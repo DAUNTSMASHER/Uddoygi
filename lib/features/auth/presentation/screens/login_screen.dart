@@ -1,82 +1,71 @@
 import 'package:flutter/material.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool loading;
+  final Future<void> Function(String email, String password) onLogin;
+
+  const LoginScreen({
+    Key? key,
+    this.loading = false,
+    required this.onLogin,
+  }) : super(key: key);
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  String? _username;
-  String? _password;
-  bool _obscurePassword = true;
+  final TextEditingController emailCtrl = TextEditingController();
+  final TextEditingController passCtrl = TextEditingController();
 
   void _submit() {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      // TODO: Add your login logic here
+    final email = emailCtrl.text.trim();
+    final password = passCtrl.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Logging in as $_username')),
+        const SnackBar(content: Text("Please enter email and password")),
       );
+      return;
     }
+
+    widget.onLogin(email, password);
+  }
+
+  @override
+  void dispose() {
+    emailCtrl.dispose();
+    passCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
+      body: Center(
+        child: widget.loading
+            ? const CircularProgressIndicator()
+            : Padding(
+          padding: const EdgeInsets.all(24.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Uddyogi ERP',
-                style: Theme.of(context).textTheme.headlineMedium,
+              TextField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(labelText: 'Email'),
+                keyboardType: TextInputType.emailAddress,
               ),
-              const SizedBox(height: 40),
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
-                ),
-                validator: (value) =>
-                value == null || value.isEmpty ? 'Enter username' : null,
-                onSaved: (value) => _username = value,
+              const SizedBox(height: 16),
+              TextField(
+                controller: passCtrl,
+                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: true,
               ),
-              const SizedBox(height: 20),
-              TextFormField(
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () => setState(() {
-                      _obscurePassword = !_obscurePassword;
-                    }),
-                  ),
-                ),
-                validator: (value) =>
-                value == null || value.isEmpty ? 'Enter password' : null,
-                onSaved: (value) => _password = value,
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _submit,
-                  child: const Text('Login', style: TextStyle(fontSize: 18)),
-                ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _submit,
+                child: const Text('Login'),
               ),
             ],
           ),

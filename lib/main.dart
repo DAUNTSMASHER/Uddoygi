@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Import your feature screens
+import 'firebase_options.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 import 'features/admin/presentation/screens/admin_dashboard.dart';
 import 'features/hr/presentation/screens/hr_dashboard.dart';
 import 'features/marketing/presentation/screens/marketing_dashboard.dart';
 import 'features/factory/presentation/screens/factory_dashboard.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const UddyogiApp());
 }
 
@@ -24,25 +31,98 @@ class UddyogiApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       debugShowCheckedModeBanner: false,
-
-      initialRoute: '/login',
-
+      home: const LoginScreenWrapper(),
       routes: {
-        '/login': (context) => const LoginScreen(),
         '/admin/dashboard': (context) => const AdminDashboard(),
         '/hr/dashboard': (context) => const HRDashboard(),
         '/marketing/dashboard': (context) => const MarketingDashboard(),
         '/factory/dashboard': (context) => const FactoryDashboard(),
       },
+      onUnknownRoute: (settings) => MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Page Not Found')),
+          body: const Center(child: Text('404 - Page Not Found')),
+        ),
+      ),
+    );
+  }
+}
 
-      onUnknownRoute: (settings) {
-        return MaterialPageRoute(
-          builder: (context) => Scaffold(
-            appBar: AppBar(title: const Text('Page Not Found')),
-            body: const Center(child: Text('404 - Page Not Found')),
-          ),
-        );
-      },
-    ); //test
+class LoginScreenWrapper extends StatefulWidget {
+  const LoginScreenWrapper({Key? key}) : super(key: key);
+
+  @override
+  State<LoginScreenWrapper> createState() => _LoginScreenWrapperState();
+}
+
+class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  bool _loading = false;
+
+  Future<void> _handleLogin(String email, String password) async {
+    setState(() {
+      _loading = true;
+    });
+
+    try {
+      final UserCredential credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final userDoc =
+      await _firestore.collection('users').doc(credential.user!.uid).get();
+
+      if (!userDoc.exists) {
+        throw Exception("User data not found");
+      }
+
+      final data = userDoc.data()!;
+      final String department = data['department'] ?? '';
+
+      String route;
+
+      switch (department) {
+        case 'admin':
+          route = '/admin/dashboard';
+          break;
+        case 'hr':
+          route = '/hr/dashboard';
+          break;
+        case 'marketing':
+          route = '/marketing/dashboard';
+          break;
+        case 'factory':
+          route = '/factory/dashboard';
+          break;
+        default:
+          throw Exception("Invalid department: $department");
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, route);
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Authentication Error: ${e.message}")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: ${e.toString()}")),
+      );
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LoginScreen(
+      loading: _loading,
+      onLogin: _handleLogin,
+    );
   }
 }

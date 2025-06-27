@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "308795588138",
+    "project_id": "uddyogi",
+    "storage_bucket": "uddyogi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:308795588138:android:c1d07583777a1b0cdecd53",
+        "android_client_info": {
+          "package_name": "com.example.uddoygi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB00JFFDWQfEKRFpz50RLfKTuz9Ve4uuyg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:308795588138:android:638c409cbb21affbdecd53",
+        "android_client_info": {
+          "package_name": "com.group11.uddyogi"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB00JFFDWQfEKRFpz50RLfKTuz9Ve4uuyg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
