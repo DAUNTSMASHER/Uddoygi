@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
+import '../widgets/admin_drawer.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Sample data for dashboard tiles
     final dashboardItems = [
-      _DashboardItem('Employees', Icons.people, Colors.blue, '/admin/employees'),
+      _DashboardItem(
+          'Notices', Icons.announcement, Colors.purple, '/admin/notices'),
+      _DashboardItem(
+          'Employees', Icons.people, Colors.blue, '/admin/employees'),
       _DashboardItem('Reports', Icons.bar_chart, Colors.green, '/admin/reports'),
       _DashboardItem('Welfare Scheme', Icons.favorite, Colors.pink, '/admin/welfare'),
       _DashboardItem('Complaints', Icons.report_problem, Colors.red, '/admin/complaints'),
       _DashboardItem('Salary', Icons.attach_money, Colors.orange, '/admin/salary'),
-      _DashboardItem('Notices', Icons.announcement, Colors.purple, '/admin/notices'),
     ];
 
     return Scaffold(
@@ -20,12 +22,13 @@ class AdminDashboard extends StatelessWidget {
         title: const Text('Admin Dashboard'),
         centerTitle: true,
       ),
+      drawer: const AdminDrawer(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: GridView.builder(
           itemCount: dashboardItems.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,  // 2 items per row
+            crossAxisCount: 2,
             mainAxisSpacing: 16,
             crossAxisSpacing: 16,
             childAspectRatio: 1.1,
@@ -58,7 +61,6 @@ class _DashboardTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        // Navigate to the route
         Navigator.pushNamed(context, item.route);
       },
       borderRadius: BorderRadius.circular(16),

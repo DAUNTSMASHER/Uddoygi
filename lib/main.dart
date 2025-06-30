@@ -3,12 +3,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'core/routes.dart'; // ✅ Centralized route map
 import 'firebase_options.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
-import 'features/admin/presentation/screens/admin_dashboard.dart';
-import 'features/hr/presentation/screens/hr_dashboard.dart';
-import 'features/marketing/presentation/screens/marketing_dashboard.dart';
-import 'features/factory/presentation/screens/factory_dashboard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,12 +29,7 @@ class UddyogiApp extends StatelessWidget {
       ),
       debugShowCheckedModeBanner: false,
       home: const LoginScreenWrapper(),
-      routes: {
-        '/admin/dashboard': (context) => const AdminDashboard(),
-        '/hr/dashboard': (context) => const HRDashboard(),
-        '/marketing/dashboard': (context) => const MarketingDashboard(),
-        '/factory/dashboard': (context) => const FactoryDashboard(),
-      },
+      routes: appRoutes, // ✅ Use centralized route map
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (context) => Scaffold(
           appBar: AppBar(title: const Text('Page Not Found')),
@@ -72,8 +64,7 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
         password: password,
       );
 
-      final userDoc =
-      await _firestore.collection('users').doc(credential.user!.uid).get();
+      final userDoc = await _firestore.collection('users').doc(credential.user!.uid).get();
 
       if (!userDoc.exists) {
         throw Exception("User data not found");
