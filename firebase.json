@@ -1,0 +1,53 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "uddyogi",
+          "appId": "1:308795588138:android:c1d07583777a1b0cdecd53",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "uddyogi",
+          "appId": "1:308795588138:ios:eb7cb46d4e012290decd53",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "uddyogi",
+          "appId": "1:308795588138:ios:eb7cb46d4e012290decd53",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "uddyogi",
+          "configurations": {
+            "android": "1:308795588138:android:c1d07583777a1b0cdecd53",
+            "ios": "1:308795588138:ios:eb7cb46d4e012290decd53",
+            "macos": "1:308795588138:ios:eb7cb46d4e012290decd53",
+            "web": "1:308795588138:web:2f43ef195bb1b8f0decd53",
+            "windows": "1:308795588138:web:a1b217cde47ac1cadecd53"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "database": {
+    "rules": "database.rules.json"
+  }
+}
