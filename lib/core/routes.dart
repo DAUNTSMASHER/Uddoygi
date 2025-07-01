@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/main.dart'; // ✅ Correct import for LoginScreenWrapper
 
 // ✅ Admin Screens
 import 'package:uddoygi/features/admin/presentation/screens/admin_dashboard.dart';
@@ -22,7 +23,10 @@ import 'package:uddoygi/features/marketing/presentation/screens/marketing_dashbo
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
 
 final Map<String, WidgetBuilder> appRoutes = {
-  // 🔵 Admin Routes
+  // 🔐 Auth
+  '/login': (context) => const LoginScreenWrapper(),
+
+  // 🔵 Admin
   '/admin/dashboard': (context) => const AdminDashboard(),
   '/admin/employees': (context) => const EmployeeManagementScreen(),
   '/admin/reports': (context) => const ReportsScreen(),
@@ -34,12 +38,12 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/notices/all': (context) => const AdminAllNoticesScreen(),
   '/admin/messages': (context) => const AdminMessagesScreen(),
 
-  // 🟢 HR Routes
+  // 🟢 HR
   '/hr/dashboard': (context) => const HRDashboard(),
 
-  // 🟠 Marketing Routes
+  // 🟠 Marketing
   '/marketing/dashboard': (context) => const MarketingDashboard(),
 
-  // 🟣 Factory Routes
+  // 🟣 Factory
   '/factory/dashboard': (context) => const FactoryDashboard(),
 };
