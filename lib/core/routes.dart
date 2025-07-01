@@ -16,7 +16,7 @@ import 'package:uddoygi/features/hr/presentation/screens/hr_dashboard.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_dashboard.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
 
-// Add the edit notice screen import when available
+
 // import 'package:uddoygi/features/admin/presentation/screens/edit_notice_screen.dart';
 
 final Map<String, WidgetBuilder> appRoutes = {
