@@ -11,7 +11,7 @@ import 'package:uddoygi/features/admin/presentation/screens/salary_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/notices_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_all_notices_screen.dart';
 
-// HR, Marketing, and Factory Dashboards
+
 import 'package:uddoygi/features/hr/presentation/screens/hr_dashboard.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_dashboard.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
