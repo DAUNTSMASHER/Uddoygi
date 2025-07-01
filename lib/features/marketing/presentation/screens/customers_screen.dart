@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/features/marketing/presentation/widgets/add_customer_form.dart';
+import 'package:uddoygi/features/marketing/presentation/widgets/customer_list_view.dart';
+import 'package:uddoygi/features/marketing/presentation/widgets/customer_order_summary.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import '../widgets/add_customer_form.dart';
-import '../widgets/customer_list_view.dart';
-import '../widgets/customer_order_summary.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -13,29 +12,29 @@ class CustomersScreen extends StatefulWidget {
 }
 
 class _CustomersScreenState extends State<CustomersScreen> {
-  String? _userId;
+  String? userId;
+  String? email;
 
   @override
   void initState() {
     super.initState();
-    _loadUidFromSession();
+    _loadSession();
   }
 
-  Future<void> _loadUidFromSession() async {
+  Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
-    if (session != null && session['uid'] != null) {
+    if (session != null) {
       setState(() {
-        _userId = session['uid'];
+        userId = session['uid'];
+        email = session['email'];
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_userId == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+    if (userId == null || email == null) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     return DefaultTabController(
@@ -53,9 +52,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
         ),
         body: TabBarView(
           children: [
-            CustomerListView(userId: _userId!),
-            AddCustomerForm(userId: _userId!),
-            CustomerOrderSummary(userId: _userId!),
+            CustomerListView(userId: userId!, email: email!), // ✅ both
+            AddCustomerForm(userId: userId!, email: email!),   // ✅ both
+            CustomerOrderSummary(email: email!),               // ✅ only email
           ],
         ),
       ),
