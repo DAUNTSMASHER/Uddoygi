@@ -12,6 +12,9 @@ import 'package:uddoygi/features/admin/presentation/screens/salary_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/notices_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_all_notices_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_messages_screen.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/new_invoices_screen.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/sales_report_screen.dart';
 
 // 🟢 HR Screens
 import 'package:uddoygi/features/hr/presentation/screens/hr_dashboard.dart';
@@ -55,7 +58,9 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/campaign': (context) => const CampaignScreen(),
   '/marketing/orders': (context) => const OrdersScreen(),
   '/marketing/loan_request': (context) => const LoanRequestScreen(),
-
+  '/marketing/sales/new': (context) => const NewInvoicesScreen(),
+  '/marketing/sales/all': (context) => const AllInvoicesScreen(),
+  '/marketing/sales/report': (context) => const SalesReportScreen(),
   // 🟣 Factory Routes
   '/factory/dashboard': (context) => const FactoryDashboard(),
 };
