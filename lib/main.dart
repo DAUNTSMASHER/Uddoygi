@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/routes.dart'; // ✅ Centralized route map
 import 'firebase_options.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
+import 'features/auth/presentation/screens/splash_screen.dart'; // ✅ Add this line
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +29,8 @@ class UddyogiApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       debugShowCheckedModeBanner: false,
-      home: const LoginScreenWrapper(),
-      routes: appRoutes, // ✅ Use centralized route map
+      home: const SplashScreen(), // ✅ Start with splash screen
+      routes: appRoutes,
       onUnknownRoute: (settings) => MaterialPageRoute(
         builder: (context) => Scaffold(
           appBar: AppBar(title: const Text('Page Not Found')),
@@ -40,6 +41,7 @@ class UddyogiApp extends StatelessWidget {
   }
 }
 
+// ✅ Your LoginScreen logic remains the same
 class LoginScreenWrapper extends StatefulWidget {
   const LoginScreenWrapper({Key? key}) : super(key: key);
 

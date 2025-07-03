@@ -27,6 +27,8 @@ import 'package:uddoygi/features/marketing/presentation/screens/task_assignment_
 import 'package:uddoygi/features/marketing/presentation/screens/campaign_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/orders_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/loan_request_screen.dart';
+import 'package:uddoygi/features/marketing/presentation/widgets/customer_details.dart';
+
 
 // 🟣 Factory Screens
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
