@@ -28,7 +28,7 @@ class WelfareSchemeScreen extends StatelessWidget {
       },
     ];
 
-    Color _getStatusColor(String status) {
+    Color getStatusColor(String status) {
       switch (status) {
         case 'Approved':
           return Colors.green;
@@ -39,7 +39,7 @@ class WelfareSchemeScreen extends StatelessWidget {
       }
     }
 
-    IconData _getStatusIcon(String status) {
+    IconData getStatusIcon(String status) {
       switch (status) {
         case 'Approved':
           return Icons.check_circle;
@@ -73,8 +73,8 @@ class WelfareSchemeScreen extends StatelessWidget {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: _getStatusColor(item['status']!),
-                        child: Icon(_getStatusIcon(item['status']!), color: Colors.white),
+                        backgroundColor: getStatusColor(item['status']!),
+                        child: Icon(getStatusIcon(item['status']!), color: Colors.white),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -85,8 +85,8 @@ class WelfareSchemeScreen extends StatelessWidget {
                       ),
                       Chip(
                         label: Text(item['status']!),
-                        backgroundColor: _getStatusColor(item['status']!).withOpacity(0.2),
-                        labelStyle: TextStyle(color: _getStatusColor(item['status']!)),
+                        backgroundColor: getStatusColor(item['status']!).withOpacity(0.2),
+                        labelStyle: TextStyle(color: getStatusColor(item['status']!)),
                       ),
                     ],
                   ),

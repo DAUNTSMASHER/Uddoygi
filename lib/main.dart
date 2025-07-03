@@ -43,7 +43,7 @@ class UddyogiApp extends StatelessWidget {
 
 // ✅ Your LoginScreen logic remains the same
 class LoginScreenWrapper extends StatefulWidget {
-  const LoginScreenWrapper({Key? key}) : super(key: key);
+  const LoginScreenWrapper({super.key});
 
   @override
   State<LoginScreenWrapper> createState() => _LoginScreenWrapperState();

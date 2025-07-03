@@ -145,7 +145,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           }),
       _ReportTile(
           title: 'Work Performance',
-          value: '${workPerformance.toStringAsFixed(1)}',
+          value: workPerformance.toStringAsFixed(1),
           icon: Icons.bar_chart,
           onTap: () {
             Navigator.pushNamed(context, '/admin/reports/performance');

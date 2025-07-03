@@ -42,6 +42,7 @@ dependencies:
   image_gallery_saver_plus: ^4.0.1
   video_player: ^2.7.2
   url_launcher: ^6.2.5
+  uuid: ^3.0.6
 
 
 dev_dependencies:

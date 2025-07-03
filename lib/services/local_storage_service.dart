@@ -32,4 +32,18 @@ class LocalStorageService {
       await file.writeAsString(jsonEncode({}));
     }
   }
+
+  /// ✅ Update a single field in the session JSON file
+  static Future<void> setSessionField(String key, dynamic value) async {
+    final file = File(await _getPath());
+    Map<String, dynamic> session = {};
+    if (await file.exists()) {
+      final content = await file.readAsString();
+      if (content.isNotEmpty) {
+        session = jsonDecode(content);
+      }
+    }
+    session[key] = value;
+    await file.writeAsString(jsonEncode(session));
+  }
 }
