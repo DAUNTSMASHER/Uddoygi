@@ -16,22 +16,65 @@ class MarketingDrawer extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.mark_email_read_outlined, size: 48, color: Colors.white),
+                Icon(
+                  Icons.mark_email_read_outlined,
+                  size: 48,
+                  color: Colors.white,
+                ),
                 SizedBox(height: 8),
                 Text(
                   'Marketing Panel',
-                  style: TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
           ),
-          _buildTile(context, 'Dashboard', Icons.dashboard_outlined, '/marketing/dashboard'),
-          _buildTile(context, 'Clients', Icons.people_alt_outlined, '/marketing/clients'),
-          _buildTile(context, 'Sales & Invoices', Icons.receipt_long_outlined, '/marketing/sales'),
-          _buildTile(context, 'Task Assignment', Icons.task_outlined, '/marketing/task_assignment'),
-          _buildTile(context, 'Campaigns', Icons.campaign_outlined, '/marketing/campaign'),
-          _buildTile(context, 'Orders', Icons.shopping_bag_outlined, '/marketing/orders'),
-          _buildTile(context, 'Loan Requests', Icons.request_page_outlined, '/marketing/loan_request'),
+          _buildTile(
+            context,
+            'Dashboard',
+            Icons.dashboard_outlined,
+            '/marketing/dashboard',
+          ),
+          _buildTile(
+            context,
+            'Clients',
+            Icons.people_alt_outlined,
+            '/marketing/clients',
+          ),
+          _buildTile(
+            context,
+            'Sales & Invoices',
+            Icons.receipt_long_outlined,
+            '/marketing/sales',
+          ),
+          _buildTile(
+            context,
+            'Task Assignment',
+            Icons.task_outlined,
+            '/marketing/task_assignment',
+          ),
+          _buildTile(
+            context,
+            'Campaigns',
+            Icons.campaign_outlined,
+            '/marketing/campaign',
+          ),
+          _buildTile(
+            context,
+            'Orders',
+            Icons.shopping_bag_outlined,
+            '/marketing/orders',
+          ),
+          _buildTile(
+            context,
+            'Loan Requests',
+            Icons.request_page_outlined,
+            '/marketing/loan_request',
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
@@ -48,7 +91,12 @@ class MarketingDrawer extends StatelessWidget {
     );
   }
 
-  ListTile _buildTile(BuildContext context, String title, IconData icon, String route) {
+  ListTile _buildTile(
+    BuildContext context,
+    String title,
+    IconData icon,
+    String route,
+  ) {
     return ListTile(
       leading: Icon(icon, color: Colors.indigo),
       title: Text(title),

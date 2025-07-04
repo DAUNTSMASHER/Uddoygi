@@ -16,17 +16,26 @@ import 'package:uddoygi/features/admin/presentation/widgets/admin_allbuyer.dart'
 
 // 🟢 HR Screens
 import 'package:uddoygi/features/hr/presentation/screens/hr_dashboard.dart';
-import 'package:uddoygi/features/hr/presentation/screens/notices_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/employee_directory_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/shift_tracker_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/recruitment_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/attendance_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/leave_management_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/payroll_processing_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/payslip_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/salary_management.dart';
-import 'package:uddoygi/features/hr/presentation/screens/incentives_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/benefits_compensation_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/loan_approval_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/incentives_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/general_ledger_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/accounts_payable_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/accounts_receivable_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/balance_update_screen.dart';
-import 'package:uddoygi/features/hr/presentation/screens/procurement_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/tax_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/procurement_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/budget_forecast_screen.dart';
+import 'package:uddoygi/features/hr/presentation/screens/notices_screen.dart';
 
-// HR Complaints
-import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
 
 // 🟠 Marketing Screens
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_dashboard.dart';
@@ -45,17 +54,18 @@ import 'package:uddoygi/features/marketing/presentation/screens/marketing_notice
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_notice.dart';
 
-// COMMON
+// 🔁 Common Screens
 import 'package:uddoygi/features/common/presentation/screens/messages_screen.dart';
 import 'package:uddoygi/features/common/presentation/screens/welfare_screen.dart';
+import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
 
 // === FULL ROUTE MAP ===
 
 final Map<String, WidgetBuilder> appRoutes = {
-  // 🔐 Authentication
+  // 🔐 Auth
   '/login': (context) => const LoginScreenWrapper(),
 
-  // 🔵 Admin Routes
+  // 🔵 Admin
   '/admin/dashboard': (context) => const AdminDashboard(),
   '/admin/employees': (context) => const EmployeeManagementScreen(),
   '/admin/reports': (context) => const ReportsScreen(),
@@ -68,19 +78,30 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/messages': (context) => const AdminMessagesScreen(),
   '/admin/all-buyers': (context) => const AdminAllBuyersPage(),
 
-  // 🟢 HR Routes
+  // 🟢 HR
   '/hr/dashboard': (context) => const HRDashboard(),
-  '/hr/notices': (context) => const HRNoticeScreen(),
+  '/hr/employee_directory': (context) => const EmployeeDirectoryScreen(),
+  '/hr/shift_tracker': (context) => const ShiftTrackerScreen(),
   '/hr/recruitment': (context) => const RecruitmentScreen(),
+  '/hr/attendance': (context) => const AttendanceScreen(),
+  '/hr/leave_management': (context) => const LeaveManagementScreen(),
+  '/hr/payroll_processing': (context) => const PayrollProcessingScreen(),
+  '/hr/payslip': (context) => const PayslipScreen(),
   '/hr/salary_management': (context) => const SalaryManagementScreen(),
-  '/hr/incentives': (context) => const IncentivesScreen(),
+  '/hr/benefits_compensation': (context) => const BenefitsCompensationScreen(),
   '/hr/loan_approval': (context) => const LoanApprovalScreen(),
+  '/hr/incentives': (context) => const IncentiveScreen(),
+  '/hr/general_ledger': (context) => const GeneralLedgerScreen(),
+  '/hr/accounts_payable': (context) => const AccountsPayableScreen(),
+  '/hr/accounts_receivable': (context) => const AccountsReceivableScreen(),
   '/hr/balance_update': (context) => const BalanceUpdateScreen(),
-  '/hr/procurement': (context) => const ProcurementScreen(),
   '/hr/tax': (context) => const TaxScreen(),
-  '/hr/complaints': (context) => const ComplaintScreen(),    // 👈 NEW LINE for HR Complaints
+  '/hr/procurement': (context) => const ProcurementScreen(),
+  '/hr/budget_forecast': (context) => const BudgetForecastScreen(),
+  '/hr/notices': (context) => const HRNoticeScreen(),
 
-  // 🟠 Marketing Routes
+
+  // 🟠 Marketing
   '/marketing/dashboard': (context) => const MarketingDashboard(),
   '/marketing/clients': (context) => const CustomersScreen(),
   '/marketing/sales': (context) => const SalesScreen(),
@@ -93,12 +114,12 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/sales/report': (context) => const SalesReportScreen(),
   '/marketing/notices': (context) => const MarketingNoticeScreen(),
 
-  // 🟣 Factory Routes
+  // 🟣 Factory
   '/factory/dashboard': (context) => const FactoryDashboard(),
   '/factory/notices': (context) => const FactoryNoticeScreen(),
 
-  // COMMON Routes
+  // 🔁 Common
   '/common/messages': (context) => const MessagesScreen(),
   '/common/welfare': (context) => const WelfareScreen(),
-  '/common/complaints': (context) => const ComplaintScreen(), // For general user access
+  '/common/complaints': (context) => const ComplaintScreen(),
 };

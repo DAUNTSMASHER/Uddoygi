@@ -46,7 +46,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '308795588138',
     projectId: 'uddyogi',
     authDomain: 'uddyogi.firebaseapp.com',
-    databaseURL: 'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'uddyogi.firebasestorage.app',
   );
 
@@ -55,7 +56,8 @@ class DefaultFirebaseOptions {
     appId: '1:308795588138:android:c1d07583777a1b0cdecd53',
     messagingSenderId: '308795588138',
     projectId: 'uddyogi',
-    databaseURL: 'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'uddyogi.firebasestorage.app',
   );
 
@@ -64,7 +66,8 @@ class DefaultFirebaseOptions {
     appId: '1:308795588138:ios:eb7cb46d4e012290decd53',
     messagingSenderId: '308795588138',
     projectId: 'uddyogi',
-    databaseURL: 'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'uddyogi.firebasestorage.app',
     iosBundleId: 'com.example.uddoygi',
   );
@@ -74,7 +77,8 @@ class DefaultFirebaseOptions {
     appId: '1:308795588138:ios:eb7cb46d4e012290decd53',
     messagingSenderId: '308795588138',
     projectId: 'uddyogi',
-    databaseURL: 'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'uddyogi.firebasestorage.app',
     iosBundleId: 'com.example.uddoygi',
   );
@@ -85,8 +89,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '308795588138',
     projectId: 'uddyogi',
     authDomain: 'uddyogi.firebaseapp.com',
-    databaseURL: 'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'uddyogi.firebasestorage.app',
   );
-
 }

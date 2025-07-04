@@ -27,7 +27,10 @@ class AdminDrawer extends StatelessWidget {
           // Notices (Section Heading)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Text('Notices', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: Text(
+              'Notices',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
 
           ListTile(

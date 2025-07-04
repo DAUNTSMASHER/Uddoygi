@@ -23,6 +23,9 @@ dependencies:
   provider: ^6.1.1
   flutter_form_builder: ^10.0.1
   flutter_hooks: ^0.21.2
+  excel: ^2.0.4
+  table_calendar: ^3.0.9
+  share_plus: ^7.0.2
 
   # UI & UX
   carousel_slider: ^5.1.1
