@@ -6,87 +6,112 @@ class AdminDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
+      backgroundColor: Colors.grey[100],
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Colors.blue),
-            child: Text(
-              'Admin Menu',
-              style: TextStyle(color: Colors.white, fontSize: 24),
+          // 🧑 Profile Header
+          Container(
+            color: Colors.indigo,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            child: Row(
+              children: [
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, size: 32, color: Colors.indigo),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'Admin Panel',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'View profile',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.settings, color: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/admin/profile'); // Placeholder for profile screen
+                  },
+                )
+              ],
             ),
           ),
 
-          // Dashboard
-          ListTile(
-            leading: const Icon(Icons.dashboard),
-            title: const Text('Dashboard'),
-            onTap: () => Navigator.pushNamed(context, '/admin/dashboard'),
-          ),
+          // 📂 Dashboard
+          _drawerItem(context, 'Dashboard', Icons.dashboard, '/admin/dashboard'),
 
-          // Notices (Section Heading)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Text(
-              'Notices',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
+          // 📢 Notices Section
+          _drawerHeading('Notices'),
+          _drawerItem(context, 'All Notices', Icons.list_alt, '/admin/notices/all'),
+          _drawerItem(context, 'Publish Notice', Icons.add_alert, '/admin/notices'),
 
-          ListTile(
-            leading: const Icon(Icons.list_alt),
-            title: const Text('All Notices'),
-            onTap: () => Navigator.pushNamed(context, '/admin/notices/all'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.add_alert),
-            title: const Text('Publish Notice'),
-            onTap: () => Navigator.pushNamed(context, '/admin/notices'),
-          ),
+          // 👥 Employees
+          _drawerHeading('Employees'),
+          _drawerItem(context, 'Employee Directory', Icons.people, '/admin/employees'),
 
-          // Employees
-          ListTile(
-            leading: const Icon(Icons.people),
-            title: const Text('Employees'),
-            onTap: () => Navigator.pushNamed(context, '/admin/employees'),
-          ),
+          // 📊 Reports
+          _drawerHeading('Reports'),
+          _drawerItem(context, 'Generate Reports', Icons.bar_chart, '/admin/reports'),
 
-          // Reports
-          ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text('Reports'),
-            onTap: () => Navigator.pushNamed(context, '/admin/reports'),
-          ),
+          // ❤️ Welfare
+          _drawerHeading('Welfare'),
+          _drawerItem(context, 'Welfare Scheme', Icons.favorite, '/common/welfare'),
 
-          // Welfare
-          ListTile(
-            leading: const Icon(Icons.favorite),
-            title: const Text('Welfare Scheme'),
-            onTap: () => Navigator.pushNamed(context, '/admin/welfare'),
-          ),
+          // ⚠️ Complaints
+          _drawerHeading('Complaints'),
+          _drawerItem(context, 'Complaints', Icons.report_problem, '/common/complaints'),
 
-          // Complaints
-          ListTile(
-            leading: const Icon(Icons.report_problem),
-            title: const Text('Complaints'),
-            onTap: () => Navigator.pushNamed(context, '/admin/complaints'),
-          ),
+          // 💰 Salary
+          _drawerHeading('Finance'),
+          _drawerItem(context, 'Salary Management', Icons.attach_money, '/admin/salary'),
 
-          // Salary
-          ListTile(
-            leading: const Icon(Icons.attach_money),
-            title: const Text('Salary'),
-            onTap: () => Navigator.pushNamed(context, '/admin/salary'),
-          ),
+          // 💬 Messages
+          _drawerHeading('Communication'),
+          _drawerItem(context, 'Messages', Icons.message, '/common/messages'),
 
-          // Messages
+          const Divider(),
+
+          // 🔓 Logout
           ListTile(
-            leading: const Icon(Icons.message),
-            title: const Text('Messages'),
-            onTap: () => Navigator.pushNamed(context, '/admin/messages'),
+            leading: const Icon(Icons.logout, color: Colors.redAccent),
+            title: const Text('Logout', style: TextStyle(color: Colors.redAccent)),
+            onTap: () => Navigator.pushReplacementNamed(context, '/login'),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _drawerHeading(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, top: 16, bottom: 6),
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.indigo),
+      ),
+    );
+  }
+
+  Widget _drawerItem(BuildContext context, String title, IconData icon, String route) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.indigo),
+      title: Text(title, style: const TextStyle(fontSize: 14)),
+      onTap: () {
+        Navigator.pop(context); // Close drawer
+        Navigator.pushNamed(context, route);
+      },
     );
   }
 }
