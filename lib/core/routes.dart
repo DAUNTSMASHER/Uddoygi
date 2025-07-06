@@ -36,7 +36,6 @@ import 'package:uddoygi/features/hr/presentation/screens/procurement_screen.dart
 import 'package:uddoygi/features/hr/presentation/screens/budget_forecast_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/notices_screen.dart';
 
-
 // 🟠 Marketing Screens
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_dashboard.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/customers_screen.dart';
@@ -60,7 +59,6 @@ import 'package:uddoygi/features/common/presentation/screens/welfare_screen.dart
 import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
 
 // === FULL ROUTE MAP ===
-
 final Map<String, WidgetBuilder> appRoutes = {
   // 🔐 Auth
   '/login': (context) => const LoginScreenWrapper(),
@@ -99,7 +97,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/hr/procurement': (context) => const ProcurementScreen(),
   '/hr/budget_forecast': (context) => const BudgetForecastScreen(),
   '/hr/notices': (context) => const HRNoticeScreen(),
-
 
   // 🟠 Marketing
   '/marketing/dashboard': (context) => const MarketingDashboard(),

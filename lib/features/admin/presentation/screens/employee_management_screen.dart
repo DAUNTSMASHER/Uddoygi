@@ -1,161 +1,111 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:uddoygi/features/employee_management/add_employee_page.dart';
+import 'package:uddoygi/features/employee_management/all_employees_page.dart';
+import 'package:uddoygi/features/employee_management/hr_recommendations_page.dart';
+import 'package:uddoygi/features/employee_management/transitions_page.dart';
 
-class EmployeeManagementScreen extends StatefulWidget {
-  const EmployeeManagementScreen({super.key});
+class EmployeeManagementScreen extends StatelessWidget {
+  const EmployeeManagementScreen({Key? key}) : super(key: key);
 
-  @override
-  State<EmployeeManagementScreen> createState() => _EmployeeManagementScreenState();
-}
-
-class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
-
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String _selectedDepartment = 'marketing';
-
-  final List<String> _departments = ['admin', 'hr', 'marketing', 'factory'];
-  bool _loading = false;
-
-  Future<void> _createEmployee() async {
-    setState(() => _loading = true);
-    try {
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
-        'email': _emailController.text.trim(),
-        'department': _selectedDepartment,
-        'isHead': false,
-        'createdAt': Timestamp.now(),
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Employee added successfully.")),
-      );
-
-      _emailController.clear();
-      _passwordController.clear();
-    } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${e.message}")),
-      );
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _setAsDepartmentHead(String uid) async {
-    final doc = _firestore.collection('users').doc(uid);
-    final data = (await doc.get()).data();
-    final dept = data?['department'];
-
-    // Remove previous head if exists
-    final existingHead = await _firestore
-        .collection('users')
-        .where('department', isEqualTo: dept)
-        .where('isHead', isEqualTo: true)
-        .get();
-
-    for (var head in existingHead.docs) {
-      await head.reference.update({'isHead': false});
-    }
-
-    // Set current as new head
-    await doc.update({'isHead': true});
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Head assigned for $dept")),
-    );
-  }
+  static const Color _darkBlue = Color(0xFF0D47A1);
 
   @override
   Widget build(BuildContext context) {
+    final cards = [
+      _DashboardCard(
+        title: 'Add Employee',
+        icon: Icons.person_add,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AddEmployeePage()),
+        ),
+      ),
+      _DashboardCard(
+        title: 'All Employees',
+        icon: Icons.group,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AllEmployeesPage()),
+        ),
+      ),
+      _DashboardCard(
+        title: 'Recommendations',
+        icon: Icons.thumb_up,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const HRRecommendationsPage()),
+        ),
+      ),
+      _DashboardCard(
+        title: 'Promotions',
+        icon: Icons.swap_vert,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TransitionsPage()),
+        ),
+      ),
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Employee Management'),
-        centerTitle: true,
+        title: const Text('Employee Dashboard'),
+        backgroundColor: _darkBlue,
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(labelText: 'Employee Email'),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Password'),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  value: _selectedDepartment,
-                  items: _departments
-                      .map((dept) => DropdownMenuItem(value: dept, child: Text(dept.toUpperCase())))
-                      .toList(),
-                  onChanged: (value) => setState(() => _selectedDepartment = value!),
-                  decoration: const InputDecoration(labelText: 'Department'),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _loading ? null : _createEmployee,
-                  child: _loading
-                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator())
-                      : const Text("Add Employee"),
-                ),
-              ],
-            ),
-          ),
-          const Divider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text("All Employees", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore.collection('users').orderBy('createdAt', descending: true).snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text('Failed to load employees'));
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('No employees found'));
-                }
+      backgroundColor: Colors.white,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          children: cards,
+        ),
+      ),
+    );
+  }
+}
 
-                final users = snapshot.data!.docs;
+class _DashboardCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
 
-                return ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (context, index) {
-                    final data = users[index].data() as Map<String, dynamic>;
-                    final uid = users[index].id;
-                    return ListTile(
-                      leading: const Icon(Icons.person),
-                      title: Text(data['email'] ?? 'Unknown'),
-                      subtitle: Text('Dept: ${data['department']}'),
-                      trailing: data['isHead'] == true
-                          ? const Chip(label: Text("Head", style: TextStyle(color: Colors.white)), backgroundColor: Colors.green)
-                          : ElevatedButton(
-                        onPressed: () => _setAsDepartmentHead(uid),
-                        child: const Text("Make Head"),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+  const _DashboardCard({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+  });
+
+  static const Color _darkBlue = Color(0xFF0D47A1);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: _darkBlue, width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 48, color: _darkBlue),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: _darkBlue,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

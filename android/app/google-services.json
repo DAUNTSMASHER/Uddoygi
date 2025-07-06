@@ -13,7 +13,20 @@
           "package_name": "com.example.uddoygi"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "308795588138-ve1nskkrjb4bai43m387cq8u3j4jo87o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.uddoygi",
+            "certificate_hash": "a11dd8e4a4f0ed7c4abb1ba1015c84a4de5478be"
+          }
+        },
+        {
+          "client_id": "308795588138-e197ov8m7988apulm8fq99nngkkga07m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB00JFFDWQfEKRFpz50RLfKTuz9Ve4uuyg"
@@ -21,7 +34,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "308795588138-e197ov8m7988apulm8fq99nngkkga07m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "308795588138-l7cgbg31beflnkcmj98ia57jjjeonsnp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.uddoygi"
+              }
+            }
+          ]
         }
       }
     },
@@ -32,7 +57,20 @@
           "package_name": "com.group11.uddyogi"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "308795588138-c97khkg92avn3m0qgm8vscm16oqjesep.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.group11.uddyogi",
+            "certificate_hash": "a11dd8e4a4f0ed7c4abb1ba1015c84a4de5478be"
+          }
+        },
+        {
+          "client_id": "308795588138-e197ov8m7988apulm8fq99nngkkga07m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB00JFFDWQfEKRFpz50RLfKTuz9Ve4uuyg"
@@ -40,7 +78,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "308795588138-e197ov8m7988apulm8fq99nngkkga07m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "308795588138-l7cgbg31beflnkcmj98ia57jjjeonsnp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.uddoygi"
+              }
+            }
+          ]
         }
       }
     }
