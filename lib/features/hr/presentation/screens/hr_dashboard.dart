@@ -59,9 +59,9 @@ class _HRDashboardState extends State<HRDashboard> {
   void initState() {
     super.initState();
     _loadSession();
-    groupedItems.keys.forEach((section) {
+    for (var section in groupedItems.keys) {
       _expandedSections[section] = true;
-    });
+    }
   }
 
   Future<void> _loadSession() async {

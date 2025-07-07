@@ -6,7 +6,7 @@ const Color _darkBlue = Color(0xFF0D47A1);
 
 /// Displays tabs for each department and shows filtered employee lists
 class AllEmployeesPage extends StatelessWidget {
-  const AllEmployeesPage({Key? key}) : super(key: key);
+  const AllEmployeesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +54,7 @@ class AllEmployeesPage extends StatelessWidget {
 /// Streams and displays a list of employees, filtered by [department] if provided.
 class EmployeeList extends StatelessWidget {
   final String? department;
-  const EmployeeList({Key? key, this.department}) : super(key: key);
+  const EmployeeList({super.key, this.department});
 
   @override
   Widget build(BuildContext context) {

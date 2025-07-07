@@ -6,7 +6,7 @@ const Color _darkBlue = Color(0xFF0D47A1);
 
 /// Displays a list of employees recommended by HR.
 class HRRecommendationsPage extends StatelessWidget {
-  const HRRecommendationsPage({Key? key}) : super(key: key);
+  const HRRecommendationsPage({super.key});
 
   @override
   Widget build(BuildContext context) {

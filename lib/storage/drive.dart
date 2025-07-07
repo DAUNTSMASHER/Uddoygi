@@ -17,12 +17,12 @@ class DrivePage extends StatefulWidget {
   final String employeeId; // e.g. '1514'
 
   const DrivePage({
-    Key? key,
+    super.key,
     required this.uid,
     required this.field,
     required this.userEmail,
     required this.employeeId,
-  }) : super(key: key);
+  });
 
   @override
   _DrivePageState createState() => _DrivePageState();

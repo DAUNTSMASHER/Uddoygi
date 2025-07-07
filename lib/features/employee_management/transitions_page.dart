@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 const Color _darkBlue = Color(0xFF0D47A1);
 
 class TransitionsPage extends StatefulWidget {
-  const TransitionsPage({Key? key}) : super(key: key);
+  const TransitionsPage({super.key});
 
   @override
   State<TransitionsPage> createState() => _TransitionsPageState();
@@ -252,7 +252,7 @@ class _TransitionsPageState extends State<TransitionsPage> {
                         type == 'promotion' ? Icons.arrow_upward : Icons.swap_horiz,
                         color: _darkBlue,
                       ),
-                      title: Text('$name'),
+                      title: Text(name),
                       subtitle: Text(
                           '${type.capitalize()} to $pos on $dateStr'),
                     );
