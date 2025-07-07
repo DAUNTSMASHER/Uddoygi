@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -12,11 +11,11 @@ class EmployeeDetailsPage extends StatefulWidget {
   final String employeeId;
 
   const EmployeeDetailsPage({
-    Key? key,
+    super.key,
     required this.uid,
     required this.userEmail,
     required this.employeeId,
-  }) : super(key: key);
+  });
 
   @override
   _EmployeeDetailsPageState createState() => _EmployeeDetailsPageState();
@@ -152,8 +151,9 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
         stream: _docRef.snapshots(),
         builder: (context, snap) {
           if (snap.hasError) return const Center(child: Text('Error loading'));
-          if (!snap.hasData || !snap.data!.exists)
+          if (!snap.hasData || !snap.data!.exists) {
             return const Center(child: CircularProgressIndicator());
+          }
 
           final d = snap.data!.data()!;
           // -- PERSONAL

@@ -5,7 +5,7 @@ import 'package:uddoygi/features/employee_management/hr_recommendations_page.dar
 import 'package:uddoygi/features/employee_management/transitions_page.dart';
 
 class EmployeeManagementScreen extends StatelessWidget {
-  const EmployeeManagementScreen({Key? key}) : super(key: key);
+  const EmployeeManagementScreen({super.key});
 
   static const Color _darkBlue = Color(0xFF0D47A1);
 
