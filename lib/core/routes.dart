@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:uddoygi/main.dart'; // ✅ Login wrapper
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uddoygi/main.dart';
+import 'package:uddoygi/profile.dart';
 
 // 🔵 Admin Screens
 import 'package:uddoygi/features/admin/presentation/screens/admin_dashboard.dart';
-import 'package:uddoygi/features/admin/presentation/screens/employee_management_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/reports_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/reports_graph_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/welfare_scheme_screen.dart';
@@ -13,6 +14,13 @@ import 'package:uddoygi/features/admin/presentation/screens/notices_screen.dart'
 import 'package:uddoygi/features/admin/presentation/screens/admin_all_notices_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_messages_screen.dart';
 import 'package:uddoygi/features/admin/presentation/widgets/admin_allbuyer.dart';
+import 'package:uddoygi/features/admin/presentation/screens/employee_management_screen.dart';
+
+// 👥 Employee Management Screens
+import 'package:uddoygi/features/employee_management/add_employee_page.dart';
+import 'package:uddoygi/features/employee_management/all_employees_page.dart';
+import 'package:uddoygi/features/employee_management/submit_recommendation_page.dart';
+import 'package:uddoygi/features/employee_management/transitions_page.dart';
 
 // 🟢 HR Screens
 import 'package:uddoygi/features/hr/presentation/screens/hr_dashboard.dart';
@@ -58,14 +66,21 @@ import 'package:uddoygi/features/common/presentation/screens/messages_screen.dar
 import 'package:uddoygi/features/common/presentation/screens/welfare_screen.dart';
 import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
 
-// === FULL ROUTE MAP ===
 final Map<String, WidgetBuilder> appRoutes = {
   // 🔐 Auth
   '/login': (context) => const LoginScreenWrapper(),
+  '/profile': (context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return ProfilePage(userId: uid);
+  },
 
   // 🔵 Admin
   '/admin/dashboard': (context) => const AdminDashboard(),
   '/admin/employees': (context) => const EmployeeManagementScreen(),
+  '/admin/employees/add': (context) => const AddEmployeePage(),
+  '/admin/employees/all': (context) => const AllEmployeesPage(),
+  '/admin/employees/recommendation': (context) => const SubmitRecommendationPage(),
+  '/admin/employees/promotions': (context) => const TransitionsPage(),
   '/admin/reports': (context) => const ReportsScreen(),
   '/admin/reports/graphs': (context) => const AdminReportsWithGraphsScreen(),
   '/admin/welfare': (context) => const WelfareSchemeScreen(),

@@ -1,31 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/profile.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+const Color _darkBlue = Color(0xFF0D47A1);
 
 class FactoryDrawer extends StatefulWidget {
-  const FactoryDrawer({super.key});
+  const FactoryDrawer({Key? key}) : super(key: key);
 
   @override
   State<FactoryDrawer> createState() => _FactoryDrawerState();
 }
 
 class _FactoryDrawerState extends State<FactoryDrawer> {
-  String? userEmail;
-  String? userName;
+  String? _uid;
+  String _name = 'User';
+  String _email = '';
+  String _photoUrl = '';
 
   @override
   void initState() {
     super.initState();
+    _uid = FirebaseAuth.instance.currentUser?.uid;
     _loadSession();
+    if (_uid != null) _listenProfile();
   }
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
     setState(() {
-      userEmail = (session != null && session['email'] != null) ? session['email'] : '';
-      userName = (session != null && session['name'] != null)
-          ? session['name']
-          : (session != null && session['email'] != null ? session['email'] : '');
+      _email = session?['email'] as String? ?? '';
+    });
+  }
+
+  void _listenProfile() {
+    FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .snapshots()
+        .listen((snap) {
+      final data = snap.data();
+      if (data != null) {
+        setState(() {
+          _name = (data['fullName'] as String?)?.trim().isNotEmpty == true
+              ? data['fullName']!
+              : (data['name'] as String?) ?? _name;
+          _photoUrl = (data['profilePhotoUrl'] as String?) ?? '';
+          _email = (data['personalEmail'] as String?) ?? _email;
+        });
+      }
     });
   }
 
@@ -38,132 +62,116 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.indigo[900],
-      child: SafeArea(
-        child: Column(
-          children: [
-            UserAccountsDrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.indigo[800],
-              ),
-              currentAccountPicture: const CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(Icons.factory, size: 36, color: Colors.indigo),
-              ),
-              accountName: Text(userName ?? '', style: const TextStyle(color: Colors.white)),
-              accountEmail: Text(userEmail ?? '', style: const TextStyle(color: Colors.white70)),
+      backgroundColor: Colors.white,
+      child: Column(
+        children: [
+          // Custom header
+          Container(
+            height: 180,
+            color: _darkBlue,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: Colors.white,
+                  backgroundImage:
+                  _photoUrl.isNotEmpty ? NetworkImage(_photoUrl) : null,
+                  child: _photoUrl.isEmpty
+                      ? Text(_name.isNotEmpty ? _name[0] : '?',
+                      style: const TextStyle(fontSize: 36, color: _darkBlue))
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(50, 20),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProfilePage(userId: _uid!),
+                            ),
+                          );
+                        },
+                        child: const Text('View Profile',
+                            style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon:
+                  const Icon(Icons.chevron_right, size: 28, color: Colors.white),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProfilePage(userId: _uid!),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-            _DrawerTile(
-              icon: Icons.dashboard,
-              label: 'Dashboard',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/dashboard');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.notifications_active,
-              label: 'Notices',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/notices');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.volunteer_activism,
-              label: 'Welfare',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/common/welfare');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.message,
-              label: 'Messages',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/common/messages');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.work,
-              label: 'Work Orders',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/work_orders');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.request_page,
-              label: 'Resource Requests',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/resource_requests');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.update,
-              label: 'Progress Update',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/progress_update');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.event_available,
-              label: 'Attendance',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/attendance');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.request_page,
-              label: 'Loan Requests',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/loan_requests');
-              },
-            ),
-            _DrawerTile(
-              icon: Icons.money_off,
-              label: 'Salary & Overtime',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/factory/salary_overtime');
-              },
-            ),
-            const Spacer(),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.redAccent),
-              title: const Text('Logout', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-              onTap: _logout,
-            ),
-            const SizedBox(height: 12),
-          ],
-        ),
+          ),
+
+          // Menu items
+          _tile(context, Icons.dashboard, 'Dashboard', '/factory/dashboard'),
+          _tile(context, Icons.notifications_active, 'Notices', '/factory/notices'),
+          _tile(context, Icons.volunteer_activism, 'Welfare', '/common/welfare'),
+          _tile(context, Icons.message, 'Messages', '/common/messages'),
+          _tile(context, Icons.work, 'Work Orders', '/factory/work_orders'),
+          _tile(context, Icons.request_page, 'Resource Requests',
+              '/factory/resource_requests'),
+          _tile(context, Icons.update, 'Progress Update',
+              '/factory/progress_update'),
+          _tile(
+              context, Icons.event_available, 'Attendance', '/factory/attendance'),
+          _tile(context, Icons.request_page, 'Loan Requests',
+              '/factory/loan_requests'),
+          _tile(context, Icons.money_off, 'Salary & Overtime',
+              '/factory/salary_overtime'),
+
+          const Spacer(),
+
+          // Logout
+          ListTile(
+            leading: const Icon(Icons.logout, color: _darkBlue),
+            title:
+            const Text('Logout', style: TextStyle(color: _darkBlue)),
+            onTap: _logout,
+          ),
+          const SizedBox(height: 12),
+        ],
       ),
     );
   }
-}
 
-class _DrawerTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _DrawerTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _tile(BuildContext context, IconData icon, String label, String route) {
     return ListTile(
-      leading: Icon(icon, color: Colors.blueAccent),
-      title: Text(label, style: const TextStyle(color: Colors.white)),
-      onTap: onTap,
+      leading: Icon(icon, color: _darkBlue),
+      title: Text(label, style: const TextStyle(color: _darkBlue)),
+      onTap: () {
+        Navigator.pop(context);
+        Navigator.pushReplacementNamed(context, route);
+      },
     );
   }
 }
