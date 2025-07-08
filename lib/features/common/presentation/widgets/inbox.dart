@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 class InboxTab extends StatelessWidget {
   final String userEmail;
-  const InboxTab({super.key, required this.userEmail});
+  const InboxTab({super.key , required this.userEmail});
 
   @override
   Widget build(BuildContext context) {
