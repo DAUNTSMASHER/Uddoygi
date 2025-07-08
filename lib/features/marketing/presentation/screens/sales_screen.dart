@@ -1,3 +1,5 @@
+// lib/features/marketing/presentation/screens/sales_screen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -8,22 +10,28 @@ import 'all_invoices_screen.dart';
 import 'sales_report_screen.dart';
 import 'order_progress_screen.dart';
 
+const Color _darkBlue = Color(0xFF0D47A1);
+
 class SalesScreen extends StatefulWidget {
-  const SalesScreen({super.key});
+  const SalesScreen({Key? key}) : super(key: key);
 
   @override
   State<SalesScreen> createState() => _SalesScreenState();
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  double salesTarget = 100000;
-  int orderCount = 0;
-  double totalSales = 0;
+  static const double _fontSmall   = 12;
+  static const double _fontRegular = 14;
+  static const double _fontLarge   = 16;
+
+  double salesTarget   = 100000;
+  int    orderCount    = 0;
+  double totalSales    = 0;
   String? userEmail;
-  bool targetReached = false;
+  bool   targetReached = false;
   DateTime selectedMonth = DateTime.now();
   bool showSummary = true;
-  bool showPie = false;
+  bool showPie     = false;
 
   @override
   void initState() {
@@ -41,252 +49,225 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _calculateUserSales() async {
     if (userEmail == null) return;
-    final startOfMonth = DateTime(selectedMonth.year, selectedMonth.month, 1);
-    final endOfMonth = DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
+    final start = DateTime(selectedMonth.year, selectedMonth.month, 1);
+    final end   = DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
 
-    final snapshot = await FirebaseFirestore.instance
+    final snap = await FirebaseFirestore.instance
         .collection('invoices')
         .where('agentEmail', isEqualTo: userEmail)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end))
         .get();
 
     double total = 0;
-    int count = 0;
-
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      if (data.containsKey('grandTotal')) {
-        total += (data['grandTotal'] as num).toDouble();
-      }
-      count++;
+    for (var doc in snap.docs) {
+      total += (doc.data()['grandTotal'] as num? ?? 0).toDouble();
     }
 
     if (mounted) {
       setState(() {
-        totalSales = total;
-        orderCount = count;
+        totalSales    = total;
+        orderCount    = snap.docs.length;
         targetReached = totalSales >= salesTarget;
       });
     }
   }
 
-  Future<void> _selectMonth(BuildContext context) async {
+  Future<void> _selectMonth(BuildContext ctx) async {
     final picked = await showDatePicker(
-      context: context,
+      context: ctx,
       initialDate: selectedMonth,
       firstDate: DateTime(2025, 1),
       lastDate: DateTime.now(),
       initialDatePickerMode: DatePickerMode.year,
-      builder: (context, child) => Theme(
+      builder: (c, w) => Theme(
         data: ThemeData.light().copyWith(
-          primaryColor: Colors.indigo,
-          colorScheme: const ColorScheme.light(primary: Colors.indigo),
+          colorScheme: const ColorScheme.light(primary: _darkBlue),
         ),
-        child: child!,
+        child: w!,
       ),
     );
     if (picked != null && picked != selectedMonth) {
-      setState(() {
-        selectedMonth = picked;
-      });
+      setState(() => selectedMonth = picked);
       await _calculateUserSales();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final achievement = (totalSales / salesTarget * 100).clamp(0, 100);
+    // clamp to 0.0–100.0 and convert to double
+    final double achievement =
+    (totalSales / salesTarget * 100).clamp(0.0, 100.0).toDouble();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sales Dashboard'),
-        backgroundColor: Colors.indigo,
+        title: const Text('Sales Dashboard', style: TextStyle(fontSize: _fontLarge)),
+        backgroundColor: _darkBlue,
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_month),
+            icon: const Icon(Icons.calendar_today),
             onPressed: () => _selectMonth(context),
-            tooltip: 'Filter by Month',
           )
         ],
       ),
       body: userEmail == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Month info and filter
+            // Month row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Month: ${DateFormat.yMMMM().format(selectedMonth)}",
-                  style: const TextStyle(fontSize: 16, color: Colors.indigo, fontWeight: FontWeight.bold),
+                  DateFormat.yMMMM().format(selectedMonth),
+                  style: const TextStyle(
+                      fontSize: _fontRegular,
+                      fontWeight: FontWeight.bold,
+                      color: _darkBlue),
                 ),
                 TextButton.icon(
                   onPressed: () => _selectMonth(context),
-                  icon: const Icon(Icons.filter_alt, color: Colors.blueAccent),
-                  label: const Text('Change', style: TextStyle(color: Colors.blueAccent)),
+                  icon: const Icon(Icons.filter_alt, color: _darkBlue),
+                  label: const Text('Filter', style: TextStyle(color: _darkBlue)),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
 
-            // Target reached banner
+            // Target banner
             if (targetReached)
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16, top: 4),
+                margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade100,
-                  borderRadius: BorderRadius.circular(12),
+                  color: _darkBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: const [
-                    Icon(Icons.emoji_events, color: Colors.green),
-                    SizedBox(width: 10),
-                    Expanded(child: Text("🎉 Congratulations! You've hit your monthly sales target!")),
+                    Icon(Icons.emoji_events, color: _darkBlue),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "🎉 You've hit your monthly sales target!",
+                        style: TextStyle(
+                            fontSize: _fontSmall,
+                            color: _darkBlue,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   ],
                 ),
               ),
 
-            // Minimize/Expand summary stats
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => setState(() => showSummary = !showSummary),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Summary",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.indigo),
-                  ),
-                  Icon(
-                    showSummary ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.indigo,
-                  ),
-                ],
-              ),
-            ),
-            AnimatedCrossFade(
-              firstChild: Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 8),
+            // Summary section
+            _sectionHeader('Summary', showSummary, () {
+              setState(() => showSummary = !showSummary);
+            }),
+            if (showSummary)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: GridView.count(
                   crossAxisCount: 2,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 1.2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 2,
                   children: [
-                    _buildStatCard('🎯 Sales Target', '৳${salesTarget.toStringAsFixed(0)}'),
-                    _buildStatCard('💰 Total Sales', '৳${totalSales.toStringAsFixed(0)}'),
-                    _buildStatCard('📦 Total Orders', '$orderCount'),
-                    _buildStatCard('📈 Achievement', '${achievement.toStringAsFixed(1)}%'),
+                    _buildStatCard('Target', '৳${salesTarget.toStringAsFixed(0)}'),
+                    _buildStatCard('Sales', '৳${totalSales.toStringAsFixed(0)}'),
+                    _buildStatCard('Orders', '$orderCount'),
+                    _buildStatCard('Achieved', '${achievement.toStringAsFixed(1)}%'),
                   ],
                 ),
               ),
-              secondChild: const SizedBox.shrink(),
-              crossFadeState: showSummary ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 250),
-            ),
 
-            // Pie chart minimize/expand
-            InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => setState(() => showPie = !showPie),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Sales Achievement",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.indigo),
-                  ),
-                  Icon(
-                    showPie ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.indigo,
-                  ),
-                ],
-              ),
-            ),
-            AnimatedCrossFade(
-              firstChild: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: SizedBox(
-                  height: 180,
-                  child: PieChart(
-                    PieChartData(
-                      sections: [
-                        PieChartSectionData(
-                          value: achievement.toDouble(),
-                          color: Colors.indigo,
-                          title: '${achievement.toStringAsFixed(1)}%',
-                          titleStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                          radius: 60,
-                        ),
-                        PieChartSectionData(
-                          value: (100 - achievement).toDouble(),
-                          color: Colors.grey.shade300,
-                          title: '',
-                          radius: 50,
-                        ),
-                      ],
-                      centerSpaceRadius: 40,
-                      sectionsSpace: 2,
-                    ),
+            // Pie chart section
+            _sectionHeader('Achievement Chart', showPie, () {
+              setState(() => showPie = !showPie);
+            }),
+            if (showPie)
+              SizedBox(
+                height: 160,
+                child: PieChart(
+                  PieChartData(
+                    centerSpaceRadius: 40,
+                    sectionsSpace: 2,
+                    sections: [
+                      PieChartSectionData(
+                        value: achievement,
+                        color: _darkBlue,
+                        title: '${achievement.toStringAsFixed(1)}%',
+                        radius: 60,
+                        titleStyle: const TextStyle(
+                            fontSize: _fontRegular,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      PieChartSectionData(
+                        value: 100 - achievement,
+                        color: Colors.grey.shade300,
+                        title: '',
+                        radius: 50,
+                      ),
+                    ],
                   ),
                 ),
               ),
-              secondChild: const SizedBox.shrink(),
-              crossFadeState: showPie ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 250),
-            ),
 
-            const Divider(),
+            const SizedBox(height: 16),
+            const Divider(thickness: 1),
+            const SizedBox(height: 16),
 
-            const Text('Actions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo)),
+            // Actions header
+            Text('Actions',
+                style: const TextStyle(
+                    fontSize: _fontLarge,
+                    color: _darkBlue,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
 
-            // Actions as grid
-            GridView(
+            // 3-column grid of actions
+            GridView.count(
+              crossAxisCount: 3,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 2.5,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-              ),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.2,
               children: [
-                _buildActionTile(
-                  context,
-                  icon: Icons.add_circle,
-                  color: Colors.green,
-                  text: '🆕 New Invoice',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen())),
-                ),
-                _buildActionTile(
-                  context,
-                  icon: Icons.list_alt,
-                  color: Colors.blue,
-                  text: '📄 All Invoices',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
-                ),
-                _buildActionTile(
-                  context,
-                  icon: Icons.bar_chart,
-                  color: Colors.orange,
-                  text: '📊 Sales Report',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen())),
-                ),
-                _buildActionTile(
-                  context,
-                  icon: Icons.timeline,
-                  color: Colors.deepPurple,
-                  text: '📦 Order Progress',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen())),
-                ),
+                _buildActionTile(Icons.add_circle, 'New', _darkBlue, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NewInvoicesScreen()),
+                  );
+                }),
+                _buildActionTile(Icons.list_alt, 'All', _darkBlue, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AllInvoicesScreen()),
+                  );
+                }),
+                _buildActionTile(Icons.bar_chart, 'Report', _darkBlue, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SalesReportScreen()),
+                  );
+                }),
+                _buildActionTile(Icons.timeline, 'Progress', _darkBlue, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OrderProgressScreen()),
+                  );
+                }),
+                // placeholders to fill grid
+                const SizedBox(),
+                const SizedBox(),
               ],
             ),
           ],
@@ -295,46 +276,66 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 4))
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _sectionHeader(String text, bool expanded, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.indigo)),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.indigo)),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: _fontRegular,
+                  fontWeight: FontWeight.bold,
+                  color: _darkBlue)),
+          Icon(expanded ? Icons.expand_less : Icons.expand_more,
+              color: _darkBlue),
         ],
       ),
     );
   }
 
-  Widget _buildActionTile(BuildContext context, {required IconData icon, required Color color, required String text, required VoidCallback onTap}) {
+  Widget _buildStatCard(String title, String value) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style:
+              const TextStyle(fontSize: _fontSmall, color: _darkBlue)),
+          const SizedBox(height: 6),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: _fontLarge,
+                  fontWeight: FontWeight.bold,
+                  color: _darkBlue)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionTile(
+      IconData icon, String label, Color color, VoidCallback onTap) {
     return Material(
-      color: color.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(14),
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 30),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
-              ),
-            ],
-          ),
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 6),
+            Text(label,
+                style: TextStyle(fontSize: _fontRegular, color: color)),
+          ],
         ),
       ),
     );

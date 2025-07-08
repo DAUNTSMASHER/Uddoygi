@@ -1,31 +1,33 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/products.dart'; // ✅ Updated
 import '../widgets/marketing_drawer.dart';
 
+const Color _darkBlue = Color(0xFF0D47A1);
+
 class MarketingDashboard extends StatefulWidget {
-  const MarketingDashboard({super.key});
+  const MarketingDashboard({Key? key}) : super(key: key);
 
   @override
   State<MarketingDashboard> createState() => _MarketingDashboardState();
 }
 
 class _MarketingDashboardState extends State<MarketingDashboard> {
-  String? uid;
   String? email;
-  String? role;
 
   final List<_DashboardItem> dashboardItems = const [
-    _DashboardItem('Notices', Icons.notifications_active, Colors.pink, '/marketing/notices'),
-    _DashboardItem('Clients', Icons.people_alt, Colors.blue, '/marketing/clients'),
-    _DashboardItem('Sales', Icons.point_of_sale, Colors.green, '/marketing/sales'),
-    _DashboardItem('Welfare', Icons.volunteer_activism, Colors.indigo, '/common/welfare'),
-    _DashboardItem('Complaints', Icons.warning_amber, Colors.deepOrange, '/common/complaints'),
-    _DashboardItem('Messages', Icons.message, Colors.cyan, '/common/messages'),
-    _DashboardItem('Task Assignment', Icons.task, Colors.orange, '/marketing/task_assignment'),
-    _DashboardItem('Campaign', Icons.campaign, Colors.purple, '/marketing/campaign'),
-    _DashboardItem('Orders', Icons.assignment_turned_in, Colors.teal, '/marketing/orders'),
-    _DashboardItem('Loan Requests', Icons.request_page, Colors.red, '/marketing/loan_request'),
+    _DashboardItem('Notices', Icons.notifications_active, '/marketing/notices'),
+    _DashboardItem('Clients', Icons.people_alt, '/marketing/clients'),
+    _DashboardItem('Sales', Icons.point_of_sale, '/marketing/sales'),
+    _DashboardItem('Welfare', Icons.volunteer_activism, '/common/welfare'),
+    _DashboardItem('Complaints', Icons.warning_amber, '/common/complaints'),
+    _DashboardItem('Messages', Icons.message, '/common/messages'),
+    _DashboardItem('Tasks', Icons.task, '/marketing/task_assignment'),
+    _DashboardItem('Campaigns', Icons.campaign, '/marketing/campaign'),
+    _DashboardItem('Orders', Icons.shopping_bag, '/marketing/orders'),
+    _DashboardItem('Loans', Icons.request_page, '/marketing/loan_request'),
+    _DashboardItem('Products', Icons.inventory, ''), // route handled manually
   ];
 
   @override
@@ -38,9 +40,7 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     final session = await LocalStorageService.getSession();
     if (session != null) {
       setState(() {
-        uid = session['uid'];
-        email = session['email'];
-        role = session['role'];
+        email = session['email'] as String?;
       });
     }
   }
@@ -53,88 +53,97 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     }
   }
 
+  void _onItemTap(_DashboardItem item) {
+    if (item.title == 'Products') {
+      if (email != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductsPage(userEmail: email!), // ✅ updated target
+          ),
+        );
+      }
+    } else {
+      Navigator.pushNamed(context, item.route);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        titleSpacing: 0,
+        backgroundColor: _darkBlue,
         title: const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text('Welcome Marketing', style: TextStyle(fontSize: 18)),
+          child: Text(
+            'Marketing Dashboard',
+            style: TextStyle(fontSize: 16, color: Colors.white),
+          ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Logout',
             onPressed: _logout,
           ),
         ],
       ),
       drawer: const MarketingDrawer(),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (email != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'Welcome, $email',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
+            if (email != null) ...[
+              Text(
+                'Welcome, $email',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: _darkBlue,
                 ),
               ),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: dashboardItems.length,
-              itemBuilder: (context, index) {
-                final item = dashboardItems[index];
-                return Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 10),
-                  child: Card(
-                    elevation: 3,
+              const SizedBox(height: 8),
+            ],
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1,
+                children: dashboardItems.map((item) {
+                  return Card(
+                    color: _darkBlue,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    elevation: 2,
                     child: InkWell(
-                      onTap: () => Navigator.pushNamed(context, item.route),
-                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => _onItemTap(item),
+                      borderRadius: BorderRadius.circular(8),
                       child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(item.icon, size: 40, color: item.color),
-                            const SizedBox(width: 14),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.title,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: item.color,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Tap to explore',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: item.color.withOpacity(0.6),
-                                  ),
-                                ),
-                              ],
+                            Icon(item.icon, size: 24, color: Colors.white),
+                            const SizedBox(height: 6),
+                            Text(
+                              item.title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.white,
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ),
@@ -146,8 +155,7 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
 class _DashboardItem {
   final String title;
   final IconData icon;
-  final Color color;
   final String route;
 
-  const _DashboardItem(this.title, this.icon, this.color, this.route);
+  const _DashboardItem(this.title, this.icon, this.route);
 }

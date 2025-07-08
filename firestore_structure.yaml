@@ -31,6 +31,12 @@
   - BXNrbuaNcopPGjL6neX5:
       - amount
       - year
+  - PIGnSUlVvN5stDM8Yiu9:
+      - date
+      - amount
+      - year
+      - used
+      - category
   - gBQPxHKlI4AuhM0ngPhJ:
       - amount
       - year
@@ -357,6 +363,20 @@
       - proofUrl
       - status
 - messages:
+  - 0RX3yZamNPyxeDAWcqKG:
+      - subject
+      - fromName
+      - from
+      - to
+      - body
+      - timestamp
+  - 5J9ucCJyfbOBiylBFwdy:
+      - subject
+      - fromName
+      - from
+      - to
+      - body
+      - timestamp
   - 62KdGtSGEFC1rbp9AWKc:
       - email
       - message
@@ -379,20 +399,6 @@
       - from
       - to
       - body
-      - timestamp
-  - SqS0xk0mEzQcbNh6u2YD:
-      - subject
-      - fromName
-      - from
-      - to
-      - body
-      - timestamp
-  - UlfmnAGHvMoh849KbfeC:
-      - from
-      - to
-      - subject
-      - body
-      - status
       - timestamp
 - notices:
   - 5tJXzeq5VK5NKQXYf5Cr:
@@ -459,6 +465,133 @@
   - 6lQuRH6pCZcfujoNf0Bn:
       - userId
       - score
+- products:
+  - 4n425lgeC791ksRVLyCs:
+      - production_cost
+      - curl
+      - colour
+      - notes
+      - gender
+      - model_name
+      - size
+      - density
+      - createdBy
+      - production_time
+      - unit_price
+      - createdAt
+  - y6tL9lWmn6AuSQua19s8:
+      - production_cost
+      - curl
+      - colour
+      - notes
+      - gender
+      - model_name
+      - size
+      - density
+      - createdBy
+      - production_time
+      - unit_price
+      - createdAt
+- promotions:
+  - WmuHkY2LX8AXKqIjEDQD:
+      - employeeName
+      - newPosition
+      - employeeUid
+      - department
+      - type
+      - timestamp
+  - swE8U4CtRW8IhhWPRnc8:
+      - employeeName
+      - newPosition
+      - employeeUid
+      - department
+      - type
+      - timestamp
+- recommendation:
+  - 6IGxy4YasusKGgQeGSiW:
+      - personalPhone
+      - governmentIdUrl
+      - reasons
+      - previousEmployers
+      - probationReviews
+      - ndaUrl
+      - fullName
+      - recommendation
+      - certifications
+      - personalEmail
+      - profilePhotoUrl
+      - employmentContractUrl
+      - createdAt
+      - workPermitUrl
+      - cvUrl
+      - name
+      - taxFormUrl
+      - sentToCEO
+      - trainingRecords
+      - status
+  - sOPPEMAFf5Gxdi0KKVnE:
+      - fullName
+      - name
+      - personalEmail
+      - personalPhone
+      - governmentIdUrl
+      - profilePhotoUrl
+      - cvUrl
+      - ndaUrl
+      - employmentContractUrl
+      - workPermitUrl
+      - taxFormUrl
+      - certifications
+      - trainingRecords
+      - previousEmployers
+      - probationReviews
+      - recommendation
+      - createdAt
+      - status
+      - reasons
+      - sentToCEO
+  - soGwJK4xYckEwUNeeKhz:
+      - fullName
+      - name
+      - personalEmail
+      - personalPhone
+      - governmentIdUrl
+      - profilePhotoUrl
+      - cvUrl
+      - ndaUrl
+      - employmentContractUrl
+      - workPermitUrl
+      - taxFormUrl
+      - certifications
+      - trainingRecords
+      - previousEmployers
+      - probationReviews
+      - recommendation
+      - createdAt
+      - status
+      - reasons
+      - sentToCEO
+  - yQzwKH9yOlRiGnssfHTB:
+      - personalPhone
+      - governmentIdUrl
+      - reasons
+      - previousEmployers
+      - probationReviews
+      - ndaUrl
+      - fullName
+      - recommendation
+      - certifications
+      - personalEmail
+      - profilePhotoUrl
+      - employmentContractUrl
+      - createdAt
+      - workPermitUrl
+      - cvUrl
+      - name
+      - taxFormUrl
+      - sentToCEO
+      - trainingRecords
+      - status
 - rnd_updates:
   - MKNInSkal0Jn3VCjHrqz:
       - title
@@ -529,6 +662,20 @@
       - officeEmail
       - employeeId
       - profile_picture
+  - 42UWWdBWMHgtPbW2EeBsGCkHgN93:
+      - addedBy
+      - isHead
+      - employeeId
+      - department
+      - email
+      - createdAt
+  - 4AlvGmdebehu9ctLEAZ1lHqKQd12:
+      - addedBy
+      - isHead
+      - employeeId
+      - department
+      - email
+      - createdAt
   - 5Czn6ilRZdRPsYqrI4EvMDtLIFS2:
       - createdAt
       - isHead
@@ -597,49 +744,4 @@
       - officeEmail
       - employeeId
       - profile_picture
-      - profilePhotoUrl
-  - 7gopVIFfkKawzcfsMaTDveFsKyX2:
-      - createdAt
-      - isHead
-      - department
-      - email
-      - name
-      - fullName
-      - bankAccount
-      - personalPhone
-      - governmentIdUrl
-      - previousEmployers
-      - probationReviews
-      - employmentType
-      - emergencyContact
-      - jobTitle
-      - ndaUrl
-      - certifications
-      - personalEmail
-      - employmentContractUrl
-      - workPermitUrl
-      - yearsOfExperience
-      - cvUrl
-      - taxFormUrl
-      - trainingRecords
-      - officeLocation
-      - dateOfBirth
-      - workPhone
-      - badgeNumber
-      - managerId
-      - shiftPattern
-      - designation
-      - joiningDate
-      - officeEmail
-      - employeeId
-      - profile_picture
-      - profilePhotoUrl
-  - 8vjCDwFZfIc1DWdpOqMuceFGsZp2:
-      - addedBy
-      - isHead
-      - employeeId
-      - department
-      - email
-      - createdAt
-      - fullName
       - profilePhotoUrl
