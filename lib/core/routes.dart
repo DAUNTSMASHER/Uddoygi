@@ -1,3 +1,5 @@
+// lib/core/routes.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/main.dart';
@@ -56,6 +58,12 @@ import 'package:uddoygi/features/marketing/presentation/screens/new_invoices_scr
 import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/sales_report_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_notice.dart';
+
+// 🟣 Marketing Work Order Screens
+import 'package:uddoygi/features/marketing/presentation/work_order/add_new_wo.dart';
+import 'package:uddoygi/features/marketing/presentation/work_order/add_new_po.dart';
+import 'package:uddoygi/features/marketing/presentation/work_order/incoming_products.dart';
+import 'package:uddoygi/features/marketing/presentation/work_order/qc_report.dart';
 
 // 🟣 Factory Screens
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
@@ -125,6 +133,12 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/sales/all': (context) => const AllInvoicesScreen(),
   '/marketing/sales/report': (context) => const SalesReportScreen(),
   '/marketing/notices': (context) => const MarketingNoticeScreen(),
+
+  // 🟣 Marketing Work Orders
+  '/marketing/workorders/new': (context) => const AddNewWorkOrderScreen(),
+  '/marketing/purchase_orders/new': (context) => const AddNewPurchaseOrderScreen(),
+  '/marketing/incoming_products': (context) => const IncomingProductsScreen(),
+  '/marketing/qc_report': (context) => const QCReportScreen(),
 
   // 🟣 Factory
   '/factory/dashboard': (context) => const FactoryDashboard(),

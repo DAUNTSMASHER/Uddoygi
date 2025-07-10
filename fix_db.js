@@ -1,72 +1,48 @@
 // fix_db.js
-const admin = require('firebase-admin');
-const serviceAccount = require('./serviceAccountKey.json');
+// Script to backfill "agentEmail" field in all work_orders docs
 
+const admin = require('firebase-admin');
+const path  = require('path');
+
+// Initialize Firebase Admin with your service account
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(require(path.join(__dirname, 'serviceAccountKey.json'))),
 });
+
 const db = admin.firestore();
 
-// The full schema & default values for every product document
-const PRODUCT_FIELDS = {
-  gender: '',
-  model_name: '',
-  size: '',
-  density: '',
-  curl: '',
-  colour: '',
-  unit_price: 0.0,
-  notes: '',
-  production_time: '',
-  production_cost: 0.0,
-  createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  createdBy: ''
-};
+async function backfillAgentEmail() {
+  const collectionRef = db.collection('work_orders');
+  const snapshot = await collectionRef.get();
 
-async function seedProductCollection() {
-  console.log('🌱 Seeding products with IDs "1", "2", "3"...');
-
-  for (let i = 1; i <= 3; i++) {
-    const docId = i.toString();
-    await db
-      .collection('products')
-      .doc(docId)
-      .set(PRODUCT_FIELDS, { merge: true });
-    console.log(` ✔️  products/${docId}`);
+  if (snapshot.empty) {
+    console.log('No work_orders documents found.');
+    return;
   }
-}
 
-async function fixExistingProducts() {
-  console.log('🔧 Fixing any existing product docs...');
-  const snapshot = await db.collection('products').get();
+  let batch = db.batch();
+  let count = 0;
 
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    const updates = {};
+  snapshot.docs.forEach(doc => {
+    const docRef = collectionRef.doc(doc.id);
+    batch.update(docRef, { agentEmail: 'herok@wigbd.com' });
+    count += 1;
 
-    for (const [field, defaultValue] of Object.entries(PRODUCT_FIELDS)) {
-      if (!data.hasOwnProperty(field)) {
-        updates[field] = defaultValue;
-      }
+    // Firestore batch limit is 500; commit and reset if we hit it
+    if (count % 500 === 0) {
+      batch.commit();
+      batch = db.batch();
     }
+  });
 
-    if (Object.keys(updates).length > 0) {
-      await doc.ref.update(updates);
-      console.log(` • ${doc.id} — added fields: ${Object.keys(updates).join(', ')}`);
-    }
-  }
+  // commit any remaining updates
+  await batch.commit();
+  console.log(`✅ Updated agentEmail on ${count} work_orders documents.`);
 }
 
-async function main() {
-  try {
-    await seedProductCollection();
-    await fixExistingProducts();
-    console.log('✅ Done seeding & fixing products collection.');
-  } catch (err) {
-    console.error('❌ Error:', err);
-  } finally {
-    process.exit(0);
-  }
-}
-
-main();
+backfillAgentEmail()
+  .then(() => process.exit(0))
+  .catch(err => {
+    console.error('Error during backfill:', err);
+    process.exit(1);
+  });

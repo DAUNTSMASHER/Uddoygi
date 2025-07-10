@@ -9,6 +9,7 @@ import 'new_invoices_screen.dart';
 import 'all_invoices_screen.dart';
 import 'sales_report_screen.dart';
 import 'order_progress_screen.dart';
+import 'work_order_screen.dart'; // ← import your work order screen
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
@@ -95,12 +96,15 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // clamp to 0.0–100.0 and convert to double
     final double achievement =
     (totalSales / salesTarget * 100).clamp(0.0, 100.0).toDouble();
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const Text('Sales Dashboard', style: TextStyle(fontSize: _fontLarge)),
         backgroundColor: _darkBlue,
         actions: [
@@ -241,16 +245,22 @@ class _SalesScreenState extends State<SalesScreen> {
               mainAxisSpacing: 12,
               childAspectRatio: 1.2,
               children: [
-                _buildActionTile(Icons.add_circle, 'New', _darkBlue, () {
+                _buildActionTile(Icons.add_circle, 'New Invoice', _darkBlue, () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const NewInvoicesScreen()),
                   );
                 }),
-                _buildActionTile(Icons.list_alt, 'All', _darkBlue, () {
+                _buildActionTile(Icons.list_alt, 'All Invoices', _darkBlue, () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const AllInvoicesScreen()),
+                  );
+                }),
+                _buildActionTile(Icons.work, 'Work Orders', _darkBlue, () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WorkOrderScreen()),
                   );
                 }),
                 _buildActionTile(Icons.bar_chart, 'Report', _darkBlue, () {
@@ -265,9 +275,7 @@ class _SalesScreenState extends State<SalesScreen> {
                     MaterialPageRoute(builder: (_) => const OrderProgressScreen()),
                   );
                 }),
-                // placeholders to fill grid
-                const SizedBox(),
-                const SizedBox(),
+                const SizedBox(), // fill out grid
               ],
             ),
           ],

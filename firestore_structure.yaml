@@ -158,6 +158,14 @@
       - email
       - status
       - timestamp
+- daily_production:
+  - template:
+      - quantity
+      - forWhom
+      - productionDate
+      - timestamp
+      - managerEmail
+      - productModel
 - employees:
   - OHHP0ZjfqLJINIJveEoJ:
       - phone
@@ -229,6 +237,7 @@
       - items
       - status
       - timestamp
+      - invoiceNo
   - 71nip5gapIpvRmMLd4Kk:
       - date
       - country
@@ -245,6 +254,7 @@
       - items
       - status
       - timestamp
+      - invoiceNo
   - NjPSzFaqO1k3iRkoA9G3:
       - date
       - agentId
@@ -261,6 +271,7 @@
       - country
       - note
       - status
+      - invoiceNo
   - TTwzcoyw348oBLqPg1Fi:
       - agentEmail
       - customerName
@@ -277,6 +288,7 @@
       - customerId
       - agentName
       - status
+      - invoiceNo
   - XazNDbrD8HLUZXGh1GKI:
       - date
       - agentId
@@ -293,6 +305,7 @@
       - country
       - note
       - status
+      - invoiceNo
 - leave_requests:
   - PXKAGJCrWICOF0CeQC30:
       - userId
@@ -355,6 +368,18 @@
       - quantity
       - agentEmail
       - agentName
+  - uQzclOIGwx9XAo3N1ysX:
+      - date
+      - country
+      - note
+      - agentId
+      - amount
+      - quantity
+      - agentEmail
+      - customerId
+      - agentName
+      - invoiceNo
+      - status
 - marketing_tasks:
   - NbjpXnAky15mFomOLlZO:
       - assignedBy
@@ -472,13 +497,13 @@
       - colour
       - notes
       - gender
-      - model_name
       - size
       - density
       - createdBy
       - production_time
       - unit_price
       - createdAt
+      - model_name
   - y6tL9lWmn6AuSQua19s8:
       - production_cost
       - curl
@@ -507,6 +532,36 @@
       - department
       - type
       - timestamp
+- purchase_orders:
+  - template:
+      - poNo
+      - supplierId
+      - supplierName
+      - items
+      - instructions
+      - submittedBy
+      - expectedDate
+      - timestamp
+- qc_reports:
+  - dX6IEKfULdKVWqYDCsbK:
+      - modelName
+      - colour
+      - curl
+      - quantity
+      - density
+      - agentEmail
+      - qcDate
+      - productType
+      - remarks
+      - base
+      - timestamp
+  - template:
+      - agentEmail
+      - productType
+      - productModel
+      - status
+      - remarks
+      - qcDate
 - recommendation:
   - 6IGxy4YasusKGgQeGSiW:
       - personalPhone
@@ -628,6 +683,9 @@
   - io1iHtZ4yR5kdYC5aZLk:
       - name
       - contact
+  - template:
+      - name
+      - contact
   - xUzrY1oya5g7UfUKsFv4:
       - name
       - contact
@@ -745,3 +803,40 @@
       - employeeId
       - profile_picture
       - profilePhotoUrl
+- work_orders:
+  - asraf_20250703_1196_WO_20250731:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - status
+      - lastUpdated
+      - recommendation
+  - hafsa_09072025_2966_WO_20250710:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - lastUpdated
+      - recommendation
+      - status
+  - template:
+      - invoiceId
+      - items
+      - deliveryDays
+      - instructions
+      - submittedToFactory
+      - finalDate
+      - workOrderNo
+      - timestamp
+      - lastUpdated
+      - recommendation
+      - status
