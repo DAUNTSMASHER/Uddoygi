@@ -49,7 +49,6 @@ class _SalaryScreenState extends State<SalaryScreen>
 
   bool get _canViewAll => _role == 'admin' || _role == 'hr';
 
-  /// Stream of this user's payrolls: match on email, fallback to uid
   Stream<QuerySnapshot<Map<String,dynamic>>> _mySalaryStream() {
     final key = _email ?? _uid;
     return FirebaseFirestore.instance
@@ -59,7 +58,6 @@ class _SalaryScreenState extends State<SalaryScreen>
         .snapshots();
   }
 
-  /// Stream of everybody's payrolls (admin/HR only)
   Stream<QuerySnapshot<Map<String,dynamic>>> _allSalaryStream() {
     return FirebaseFirestore.instance
         .collection('payrolls')
