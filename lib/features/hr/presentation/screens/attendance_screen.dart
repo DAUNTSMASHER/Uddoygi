@@ -10,17 +10,16 @@ class AttendanceScreen extends StatefulWidget {
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
-  String _selectedStatus = 'All'; // Present, Absent, Leave, All
-
+  String _selectedStatus = 'All';
   final List<String> _statuses = ['All', 'Present', 'Absent', 'Leave'];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: Colors.indigo,
-        title: const Text('Attendance', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.deepPurple,
+        title: const Text('Employee Attendance', style: TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
@@ -28,12 +27,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Date Picker
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Date:',
+                  'Select Date:',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 TextButton.icon(
@@ -45,22 +43,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       lastDate: DateTime(2030),
                     );
                     if (picked != null) {
-                      setState(() {
-                        _selectedDate = picked;
-                      });
+                      setState(() => _selectedDate = picked);
                     }
                   },
-                  icon: const Icon(Icons.calendar_today, color: Colors.indigo),
+                  icon: const Icon(Icons.calendar_today, color: Colors.deepPurple),
                   label: Text(
                     DateFormat('yyyy-MM-dd').format(_selectedDate),
-                    style: const TextStyle(color: Colors.indigo),
+                    style: const TextStyle(color: Colors.deepPurple),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-
-            // Status Filter Chips
+            const SizedBox(height: 12),
+            const Text(
+              'Filter by Status:',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 6),
             Wrap(
               spacing: 8,
               children: _statuses.map((status) {
@@ -68,22 +67,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 return ChoiceChip(
                   label: Text(status),
                   selected: isSelected,
-                  selectedColor: Colors.indigo,
-                  backgroundColor: Colors.grey[200],
+                  selectedColor: Colors.deepPurple,
+                  backgroundColor: Colors.grey[300],
                   labelStyle: TextStyle(
                     color: isSelected ? Colors.white : Colors.black,
                     fontWeight: FontWeight.w500,
                   ),
-                  onSelected: (_) {
-                    setState(() => _selectedStatus = status);
-                  },
+                  onSelected: (_) => setState(() => _selectedStatus = status),
                 );
               }).toList(),
             ),
-
             const SizedBox(height: 20),
-
-            // Attendance List (Filtered)
             Expanded(
               child: ListView.builder(
                 itemCount: 10,
@@ -105,16 +99,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       : Colors.orange;
 
                   return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
                     elevation: 2,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(15),
                     ),
                     child: ListTile(
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.indigo,
-                        child: Icon(Icons.person, color: Colors.white),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.deepPurple,
+                        radius: 24,
+                        child: const Icon(Icons.person, color: Colors.white),
                       ),
-                      title: Text('Employee ${index + 1}'),
+                      title: Text('Employee ${index + 1}',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text('Status: $status'),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -138,11 +136,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ],
         ),
       ),
-
-      // FAB: Mark Attendance
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.indigo,
-        icon: const Icon(Icons.edit_calendar),
+        backgroundColor: Colors.deepPurple,
+        icon: const Icon(Icons.add_task),
         label: const Text('Mark Attendance'),
         onPressed: () => _showMarkAttendanceSheet(context),
       ),
@@ -150,7 +146,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   void _showMarkAttendanceSheet(BuildContext context) {
+    final TextEditingController nameController = TextEditingController();
     String selectedStatus = 'Present';
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -160,16 +158,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       builder: (context) {
         return Padding(
           padding: MediaQuery.of(context).viewInsets,
-          child: Container(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Mark Attendance', style: TextStyle(fontSize: 18)),
-                const SizedBox(height: 16),
+                const Center(
+                  child: Text('Mark Attendance', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 20),
                 TextField(
+                  controller: nameController,
                   decoration: const InputDecoration(
-                    labelText: 'Employee ID or Name',
+                    labelText: 'Employee Name or ID',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -177,7 +179,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 DropdownButtonFormField<String>(
                   value: selectedStatus,
                   decoration: const InputDecoration(
-                    labelText: 'Status',
+                    labelText: 'Attendance Status',
                     border: OutlineInputBorder(),
                   ),
                   items: ['Present', 'Absent', 'Leave']
@@ -191,20 +193,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // Submit attendance entry here
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // Save logic goes here
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: const Text('Save Attendance'),
                   ),
-                  icon: const Icon(Icons.check),
-                  label: const Text('Save'),
                 ),
               ],
             ),
