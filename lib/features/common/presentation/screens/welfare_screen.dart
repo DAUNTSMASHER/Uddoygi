@@ -21,7 +21,9 @@ class WelfareScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.indigo));
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.indigo),
+            );
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -33,12 +35,13 @@ class WelfareScreen extends StatelessWidget {
             );
           }
 
-          final docs = snapshot.data!.docs;
+          final welfareDocs = snapshot.data!.docs;
+
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (context, idx) {
-              final data = docs[idx].data() as Map<String, dynamic>;
+            itemCount: welfareDocs.length,
+            itemBuilder: (context, index) {
+              final data = welfareDocs[index].data() as Map<String, dynamic>;
               return _buildWelfareCard(data);
             },
           );
@@ -52,7 +55,7 @@ class WelfareScreen extends StatelessWidget {
     final description = data['description'] ?? '';
     final publishedBy = data['publishedBy'] ?? 'Admin';
     final timestamp = data['timestamp'];
-    final dateStr = timestamp is Timestamp
+    final formattedDate = timestamp is Timestamp
         ? DateFormat('MMM d, yyyy').format(timestamp.toDate())
         : '';
 
@@ -66,21 +69,24 @@ class WelfareScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(title),
+            _buildTitleRow(title),
             const SizedBox(height: 10),
             Text(
               description,
-              style: const TextStyle(color: Colors.black87, fontSize: 16),
+              style: const TextStyle(
+                color: Colors.black87,
+                fontSize: 16,
+              ),
             ),
             const SizedBox(height: 12),
-            _buildFooter(publishedBy, dateStr),
+            _buildFooterRow(publishedBy, formattedDate),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(String title) {
+  Widget _buildTitleRow(String title) {
     return Row(
       children: [
         Icon(Icons.volunteer_activism, color: Colors.indigo.shade400),
@@ -99,19 +105,4 @@ class WelfareScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFooter(String publishedBy, String dateStr) {
-    return Row(
-      children: [
-        Text(
-          'Published by: $publishedBy',
-          style: const TextStyle(color: Colors.indigo, fontSize: 13),
-        ),
-        const Spacer(),
-        Text(
-          dateStr,
-          style: const TextStyle(color: Colors.grey, fontSize: 13),
-        ),
-      ],
-    );
-  }
-}
+  Widget _buildFooterRow(String publishe_
