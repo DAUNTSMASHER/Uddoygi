@@ -9,10 +9,7 @@ class WelfareScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Welfare Schemes',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Welfare Schemes', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.indigo,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 1,
@@ -26,81 +23,95 @@ class WelfareScreen extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.indigo));
           }
+
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
-              child: Text('No welfare schemes found.',
-                  style: TextStyle(color: Colors.indigo, fontSize: 16)),
+              child: Text(
+                'No welfare schemes found.',
+                style: TextStyle(color: Colors.indigo, fontSize: 16),
+              ),
             );
           }
+
           final docs = snapshot.data!.docs;
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: docs.length,
             itemBuilder: (context, idx) {
               final data = docs[idx].data() as Map<String, dynamic>;
-              final title = data['title'] ?? '';
-              final desc = data['description'] ?? '';
-              final publishedBy = data['publishedBy'] ?? 'Admin';
-              final timestamp = data['timestamp'];
-              final dateStr = timestamp is Timestamp
-                  ? DateFormat('MMM d, yyyy').format(timestamp.toDate())
-                  : '';
-
-              return Card(
-                color: Colors.indigo[50],
-                elevation: 3,
-                margin: const EdgeInsets.only(bottom: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.volunteer_activism,
-                              color: Colors.indigo.shade400),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(title,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: Colors.indigo
-                                )),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        desc,
-                        style: const TextStyle(
-                          color: Colors.black87,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Text(
-                            'Published by: $publishedBy',
-                            style: const TextStyle(color: Colors.indigo, fontSize: 13),
-                          ),
-                          const Spacer(),
-                          Text(
-                            dateStr,
-                            style: const TextStyle(color: Colors.grey, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              return _buildWelfareCard(data);
             },
           );
         },
       ),
+    );
+  }
+
+  Widget _buildWelfareCard(Map<String, dynamic> data) {
+    final title = data['title'] ?? '';
+    final description = data['description'] ?? '';
+    final publishedBy = data['publishedBy'] ?? 'Admin';
+    final timestamp = data['timestamp'];
+    final dateStr = timestamp is Timestamp
+        ? DateFormat('MMM d, yyyy').format(timestamp.toDate())
+        : '';
+
+    return Card(
+      color: Colors.indigo[50],
+      elevation: 3,
+      margin: const EdgeInsets.only(bottom: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(title),
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: const TextStyle(color: Colors.black87, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            _buildFooter(publishedBy, dateStr),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(String title) {
+    return Row(
+      children: [
+        Icon(Icons.volunteer_activism, color: Colors.indigo.shade400),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Colors.indigo,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooter(String publishedBy, String dateStr) {
+    return Row(
+      children: [
+        Text(
+          'Published by: $publishedBy',
+          style: const TextStyle(color: Colors.indigo, fontSize: 13),
+        ),
+        const Spacer(),
+        Text(
+          dateStr,
+          style: const TextStyle(color: Colors.grey, fontSize: 13),
+        ),
+      ],
     );
   }
 }
