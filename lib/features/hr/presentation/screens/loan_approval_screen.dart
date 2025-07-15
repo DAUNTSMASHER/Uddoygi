@@ -29,9 +29,8 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
     for (var doc in snapshot.docs) {
       final status = doc['status'];
-      if (status == 'Approved') {
-        a++;
-      } else if (status == 'Rejected') r++;
+      if (status == 'Approved') a++;
+      else if (status == 'Rejected') r++;
       else p++;
     }
 
@@ -72,85 +71,34 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
-  void _showLoanForm({DocumentSnapshot? doc}) {
-    final isEdit = doc != null;
-    final TextEditingController nameController =
-    TextEditingController(text: doc?['employeeName'] ?? '');
-    final TextEditingController purposeController =
-    TextEditingController(text: doc?['purpose'] ?? '');
-    final TextEditingController amountController =
-    TextEditingController(text: doc?['amount']?.toString() ?? '');
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(isEdit ? 'Edit Loan Request' : 'New Loan Request'),
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Employee Name')),
-            TextField(controller: purposeController, decoration: const InputDecoration(labelText: 'Purpose')),
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount'),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () async {
-                final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
-                final data = {
-                  'employeeName': nameController.text.trim(),
-                  'purpose': purposeController.text.trim(),
-                  'amount': amount,
-                  'status': 'Pending',
-                  'deductedAmount': 0.0,
-                  'requestedAt': DateFormat('yyyy-MM-dd').format(DateTime.now())
-                };
-
-                if (isEdit) {
-                  await FirebaseFirestore.instance.collection('loans').doc(doc.id).update(data);
-                } else {
-                  await FirebaseFirestore.instance.collection('loans').add(data);
-                }
-
-                Navigator.pop(context);
-                _fetchStats();
-              },
-              child: Text(isEdit ? 'Update' : 'Submit'),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _updateLoanStatus(String id, String status) async {
-    await FirebaseFirestore.instance.collection('loans').doc(id).update({'status': status});
-    _fetchStats();
-  }
-
-  void _deleteLoan(String id) async {
-    await FirebaseFirestore.instance.collection('loans').doc(id).delete();
-    _fetchStats();
-  }
-
   Widget _buildPieChart() {
+    int total = approved + rejected + pending;
+    if (total == 0) total = 1; // avoid divide-by-zero
     return SizedBox(
-      height: 180,
+      height: 200,
       child: PieChart(
         PieChartData(
+          sectionsSpace: 2,
+          centerSpaceRadius: 40,
           sections: [
-            PieChartSectionData(value: approved.toDouble(), title: 'Approved', color: Colors.green),
-            PieChartSectionData(value: rejected.toDouble(), title: 'Rejected', color: Colors.red),
-            PieChartSectionData(value: pending.toDouble(), title: 'Pending', color: Colors.orange),
+            PieChartSectionData(
+              value: approved.toDouble(),
+              title: '${((approved / total) * 100).toStringAsFixed(1)}%',
+              color: Colors.green,
+              radius: 50,
+            ),
+            PieChartSectionData(
+              value: rejected.toDouble(),
+              title: '${((rejected / total) * 100).toStringAsFixed(1)}%',
+              color: Colors.red,
+              radius: 50,
+            ),
+            PieChartSectionData(
+              value: pending.toDouble(),
+              title: '${((pending / total) * 100).toStringAsFixed(1)}%',
+              color: Colors.orange,
+              radius: 50,
+            ),
           ],
         ),
       ),
@@ -169,12 +117,14 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.indigo[900],
       appBar: AppBar(
-        title: const Text('Loan Approval'),
-        backgroundColor: Colors.indigo,
+        title: const Text('Loan Approval', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.indigo[900],
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
             onPressed: () async {
               final snapshot = await FirebaseFirestore.instance.collection('loans').get();
               _exportPDF(snapshot.docs);
@@ -183,20 +133,23 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showLoanForm(),
-        icon: const Icon(Icons.add),
-        label: const Text('New Loan'),
+        onPressed: () {
+          // Add logic to open loan form
+        },
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('New Loan', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.indigo,
       ),
       body: Column(
         children: [
-          const SizedBox(height: 10),
+          const SizedBox(height: 15),
           _buildPieChart(),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
                 DropdownButton<String>(
+                  dropdownColor: Colors.white,
                   value: _selectedStatus,
                   items: ['All', 'Pending', 'Approved', 'Rejected']
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
@@ -204,17 +157,20 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
                   onChanged: (val) => setState(() => _selectedStatus = val!),
                 ),
                 const Spacer(),
-                TextButton(
-                  child: Text(_selectedMonth == null
-                      ? 'Filter by Month'
-                      : DateFormat('MMM yyyy').format(_selectedMonth!)),
+                TextButton.icon(
+                  icon: const Icon(Icons.date_range, color: Colors.white),
+                  label: Text(
+                    _selectedMonth == null
+                        ? 'Filter by Month'
+                        : DateFormat('MMM yyyy').format(_selectedMonth!),
+                    style: const TextStyle(color: Colors.white),
+                  ),
                   onPressed: () async {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: DateTime.now(),
                       firstDate: DateTime(2020),
                       lastDate: DateTime(2030),
-                      helpText: 'Select a date to filter month',
                     );
                     if (picked != null) setState(() => _selectedMonth = picked);
                   },
@@ -229,9 +185,22 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
                   .orderBy('requestedAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                final docs = snapshot.data!.docs.where((doc) => _matchFilters(doc.data() as Map<String, dynamic>)).toList();
+                final docs = snapshot.data!.docs
+                    .where((doc) => _matchFilters(doc.data() as Map<String, dynamic>))
+                    .toList();
+
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No loan records found.',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  );
+                }
 
                 return ListView.builder(
                   itemCount: docs.length,
@@ -241,28 +210,14 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       child: ListTile(
                         title: Text('${data['employeeName']} (${data['status']})'),
-                        subtitle: Text('৳${data['amount']} • ${data['purpose']}\nRequested: ${data['requestedAt']}'),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (value) {
-                            if (value == 'approve') {
-                              _updateLoanStatus(doc.id, 'Approved');
-                            } else if (value == 'reject') {
-                              _updateLoanStatus(doc.id, 'Rejected');
-                            } else if (value == 'edit') {
-                              _showLoanForm(doc: doc);
-                            } else if (value == 'delete') {
-                              _deleteLoan(doc.id);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(value: 'approve', child: Text('Approve')),
-                            const PopupMenuItem(value: 'reject', child: Text('Reject')),
-                            const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                            const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                          ],
+                        subtitle: Text(
+                          '৳${data['amount']} • ${data['purpose']}\nRequested: ${data['requestedAt']}',
                         ),
+                        trailing: const Icon(Icons.more_vert),
                       ),
                     );
                   },
