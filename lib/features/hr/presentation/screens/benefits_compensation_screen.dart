@@ -400,7 +400,7 @@ class _BenefitsCompensationScreenState
               ];
             }).toList(),
             border: pw.TableBorder.all(color: PdfColors.grey300),
-            headerStyle: const pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             cellAlignment: pw.Alignment.centerLeft,
             cellPadding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
             headerDecoration: pw.BoxDecoration(color: PdfColors.blue300),
