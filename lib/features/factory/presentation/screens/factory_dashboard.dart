@@ -10,6 +10,8 @@ import 'package:uddoygi/features/factory/presentation/factory/work_order.dart';
 import 'package:uddoygi/features/factory/presentation/factory/purchase_order.dart';
 import 'package:uddoygi/features/factory/presentation/factory/QC_report.dart';
 import 'package:uddoygi/features/factory/presentation/factory/daily_production.dart';
+// Import the updates screen
+import 'package:uddoygi/features/factory/presentation/screens/progress_update_screen.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
@@ -30,8 +32,8 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
     _DashboardItem('Work Orders',      Icons.work,                 ''), // handled directly
     _DashboardItem('Purchase Orders',  Icons.shopping_cart,         ''), // handled directly
     _DashboardItem('QC Report',        Icons.check_circle,         ''), // handled directly
-    _DashboardItem('Daily Production', Icons.factory,              ''), // new section
-    _DashboardItem('Updates',          Icons.update,               '/factory/progress_update'),
+    _DashboardItem('Daily Production', Icons.factory,              ''), // handled directly
+    _DashboardItem('Updates',          Icons.update,               ''), // now handled below
     _DashboardItem('Attendance',       Icons.event_available,      '/factory/attendance'),
     _DashboardItem('Loan Requests',    Icons.request_page,         '/factory/loan_requests'),
     _DashboardItem('Salary & OT',      Icons.money_off,            '/factory/salary_overtime'),
@@ -57,16 +59,34 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   void _onItemTap(_DashboardItem item) {
     switch (item.title) {
       case 'Work Orders':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrdersScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WorkOrdersScreen()),
+        );
         break;
       case 'Purchase Orders':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseOrdersScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PurchaseOrdersScreen()),
+        );
         break;
       case 'QC Report':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const QCReportScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const QCReportScreen()),
+        );
         break;
       case 'Daily Production':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyProductionScreen()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DailyProductionScreen()),
+        );
+        break;
+      case 'Updates':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProgressUpdateScreen()),
+        );
         break;
       default:
         if (item.route.isNotEmpty) Navigator.pushNamed(context, item.route);

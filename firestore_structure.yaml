@@ -159,6 +159,39 @@
       - status
       - timestamp
 - daily_production:
+  - 3ZAieOuJA7hH6KVmblki:
+      - managerEmail
+      - productModel
+      - colour
+      - curl
+      - quantity
+      - productionDate
+      - size
+      - forWhom
+      - base
+      - timestamp
+  - Bpi8WhcQSIPMIMg4Nc4D:
+      - managerEmail
+      - productModel
+      - quantity
+      - productionDate
+      - forWhom
+      - colour
+      - curl
+      - size
+      - base
+      - timestamp
+  - F8TzvnWW6kzzEiziBgWU:
+      - managerEmail
+      - productModel
+      - colour
+      - curl
+      - quantity
+      - productionDate
+      - size
+      - forWhom
+      - base
+      - timestamp
   - template:
       - quantity
       - forWhom
@@ -490,6 +523,16 @@
   - 6lQuRH6pCZcfujoNf0Bn:
       - userId
       - score
+- production:
+  - template:
+      - modelName
+      - size
+      - colour
+      - curl
+      - quantity
+      - productionDate
+      - timestamp
+      - managerEmail
 - products:
   - 4n425lgeC791ksRVLyCs:
       - production_cost
@@ -518,6 +561,13 @@
       - unit_price
       - createdAt
 - promotions:
+  - NTSqgQwO4ltsaqEE93GS:
+      - employeeName
+      - newPosition
+      - employeeUid
+      - department
+      - type
+      - timestamp
   - WmuHkY2LX8AXKqIjEDQD:
       - employeeName
       - newPosition
@@ -543,6 +593,30 @@
       - expectedDate
       - timestamp
 - qc_reports:
+  - M0NtCNgVx1y9f9U5YdTj:
+      - modelName
+      - colour
+      - curl
+      - quantity
+      - density
+      - agentEmail
+      - qcDate
+      - productType
+      - remarks
+      - base
+      - timestamp
+  - cQHf7oRacKNkMxUqH57A:
+      - modelName
+      - colour
+      - curl
+      - quantity
+      - density
+      - agentEmail
+      - qcDate
+      - productType
+      - remarks
+      - base
+      - timestamp
   - dX6IEKfULdKVWqYDCsbK:
       - modelName
       - colour
@@ -555,13 +629,22 @@
       - remarks
       - base
       - timestamp
+      - agentName
   - template:
       - agentEmail
       - productType
       - productModel
       - status
       - remarks
+      - modelName
+      - colour
+      - curl
+      - quantity
+      - density
+      - agentName
+      - base
       - qcDate
+      - timestamp
 - recommendation:
   - 6IGxy4YasusKGgQeGSiW:
       - personalPhone
@@ -803,8 +886,66 @@
       - employeeId
       - profile_picture
       - profilePhotoUrl
+- work_order_tracking:
+  - 0XugJLtqYw7jvj4sHNaW:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
+  - KK4B4q9u8rQdAe52fhIb:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
+  - UmIPj17PBfmxtL9FUZxh:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
+  - ZEGnt5xABOtM0fu0AWiw:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
+  - mqcjVyFItNJa3TArz0w0:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
 - work_orders:
-  - asraf_20250703_1196_WO_20250731:
+  - hafsa_09072025_2152_WO_20250711:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - agentEmail
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - lastUpdated
+      - status
+  - hafsa_20250703_500090_WO_20250711:
       - finalDate
       - instructions
       - deliveryDays
@@ -813,10 +954,22 @@
       - items
       - submittedToFactory
       - timestamp
-      - status
+      - agentEmail
       - lastUpdated
-      - recommendation
-  - hafsa_09072025_2966_WO_20250710:
+      - status
+  - hafsa_20250703_500090_WO_20250715:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - agentEmail
+      - lastUpdated
+      - status
+  - tashdid_20250630_139_WO_20250714:
       - finalDate
       - instructions
       - deliveryDays
@@ -826,17 +979,5 @@
       - submittedToFactory
       - timestamp
       - lastUpdated
-      - recommendation
       - status
-  - template:
-      - invoiceId
-      - items
-      - deliveryDays
-      - instructions
-      - submittedToFactory
-      - finalDate
-      - workOrderNo
-      - timestamp
-      - lastUpdated
-      - recommendation
-      - status
+      - agentEmail
