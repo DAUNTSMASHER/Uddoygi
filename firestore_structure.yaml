@@ -547,6 +547,19 @@
       - unit_price
       - createdAt
       - model_name
+  - r2nEbnspI4EgBS5cTD6R:
+      - production_cost
+      - curl
+      - colour
+      - notes
+      - gender
+      - model_name
+      - size
+      - density
+      - createdBy
+      - production_time
+      - unit_price
+      - createdAt
   - y6tL9lWmn6AuSQua19s8:
       - production_cost
       - curl
@@ -569,6 +582,13 @@
       - type
       - timestamp
   - WmuHkY2LX8AXKqIjEDQD:
+      - employeeName
+      - newPosition
+      - employeeUid
+      - department
+      - type
+      - timestamp
+  - cwrJVPyBE7obWu36SLYC:
       - employeeName
       - newPosition
       - employeeUid
@@ -746,6 +766,18 @@
       - deduction
       - bonus
       - base
+- salary_templates:
+  - template:
+      - baseSalary
+      - rentAllowance
+      - maritalAllowance
+      - transport
+      - foodAllowance
+      - medicalAllowance
+      - otherAllowances
+      - createdAt
+      - updatedAt
+      - description
 - sales:
   - 1r3g6JLELZMG7YmSaYAO:
       - amount
@@ -896,7 +928,25 @@
       - workOrderNo
       - assignedTo
       - status
+  - C1aSFf5EU9W5uSFHiN4O:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
   - KK4B4q9u8rQdAe52fhIb:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
+  - UMyhVjzf0OdBNn9rdYpv:
       - timeLimit
       - createdAt
       - lastUpdated
@@ -914,26 +964,20 @@
       - workOrderNo
       - assignedTo
       - status
-  - ZEGnt5xABOtM0fu0AWiw:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
-  - mqcjVyFItNJa3TArz0w0:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
 - work_orders:
   - hafsa_09072025_2152_WO_20250711:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - agentEmail
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - lastUpdated
+      - status
+  - hafsa_09072025_2966_WO_20250711:
       - finalDate
       - instructions
       - deliveryDays
