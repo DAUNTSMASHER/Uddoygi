@@ -14,14 +14,15 @@ class ProgressUpdateScreen extends StatefulWidget {
 }
 
 class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
-  String? _selectedOrder;
+  String? _selectedOrderNo;
+  String? _selectedOrderDocId;
+  Future<DocumentSnapshot<Map<String, dynamic>>>? _orderDocFuture;
 
   // Form controllers & state
-  final _notesCtl    = TextEditingController();
+  final _notesCtl = TextEditingController();
   final _assignedCtl = TextEditingController();
-  String _status     = 'running';
-  DateTime _timeLimit= DateTime.now().add(const Duration(days: 1));
-  String? _selectedStage;
+  DateTime _timeLimit = DateTime.now().add(const Duration(days: 1));
+  String? _selectedNextStage;
 
   static const List<String> _stages = [
     'Invoice created',
@@ -38,45 +39,65 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     'Final tracking code',
   ];
 
-  /// Stream of accepted work‑orders
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _acceptedOrdersStream {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
-        .where('status', isEqualTo: 'Accepted')
-        .orderBy('lastUpdated', descending: true)
-        .snapshots();
-  }
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _acceptedOrdersStream =>
+      FirebaseFirestore.instance
+          .collection('work_orders')
+          .where('status', isEqualTo: 'Accepted')
+          .orderBy('lastUpdated', descending: true)
+          .snapshots();
 
-  /// Stream of all updates for the selected order
   Stream<QuerySnapshot<Map<String, dynamic>>> get _trackingStream {
+    if (_selectedOrderNo == null) return const Stream.empty();
     return FirebaseFirestore.instance
         .collection('work_order_tracking')
-        .where('workOrderNo', isEqualTo: _selectedOrder)
+        .where('workOrderNo', isEqualTo: _selectedOrderNo)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
 
   Future<void> _addUpdate() async {
-    if (_selectedStage == null || _selectedOrder == null) return;
+    if (_selectedNextStage == null ||
+        _selectedOrderNo == null ||
+        _selectedOrderDocId == null) return;
+
     final now = Timestamp.now();
-    await FirebaseFirestore.instance
+    final batch = FirebaseFirestore.instance.batch();
+
+    // 1) Add to tracking history
+    final trackingRef = FirebaseFirestore.instance
         .collection('work_order_tracking')
-        .add({
-      'workOrderNo': _selectedOrder,
-      'stage'      : _selectedStage,
-      'status'     : _status,
-      'notes'      : _notesCtl.text.trim(),
-      'assignedTo' : _assignedCtl.text.trim(),
-      'timeLimit'  : Timestamp.fromDate(_timeLimit),
-      'createdAt'  : now,
+        .doc();
+    batch.set(trackingRef, {
+      'workOrderNo': _selectedOrderNo,
+      'stage': _selectedNextStage,
+      'notes': _notesCtl.text.trim(),
+      'assignedTo': _assignedCtl.text.trim(),
+      'timeLimit': Timestamp.fromDate(_timeLimit),
+      'createdAt': now,
       'lastUpdated': now,
     });
+
+    // 2) Update the work_orders doc with currentStage & lastUpdated
+    final orderRef = FirebaseFirestore.instance
+        .collection('work_orders')
+        .doc(_selectedOrderDocId);
+    batch.update(orderRef, {
+      'currentStage': _selectedNextStage,
+      'lastUpdated': now,
+    });
+
+    await batch.commit();
+
+    // Reset form & reload order
     setState(() {
-      _selectedStage = null;
-      _status        = 'running';
+      _selectedNextStage = null;
       _notesCtl.clear();
       _assignedCtl.clear();
-      _timeLimit     = DateTime.now().add(const Duration(days: 1));
+      _timeLimit = DateTime.now().add(const Duration(days: 1));
+      _orderDocFuture = FirebaseFirestore.instance
+          .collection('work_orders')
+          .doc(_selectedOrderDocId!)
+          .get();
     });
   }
 
@@ -102,121 +123,57 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _selectedOrder == null
+          _selectedOrderNo == null
               ? 'Select Work‑Order'
-              : 'Updates: $_selectedOrder',
+              : 'Updates: $_selectedOrderNo',
         ),
         backgroundColor: _darkBlue,
-        leading: _selectedOrder != null
+        leading: _selectedOrderNo != null
             ? IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => setState(() => _selectedOrder = null),
+          onPressed: () => setState(() {
+            _selectedOrderNo = null;
+            _selectedOrderDocId = null;
+            _orderDocFuture = null;
+          }),
         )
             : null,
       ),
-
-      // ────────────────
-      // 1) LIST ACCEPTED
-      // ────────────────
-      body: _selectedOrder == null
+      body: _selectedOrderNo == null
+      // 1) List of accepted work‑orders
           ? StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _acceptedOrdersStream,
         builder: (ctx, snap) {
-          if (snap.connectionState == ConnectionState.waiting)
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
           final docs = snap.data?.docs ?? [];
-          if (docs.isEmpty)
+          if (docs.isEmpty) {
             return const Center(child: Text('No accepted work‑orders.'));
+          }
           return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: docs.length,
             itemBuilder: (ctx, i) {
-              final order = docs[i].data();
-              final no     = order['workOrderNo'] as String? ?? '—';
-              final invId  = order['invoiceId']   as String?;
-
+              final doc = docs[i];
+              final no = doc.data()['workOrderNo'] as String? ?? '—';
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ListTile(
-                  // ─ top‐left: agent email from invoice
-                  title: FutureBuilder<DocumentSnapshot<Map<String,dynamic>>>(
-                    future: invId != null
-                        ? FirebaseFirestore.instance
-                        .collection('invoices')
-                        .doc(invId)
-                        .get()
-                        : Future.value(null),
-                    builder: (ctx, invSnap) {
-                      if (invSnap.connectionState == ConnectionState.waiting)
-                        return const Text(
-                          '…',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _darkBlue,
-                          ),
-                        );
-                      final inv  = invSnap.data?.data();
-                      final email = inv?['agentEmail'] as String? ?? 'unknown';
-                      return Text(
-                        email,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: _darkBlue,
-                        ),
-                      );
-                    },
-                  ),
-
-                  // ─ bottom‐left: small work‑order number
-                  subtitle: Text(
-                    no,
-                    style: const TextStyle(
-                      fontSize: 8,
-                      color: Colors.black87,
-                    ),
-                  ),
-
-                  // ─ right: latest stage + status
-                  trailing: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    future: FirebaseFirestore.instance
-                        .collection('work_order_tracking')
-                        .where('workOrderNo', isEqualTo: no)
-                        .orderBy('createdAt', descending: true)
-                        .limit(1)
-                        .get(),
-                    builder: (ctx, updSnap) {
-                      if (updSnap.connectionState == ConnectionState.waiting)
-                        return const SizedBox(
-                          width: 24, height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        );
-
-                      final updDocs = updSnap.data?.docs ?? [];
-                      if (updDocs.isEmpty)
-                        return const Text(
-                          'No updates',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        );
-
-                      final data   = updDocs.first.data();
-                      final stage  = data['stage']  as String? ?? '-';
-                      final status = (data['status'] as String? ?? '').toUpperCase();
-                      final color  = status == 'RUNNING'
-                          ? Colors.orange
-                          : Colors.green;
-
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(stage,  style: const TextStyle(fontSize: 10)),
-                          Text(status, style: TextStyle(fontSize: 10, color: color)),
-                        ],
-                      );
-                    },
-                  ),
-
-                  onTap: () => setState(() => _selectedOrder = no),
+                  title: Text('Order $no',
+                      style: const TextStyle(
+                          fontSize: 14, color: _darkBlue)),
+                  subtitle: Text(no,
+                      style: const TextStyle(
+                          fontSize: 10, color: Colors.black54)),
+                  onTap: () => setState(() {
+                    _selectedOrderNo = no;
+                    _selectedOrderDocId = doc.id;
+                    _orderDocFuture = FirebaseFirestore.instance
+                        .collection('work_orders')
+                        .doc(doc.id)
+                        .get();
+                  }),
                 ),
               );
             },
@@ -224,156 +181,195 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
         },
       )
 
-      // ────────────────────────────────────────
-      // 2) FORM + HISTORY FOR SELECTED ORDER
-      // ────────────────────────────────────────
-          : Column(
-        children: [
-          // ─ Add New Update Form ────────────────
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              child: Padding(
+      // 2) Form + history for selected order
+          : FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        future: _orderDocFuture,
+        builder: (ctx, orderSnap) {
+          if (orderSnap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Determine current & next stages
+          final orderData = orderSnap.data?.data() ?? {};
+          final currentStage = orderData['currentStage']
+          as String? ??
+              'Submitted to factory'; // default initial
+          // Next state options: stages #5–#9 (indices 4–8)
+          final nextStages = _stages.sublist(4, 9);
+
+          return Column(
+            children: [
+              // — New Update Form —
+              Padding(
                 padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    DropdownButtonFormField<String>(
-                      value: _selectedStage,
-                      hint: const Text('Select Stage'),
-                      items: _stages
-                          .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _selectedStage = v),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('Running'),
-                            value: 'running',
-                            groupValue: _status,
-                            onChanged: (v) => setState(() => _status = v!),
+                        // Current State (read‑only)
+                        TextFormField(
+                          initialValue: currentStage,
+                          decoration: const InputDecoration(
+                            labelText: 'Current State',
+                            border: OutlineInputBorder(),
+                          ),
+                          readOnly: true,
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Next State (select from #5–#9)
+                        DropdownButtonFormField<String>(
+                          value: _selectedNextStage,
+                          decoration: const InputDecoration(
+                            labelText: 'Next State',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: nextStages
+                              .map((s) => DropdownMenuItem(
+                              value: s, child: Text(s)))
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => _selectedNextStage = v),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Assign To
+                        TextField(
+                          controller: _assignedCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Assign To (email/ID)',
+                            border: OutlineInputBorder(),
                           ),
                         ),
-                        Expanded(
-                          child: RadioListTile<String>(
-                            title: const Text('Completed'),
-                            value: 'completed',
-                            groupValue: _status,
-                            onChanged: (v) => setState(() => _status = v!),
+                        const SizedBox(height: 12),
+
+                        // Notes
+                        TextField(
+                          controller: _notesCtl,
+                          decoration: const InputDecoration(
+                            labelText: 'Notes',
+                            border: OutlineInputBorder(),
                           ),
+                          maxLines: 2,
                         ),
-                      ],
-                    ),
-                    TextField(
-                      controller: _assignedCtl,
-                      decoration: const InputDecoration(
-                        labelText: 'Assign To (email/ID)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _notesCtl,
-                      decoration: const InputDecoration(
-                        labelText: 'Notes',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text('Deadline: ${DateFormat.yMMMd().format(_timeLimit)}'),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: _pickTimeLimit,
-                          child: const Text('Change'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: _darkBlue),
-                        onPressed: _addUpdate,
-                        child: const Text('Save Update'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+                        const SizedBox(height: 12),
 
-          // ─ Existing Updates ────────────────────
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _trackingStream,
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting)
-                  return const Center(child: CircularProgressIndicator());
-                final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty)
-                  return const Center(child: Text('No updates yet.'));
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: docs.length,
-                  itemBuilder: (ctx, i) {
-                    final d        = docs[i].data();
-                    final stage    = d['stage']      as String;
-                    final status   = (d['status']    as String).toUpperCase();
-                    final notes    = d['notes']      as String?  ?? '';
-                    final assigned = d['assignedTo'] as String?  ?? '';
-                    final tlTs     = d['timeLimit']  as Timestamp?;
-                    final tl       = tlTs != null
-                        ? DateFormat.yMMMd().format(tlTs.toDate())
-                        : '-';
-                    final updTs    = d['lastUpdated'] as Timestamp?;
-                    final updatedAt= updTs != null
-                        ? DateFormat.yMMMd().add_jm().format(updTs.toDate())
-                        : '-';
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6)),
-                      elevation: 1,
-                      child: ListTile(
-                        title: Text(
-                          '$stage • $status',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: _darkBlue),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        // Deadline picker
+                        Row(
                           children: [
-                            if (assigned.isNotEmpty)
-                              Text('Assigned to: $assigned'),
-                            if (notes.isNotEmpty)
-                              Text('Notes: $notes'),
-                            Text('Deadline: $tl'),
                             Text(
-                              'Updated: $updatedAt',
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.grey),
+                              'Deadline: ${DateFormat.yMMMd().format(_timeLimit)}',
+                            ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: _pickTimeLimit,
+                              child: const Text('Change'),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 12),
+
+                        // Save button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                                backgroundColor: _darkBlue),
+                            onPressed: _selectedNextStage == null
+                                ? null
+                                : _addUpdate,
+                            child: const Text('Save Update'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // — Update History —
+              Expanded(
+                child: StreamBuilder<
+                    QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _trackingStream,
+                  builder: (ctx, histSnap) {
+                    if (histSnap.connectionState ==
+                        ConnectionState.waiting) {
+                      return const Center(
+                          child: CircularProgressIndicator());
+                    }
+                    final docs = histSnap.data?.docs ?? [];
+                    if (docs.isEmpty) {
+                      return const Center(
+                          child: Text('No updates yet.'));
+                    }
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: docs.length,
+                      itemBuilder: (ctx, i) {
+                        final d = docs[i].data();
+                        final stage = d['stage'] as String;
+                        final notes = d['notes'] as String? ?? '';
+                        final assigned =
+                            d['assignedTo'] as String? ?? '';
+                        final tlTs = d['timeLimit'] as Timestamp?;
+                        final tl = tlTs != null
+                            ? DateFormat.yMMMd()
+                            .format(tlTs.toDate())
+                            : '-';
+                        final updTs =
+                        d['lastUpdated'] as Timestamp?;
+                        final updatedAt = updTs != null
+                            ? DateFormat.yMMMd()
+                            .add_jm()
+                            .format(updTs.toDate())
+                            : '-';
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                              vertical: 6),
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                              BorderRadius.circular(6)),
+                          elevation: 1,
+                          child: ListTile(
+                            title: Text(
+                              stage,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _darkBlue),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                if (assigned.isNotEmpty)
+                                  Text('Assigned to: $assigned'),
+                                if (notes.isNotEmpty)
+                                  Text('Notes: $notes'),
+                                Text('Deadline: $tl'),
+                                Text(
+                                  'Updated: $updatedAt',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
-          ),
-        ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

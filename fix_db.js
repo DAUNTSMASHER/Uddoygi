@@ -13,46 +13,36 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-async function seedAdminPayrolls() {
-  // we’ll use the email as the “userId” field here:
-  const userId = 'admin@ud.com';
+async function seedTracking() {
+  // You can change this to any identifier you like,
+  // or omit .doc() to let Firestore generate one.
+  const docRef = db.collection('tracking').doc('orderTrackingTemplate');
 
-  // two example payroll entries
-  const payrolls = [
-    {
-      userId,
-      month:       '2025-07',
-      baseSalary:  8000,
-      bonus:       1200,
-      deductions:  300,
-      netSalary:   8900,
-      status:      'processed',
-      processedAt: admin.firestore.Timestamp.now(),
-    },
-    {
-      userId,
-      month:       '2025-06',
-      baseSalary:  8000,
-      bonus:        500,
-      deductions:  200,
-      netSalary:   8300,
-      status:      'processed',
-      processedAt: admin.firestore.Timestamp.now(),
-    },
-  ];
+  const trackingData = {
+    invoiceCreated:           false,
+    paymentTaken:             false,
+    submittedToFactory:       false,
+    factoryUpdate1BaseDone:   false,
+    hairIsReady:              false,
+    knottingGoingOn:          false,
+    putting:                  false,
+    molding:                  false,
+    submittedToHeadOffice:    false,
+    addressValidation:        false,
+    shippedToFedEx:           false,
+    finalTrackingCode:        false
+  };
 
-  for (const p of payrolls) {
-    const docRef = await db.collection('payrolls').add(p);
-    console.log(`✔️  Seeded payroll (${p.month}) as doc ${docRef.id}`);
-  }
+  await docRef.set(trackingData);
+  console.log(`✔️  Seeded tracking document with ID "${docRef.id}"`);
 }
 
-seedAdminPayrolls()
+seedTracking()
   .then(() => {
-    console.log('🎉 Done seeding admin@ud.com payroll records.');
+    console.log('🎉 Done creating tracking collection.');
     process.exit(0);
   })
   .catch(err => {
-    console.error('❌ Error seeding payrolls:', err);
+    console.error('❌ Error seeding tracking data:', err);
     process.exit(1);
   });
