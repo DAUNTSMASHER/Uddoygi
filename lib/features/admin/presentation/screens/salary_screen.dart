@@ -124,7 +124,6 @@ class _SalaryScreenState extends State<SalaryScreen>
 
   @override
   Widget build(BuildContext context) {
-    // don't render tabs until we know email/uid
     if (_email == null && _uid == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -132,36 +131,38 @@ class _SalaryScreenState extends State<SalaryScreen>
     }
 
     return Scaffold(
-        appBar: AppBar(
-          title: const Text('Salary'),
-          backgroundColor: _darkBlue,
-          bottom: TabBar(
-            controller: _tabs,
-            indicatorColor: Colors.white,
-            tabs: [
-              const Tab(text: 'My Salary'),
-              Tab(text: _canViewAll ? 'All Salaries' : 'Locked'),
-            ],
-          ),
+      appBar: AppBar(
+        title: const Text(
+          'Salary',
+          style: TextStyle(color: Colors.white),
         ),
-        body: TabBarView(
-            controller: _tabs,
-            children: [
-              // always show this user's salary
-              _buildSalaryList(_mySalaryStream()),
-
-              // only admin/HR can view all
-              if (_canViewAll)
-                _buildSalaryList(_allSalaryStream())
-              else
-                const Center(
-                  child: Text(
-                    'Access denied',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-            ],
+        backgroundColor: _darkBlue,
+        bottom: TabBar(
+          controller: _tabs,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: [
+            const Tab(text: 'My Salary'),
+            Tab(text: _canViewAll ? 'All Salaries' : 'Locked'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          _buildSalaryList(_mySalaryStream()),
+          if (_canViewAll)
+            _buildSalaryList(_allSalaryStream())
+          else
+            const Center(
+              child: Text(
+                'Access denied',
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
-        );
-    }
+        ],
+      ),
+    );
+  }
 }
