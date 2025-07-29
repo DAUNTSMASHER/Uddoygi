@@ -1016,6 +1016,14 @@
       - workOrderNo
       - assignedTo
       - status
+  - 2HKIretUFtGfA8V7tnwV:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
   - C1aSFf5EU9W5uSFHiN4O:
       - timeLimit
       - createdAt
@@ -1025,25 +1033,16 @@
       - workOrderNo
       - assignedTo
       - status
+  - Fyu3NSAdnfagp5cLyw6j:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+      - status
   - HfP6Mrg5AXnvMAzrkN5X:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
-  - KK4B4q9u8rQdAe52fhIb:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
-  - UMyhVjzf0OdBNn9rdYpv:
       - timeLimit
       - createdAt
       - lastUpdated
@@ -1063,8 +1062,10 @@
       - items
       - submittedToFactory
       - timestamp
-      - lastUpdated
       - status
+      - currentStatus
+      - currentStage
+      - lastUpdated
   - hafsa_09072025_2152_WO_20250711:
       - finalDate
       - instructions
