@@ -1,3 +1,4 @@
+// lib/features/marketing/presentation/screens/tax_screen.dart
 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -130,163 +131,163 @@ class _TaxScreenState extends State<TaxScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: _white,
-        appBar: AppBar(
-          backgroundColor: _darkBlue,
-          title: const Text('Tax Management'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.download_outlined),
-              onPressed: _exportToExcel,
-            )
+      backgroundColor: _white,
+      appBar: AppBar(
+        backgroundColor: _darkBlue,
+        title: const Text('Tax Management'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            onPressed: _exportToExcel,
+          )
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── NEW BUTTON ────────────────────────────────────────
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _darkBlue,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TaxCalculationPage(),
+                  ),
+                );
+              },
+              child: const Text(
+                'Calculate your tax in detail',
+                style: TextStyle(color: _white, fontSize: 16),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Input Form ────────────────────────────────────
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: _taxType,
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'Individual', child: Text('Individual')),
+                          DropdownMenuItem(
+                              value: 'Company', child: Text('Company')),
+                        ],
+                        decoration:
+                        const InputDecoration(labelText: 'Tax Type'),
+                        onChanged: (v) => setState(() => _taxType = v!),
+                      ),
+                      if (_taxType == 'Company')
+                        DropdownButtonFormField<String>(
+                          value: _companyType,
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'Public', child: Text('Public')),
+                            DropdownMenuItem(
+                                value: 'Private', child: Text('Private')),
+                            DropdownMenuItem(value: 'OPC', child: Text('OPC')),
+                          ],
+                          decoration: const InputDecoration(
+                              labelText: 'Company Category'),
+                          onChanged: (v) => setState(() => _companyType = v!),
+                        ),
+                      TextFormField(
+                        controller: _entityNameController,
+                        decoration:
+                        const InputDecoration(labelText: 'Entity Name'),
+                      ),
+                      TextFormField(
+                        controller: _incomeController,
+                        decoration:
+                        const InputDecoration(labelText: 'Annual Income'),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: _darkBlue,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8))),
+                        child: const Text('Calculate & Save',
+                            style: TextStyle(color: _white)),
+                        onPressed: () {
+                          final inc = double.tryParse(
+                              _incomeController.text.trim());
+                          if (inc != null) {
+                            _calculateTax(inc);
+                            _saveTaxToFirebase();
+                          }
+                        },
+                      ),
+                      if (_calculatedTax != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Text(
+                            'Tax: ৳${_calculatedTax!.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _darkBlue),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── Chart ───────────────────────────────────────
+            const Text('Monthly Tax Trend', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 180,
+              child: BarChart(
+                BarChartData(
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(show: false),
+                  barGroups: _buildBarChart(),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── History ────────────────────────────────────
+            const Text('Tax History', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            ..._taxHistory.map((row) {
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
+                  title: Text('${row['entity']} (${row['type']})'),
+                  subtitle: Text(
+                    '৳${row['tax']} on ৳${row['income']} • ${row['date']}'
+                        '${row['companyType'] != null ? ' • ${row['companyType']}' : ''}',
+                  ),
+                ),
+              );
+            }).toList(),
           ],
         ),
-        body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── NEW BUTTON ────────────────────────────────────────
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _darkBlue,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const TaxCalculationPage(),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    'Calculate your tax in detail',
-                    style: TextStyle(color: _white, fontSize: 16),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ── Input Form ────────────────────────────────────
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          DropdownButtonFormField<String>(
-                            value: _taxType,
-                            items: const [
-                              DropdownMenuItem(
-                                  value: 'Individual', child: Text('Individual')),
-                              DropdownMenuItem(
-                                  value: 'Company', child: Text('Company')),
-                            ],
-                            decoration:
-                            const InputDecoration(labelText: 'Tax Type'),
-                            onChanged: (v) => setState(() => _taxType = v!),
-                          ),
-                          if (_taxType == 'Company')
-                            DropdownButtonFormField<String>(
-                              value: _companyType,
-                              items: const [
-                                DropdownMenuItem(
-                                    value: 'Public', child: Text('Public')),
-                                DropdownMenuItem(
-                                    value: 'Private', child: Text('Private')),
-                                DropdownMenuItem(value: 'OPC', child: Text('OPC')),
-                              ],
-                              decoration: const InputDecoration(
-                                  labelText: 'Company Category'),
-                              onChanged: (v) => setState(() => _companyType = v!),
-                            ),
-                          TextFormField(
-                            controller: _entityNameController,
-                            decoration:
-                            const InputDecoration(labelText: 'Entity Name'),
-                          ),
-                          TextFormField(
-                            controller: _incomeController,
-                            decoration:
-                            const InputDecoration(labelText: 'Annual Income'),
-                            keyboardType: TextInputType.number,
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: _darkBlue,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8))),
-                            child: const Text('Calculate & Save',
-                                style: TextStyle(color: _white)),
-                            onPressed: () {
-                              final inc = double.tryParse(
-                                  _incomeController.text.trim());
-                              if (inc != null) {
-                                _calculateTax(inc);
-                                _saveTaxToFirebase();
-                              }
-                            },
-                          ),
-                          if (_calculatedTax != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Tax: ৳${_calculatedTax!.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: _darkBlue),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ── Chart ───────────────────────────────────────
-                const Text('Monthly Tax Trend', style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 180,
-                  child: BarChart(
-                    BarChartData(
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(show: false),
-                      barGroups: _buildBarChart(),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // ── History ────────────────────────────────────
-                const Text('Tax History', style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 8),
-                ..._taxHistory.map((row) {
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      title: Text('${row['entity']} (${row['type']})'),
-                      subtitle: Text(
-                        '৳${row['tax']} on ৳${row['income']} • ${row['date']}'
-                            '${row['companyType'] != null ? ' • ${row['companyType']}' : ''}',
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ],
-            ),
-        ),
+      ),
     );
-    }
+  }
 }
