@@ -1,214 +1,168 @@
-// lib/features/marketing/presentation/screens/admin_dashboard.dart
+// lib/features/marketing/presentation/screens/salary_screen.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import '../widgets/admin_drawer.dart';
-import '../widgets/admin_dashboard_summary.dart';
 
-const Color _darkBlue   = Color(0xFF0D47A1);
-const double _fontSmall = 12.0;
-const double _fontMed   = 14.0;
-const double _fontLarge = 16.0;
+const Color _darkBlue = Color(0xFF0D47A1);
+const double _fontMed = 14.0;
 
-class AdminDashboard extends StatefulWidget {
-  const AdminDashboard({Key? key}) : super(key: key);
+class SalaryScreen extends StatefulWidget {
+  const SalaryScreen({Key? key}) : super(key: key);
 
   @override
-  State<AdminDashboard> createState() => _AdminDashboardState();
+  State<SalaryScreen> createState() => _SalaryScreenState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> {
-  bool showSummary = true;
-  bool isLoading   = false;
-  String? email, uid, role;
-
-  final List<_DashboardItem> dashboardItems = const [
-    _DashboardItem('Notices',     Icons.announcement,   '/admin/notices'),
-    _DashboardItem('Employees',   Icons.people,         '/admin/employees'),
-    _DashboardItem('Reports',     Icons.bar_chart,      '/admin/reports'),
-    _DashboardItem('Welfare',     Icons.favorite,       '/common/welfare'),
-    _DashboardItem('Complaints',  Icons.report_problem, '/common/complaints'),
-    _DashboardItem('Salary',      Icons.attach_money,   '/admin/salary'),
-    _DashboardItem('Messages',    Icons.message,        '/common/messages'),
-    _DashboardItem('R&D',         Icons.science,        '/admin/research'),
-  ];
+class _SalaryScreenState extends State<SalaryScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  String? _email;
+  String? _uid;
+  String? _role;
 
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 2, vsync: this);
     _loadSession();
   }
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
-    if (session != null && mounted) {
+    final fbUser = FirebaseAuth.instance.currentUser;
+    if (mounted) {
       setState(() {
-        email = session['email'] as String?;
-        uid   = session['uid'] as String?;
-        role  = session['role'] as String?;
+        _email = session?['email'] as String? ?? fbUser?.email;
+        _uid   = session?['uid']   as String? ?? fbUser?.uid;
+        _role  = session?['role']  as String?;
       });
     }
   }
 
-  Future<void> _refreshSummary() async {
-    setState(() => isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => isLoading = false);
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  bool get _canViewAll => _role == 'admin' || _role == 'hr';
+
+  Stream<QuerySnapshot<Map<String,dynamic>>> _mySalaryStream() {
+    final key = _email ?? _uid;
+    return FirebaseFirestore.instance
+        .collection('payrolls')
+        .where('userId', isEqualTo: key)
+        .orderBy('month', descending: true)
+        .snapshots();
+  }
+
+  Stream<QuerySnapshot<Map<String,dynamic>>> _allSalaryStream() {
+    return FirebaseFirestore.instance
+        .collection('payrolls')
+        .orderBy('month', descending: true)
+        .snapshots();
+  }
+
+  Widget _buildSalaryList(Stream<QuerySnapshot<Map<String,dynamic>>> stream) {
+    return StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+      stream: stream,
+      builder: (ctx, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: _darkBlue));
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return const Center(child: Text('No records found.'));
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: docs.length,
+          itemBuilder: (ctx, i) {
+            final d = docs[i].data();
+            final month      = d['month']      as String? ?? '-';
+            final baseSalary = d['baseSalary'] as num?    ?? 0;
+            final bonus      = d['bonus']      as num?    ?? 0;
+            final deductions = d['deductions'] as num?   ?? 0;
+            final netSalary  = d['netSalary']  as num?    ?? 0;
+
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(month,
+                        style: const TextStyle(
+                          fontSize: _fontMed,
+                          fontWeight: FontWeight.bold,
+                          color: _darkBlue,
+                        )),
+                    const SizedBox(height: 8),
+                    Text('Base Salary:   \$${baseSalary.toStringAsFixed(2)}'),
+                    Text('Bonus:         \$${bonus.toStringAsFixed(2)}'),
+                    Text('Deductions:    \$${deductions.toStringAsFixed(2)}'),
+                    const Divider(height: 20),
+                    Text('Net Salary:    \$${netSalary.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: _fontMed,
+                          fontWeight: FontWeight.w600,
+                          color: _darkBlue,
+                        )),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_email == null && _uid == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
+        title: const Text(
+          'Salary',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: _darkBlue,
-        title: const Text('Admin Dashboard', style: TextStyle(color: Colors.white)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              await LocalStorageService.clearSession();
-              if (mounted) Navigator.pushReplacementNamed(context, '/login');
-            },
-          ),
+        bottom: TabBar(
+          controller: _tabs,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: [
+            const Tab(text: 'My Salary'),
+            Tab(text: _canViewAll ? 'All Salaries' : 'Locked'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          _buildSalaryList(_mySalaryStream()),
+          if (_canViewAll)
+            _buildSalaryList(_allSalaryStream())
+          else
+            const Center(
+              child: Text(
+                'Access denied',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
         ],
       ),
-      drawer: const AdminDrawer(),
-      body: RefreshIndicator(
-        color: _darkBlue,
-        onRefresh: _refreshSummary,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (email != null)
-              Text(
-                'Welcome, $email',
-                style: const TextStyle(
-                  fontSize: _fontMed,
-                  fontWeight: FontWeight.w600,
-                  color: _darkBlue,
-                ),
-              ),
-            const SizedBox(height: 16),
-
-            // Search box
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              elevation: 2,
-              child: TextField(
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search, color: _darkBlue),
-                  hintText: 'Search...',
-                  hintStyle: const TextStyle(fontSize: _fontSmall),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Summary section
-            _sectionHeader('Summary', showSummary, () {
-              setState(() => showSummary = !showSummary);
-            }),
-            AnimatedCrossFade(
-              firstChild: isLoading
-                  ? const Center(child: CircularProgressIndicator(color: _darkBlue))
-                  : const AdminDashboardSummary(),
-              secondChild: const SizedBox.shrink(),
-              crossFadeState: showSummary
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 300),
-            ),
-            const SizedBox(height: 32),
-
-            // Quick Actions
-            Text('Quick Actions',
-                style: const TextStyle(
-                    fontSize: _fontLarge,
-                    fontWeight: FontWeight.bold,
-                    color: _darkBlue)),
-            const SizedBox(height: 16),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 3,
-              children: dashboardItems.map((item) {
-                return _buildActionCard(item);
-              }).toList(),
-            ),
-          ],
-        ),
-      ),
     );
   }
-
-  Widget _sectionHeader(String title, bool expanded, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(title,
-                style: const TextStyle(
-                    fontSize: _fontMed,
-                    fontWeight: FontWeight.bold,
-                    color: _darkBlue)),
-            Icon(expanded ? Icons.expand_less : Icons.expand_more,
-                color: _darkBlue),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionCard(_DashboardItem item) {
-    return Material(
-      color: _darkBlue.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: () => Navigator.pushNamed(context, item.route),
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              Icon(item.icon, color: _darkBlue),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(item.title,
-                    style: const TextStyle(
-                        fontSize: _fontMed,
-                        fontWeight: FontWeight.w600,
-                        color: _darkBlue),
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardItem {
-  final String title;
-  final IconData icon;
-  final String route;
-  const _DashboardItem(this.title, this.icon, this.route);
 }

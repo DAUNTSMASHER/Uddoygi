@@ -94,3 +94,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'uddyogi.firebasestorage.app',
   );
 }
+

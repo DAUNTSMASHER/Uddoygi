@@ -451,7 +451,7 @@
       - to
       - body
       - timestamp
-  - Lg2QrAIi3HRw3vaGehvJ:
+  - BEpuIB18OPlOT4EBKshm:
       - subject
       - fromName
       - from
@@ -459,18 +459,6 @@
       - body
       - timestamp
 - notices:
-  - 5tJXzeq5VK5NKQXYf5Cr:
-      - publishedBy
-      - description
-      - fileUrl
-      - title
-      - timestamp
-  - CVKbr0zvRZpAYxGtw3xJ:
-      - publishedBy
-      - description
-      - fileUrl
-      - title
-      - timestamp
   - OpiKRqOORG9naxPBRK8H:
       - publishedBy
       - description
@@ -501,6 +489,42 @@
       - status
       - timestamp
 - payrolls:
+  - AJVE6SdslJm6b2b7nE3G:
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
+      - userId
+  - MKMyDQkyMuswljP1aDA6:
+      - userId
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
+  - hR9pWMqBrxWpvQbKZgmi:
+      - userId
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
+  - iJNewscA3d3qPPE9qoXo:
+      - userId
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
   - rZjgui6GJw7yNMBxxrFg:
       - userId
       - month
@@ -547,6 +571,19 @@
       - unit_price
       - createdAt
       - model_name
+  - r2nEbnspI4EgBS5cTD6R:
+      - production_cost
+      - curl
+      - colour
+      - notes
+      - gender
+      - model_name
+      - size
+      - density
+      - createdBy
+      - production_time
+      - unit_price
+      - createdAt
   - y6tL9lWmn6AuSQua19s8:
       - production_cost
       - curl
@@ -575,6 +612,13 @@
       - department
       - type
       - timestamp
+  - cwrJVPyBE7obWu36SLYC:
+      - employeeName
+      - newPosition
+      - employeeUid
+      - department
+      - type
+      - timestamp
   - swE8U4CtRW8IhhWPRnc8:
       - employeeName
       - newPosition
@@ -592,6 +636,8 @@
       - submittedBy
       - expectedDate
       - timestamp
+      - acceptedAt
+      - status
 - qc_reports:
   - M0NtCNgVx1y9f9U5YdTj:
       - modelName
@@ -740,12 +786,51 @@
       - status
       - date
 - salaries:
+  - 5AYoomcD9yoF4UPgRIjC:
+      - employeeName
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
+  - 7ZMRtLPQWySJX1NCCMBj:
+      - employeeName
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
   - Fi8tIWbyhrX61EGBp7Ps:
       - employeeName
       - month
       - deduction
       - bonus
       - base
+  - p6LAeHpKtBjMtSWcS5rc:
+      - employeeName
+      - month
+      - baseSalary
+      - bonus
+      - deductions
+      - netSalary
+      - status
+      - processedAt
+- salary_templates:
+  - template:
+      - baseSalary
+      - rentAllowance
+      - maritalAllowance
+      - transport
+      - foodAllowance
+      - medicalAllowance
+      - otherAllowances
+      - createdAt
+      - updatedAt
+      - description
 - sales:
   - 1r3g6JLELZMG7YmSaYAO:
       - amount
@@ -773,6 +858,20 @@
       - name
       - contact
 - taxes:
+  - TBWwnXXikN1SY6ZOfRJn:
+      - income
+      - date
+      - companyType
+      - tax
+      - type
+      - entity
+  - UPLK5MNDOZykTdlnPZlE:
+      - income
+      - date
+      - companyType
+      - tax
+      - type
+      - entity
   - YexBC2zwxZK9Dk6Jn8Qa:
       - income
       - date
@@ -780,6 +879,27 @@
       - tax
       - type
       - entity
+  - sTYKj3T2kaGnu7qiZXu1:
+      - income
+      - date
+      - companyType
+      - tax
+      - type
+      - entity
+- tracking:
+  - orderTrackingTemplate:
+      - invoiceCreated
+      - paymentTaken
+      - submittedToFactory
+      - factoryUpdate1BaseDone
+      - hairIsReady
+      - knottingGoingOn
+      - putting
+      - molding
+      - submittedToHeadOffice
+      - addressValidation
+      - shippedToFedEx
+      - finalTrackingCode
 - users:
   - 1CGKRZALvxV6SjfTG7olnkhApZn1:
       - addedBy
@@ -896,7 +1016,15 @@
       - workOrderNo
       - assignedTo
       - status
-  - KK4B4q9u8rQdAe52fhIb:
+  - 2HKIretUFtGfA8V7tnwV:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+  - C1aSFf5EU9W5uSFHiN4O:
       - timeLimit
       - createdAt
       - lastUpdated
@@ -905,7 +1033,7 @@
       - workOrderNo
       - assignedTo
       - status
-  - UmIPj17PBfmxtL9FUZxh:
+  - Fyu3NSAdnfagp5cLyw6j:
       - timeLimit
       - createdAt
       - lastUpdated
@@ -914,16 +1042,7 @@
       - workOrderNo
       - assignedTo
       - status
-  - ZEGnt5xABOtM0fu0AWiw:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
-  - mqcjVyFItNJa3TArz0w0:
+  - HfP6Mrg5AXnvMAzrkN5X:
       - timeLimit
       - createdAt
       - lastUpdated
@@ -933,7 +1052,33 @@
       - assignedTo
       - status
 - work_orders:
+  - asraf_20250703_7634_WO_20250716:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - agentEmail
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - status
+      - currentStatus
+      - currentStage
+      - lastUpdated
   - hafsa_09072025_2152_WO_20250711:
+      - finalDate
+      - instructions
+      - deliveryDays
+      - agentEmail
+      - invoiceId
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - lastUpdated
+      - status
+  - hafsa_09072025_2966_WO_20250711:
       - finalDate
       - instructions
       - deliveryDays
@@ -969,15 +1114,3 @@
       - agentEmail
       - lastUpdated
       - status
-  - tashdid_20250630_139_WO_20250714:
-      - finalDate
-      - instructions
-      - deliveryDays
-      - invoiceId
-      - workOrderNo
-      - items
-      - submittedToFactory
-      - timestamp
-      - lastUpdated
-      - status
-      - agentEmail

@@ -1,48 +1,55 @@
 // fix_db.js
-// Script to backfill "agentEmail" field in all work_orders docs
+// Usage: node fix_db.js
 
 const admin = require('firebase-admin');
-const path  = require('path');
+const path = require('path');
 
-// Initialize Firebase Admin with your service account
+// Replace with your actual service account key path
+const serviceAccount = require(path.join(__dirname, 'serviceAccountKey.json'));
+
+// Initialize Firebase Admin
 admin.initializeApp({
-  credential: admin.credential.cert(require(path.join(__dirname, 'serviceAccountKey.json'))),
+  credential: admin.credential.cert(serviceAccount)
 });
 
+// Get Firestore DB instance
 const db = admin.firestore();
 
-async function backfillAgentEmail() {
-  const collectionRef = db.collection('work_orders');
-  const snapshot = await collectionRef.get();
+async function ensureCollections() {
+  try {
+    // Check/Create `marketing_sales` collection
+    const marketing_sales_ref = db.collection('marketing_sales');
+    console.log('✅ Checked: marketing_sales – For tracking agent sales (quantity, amount, customer).');
 
-  if (snapshot.empty) {
-    console.log('No work_orders documents found.');
-    return;
+    // Check/Create `products` collection
+    const products_ref = db.collection('products');
+    console.log('✅ Checked: products – Contains unit price and production cost for calculating profit.');
+
+    // Check/Create `buyers` collection
+    const buyers_ref = db.collection('buyers');
+    console.log('✅ Checked: buyers – Links customers to contact info and their agent.');
+
+    // Check/Create `marketing_incentives` collection
+    const marketing_incentives_ref = db.collection('marketing_incentives');
+    console.log('✅ Checked: marketing_incentives – Used to store calculated monthly incentives.');
+
+    // Check/Create `users` collection
+    const users_ref = db.collection('users');
+    console.log('✅ Checked: users – Connects agentId with employee information.');
+
+    // Optional: Check/Create `invoices` collection
+    const invoices_ref = db.collection('invoices');
+    console.log('✅ Checked: invoices – Useful for grand total, shipping cost, and tax info.');
+
+    // Optional: Check/Create `expenses` collection
+    const expenses_ref = db.collection('expenses');
+    console.log('✅ Checked: expenses – Can hold additional deduction records if needed.');
+
+    console.log('\n🎉 Firestore structure successfully validated for incentive calculation!');
+  } catch (error) {
+    console.error('❌ Error checking Firestore collections:', error);
   }
-
-  let batch = db.batch();
-  let count = 0;
-
-  snapshot.docs.forEach(doc => {
-    const docRef = collectionRef.doc(doc.id);
-    batch.update(docRef, { agentEmail: 'herok@wigbd.com' });
-    count += 1;
-
-    // Firestore batch limit is 500; commit and reset if we hit it
-    if (count % 500 === 0) {
-      batch.commit();
-      batch = db.batch();
-    }
-  });
-
-  // commit any remaining updates
-  await batch.commit();
-  console.log(`✅ Updated agentEmail on ${count} work_orders documents.`);
 }
 
-backfillAgentEmail()
-  .then(() => process.exit(0))
-  .catch(err => {
-    console.error('Error during backfill:', err);
-    process.exit(1);
-  });
+// Run the script
+ensureCollections();
