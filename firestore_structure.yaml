@@ -11,6 +11,37 @@
       - status
       - trackingNumber
       - validatedBy
+- applicants:
+  - 42e3wHmmgOzkduyMqp9x:
+      - role
+      - name
+      - files
+      - appliedAt
+      - status
+  - RTHvz5biOpzW0ndLecuj:
+      - role
+      - name
+      - files
+      - appliedAt
+      - status
+  - pxABXb34jhkbTZtG1zPx:
+      - role
+      - name
+      - files
+      - appliedAt
+      - status
+  - rH1wFjr1dduNW0IY26Rm:
+      - role
+      - name
+      - files
+      - appliedAt
+      - status
+  - wSlLHjdnkirDk7CvBcax:
+      - files
+      - appliedAt
+      - role
+      - name
+      - status
 - attendance:
   - 2gdePgLPDRU388jFMNe5:
       - userId
@@ -21,6 +52,24 @@
       - date
       - status
 - benefits:
+  - COXYKaqOvL7z7GJdm4cr:
+      - date
+      - note
+      - amount
+      - employee
+      - type
+  - PrVaAVYIT9bRunIoN5pU:
+      - date
+      - note
+      - amount
+      - employee
+      - type
+  - ZO9iBQ1cMy9X3TG51dYM:
+      - date
+      - note
+      - amount
+      - employee
+      - type
   - ulWGAuwgpywrtDGUCHnF:
       - userId
       - benefitType
@@ -37,9 +86,21 @@
       - year
       - used
       - category
+  - dGOo4fWc6aQ4NNIWXzem:
+      - date
+      - amount
+      - year
+      - used
+      - category
   - gBQPxHKlI4AuhM0ngPhJ:
       - amount
       - year
+  - ldshH4pYOewqbeUifjRu:
+      - date
+      - amount
+      - year
+      - used
+      - category
 - buyers:
   - YvtJ5m4nRkFW01ZZy0FX:
       - name
@@ -259,7 +320,6 @@
       - country
       - note
       - agentId
-      - shippingCost
       - agentEmail
       - grandTotal
       - agentName
@@ -271,12 +331,16 @@
       - status
       - timestamp
       - invoiceNo
+      - totalPieces
+      - totalAmount
+      - shippingCost
+      - paymentMethod
+      - buyerName
   - 71nip5gapIpvRmMLd4Kk:
       - date
       - country
       - note
       - agentId
-      - shippingCost
       - agentEmail
       - grandTotal
       - agentName
@@ -288,10 +352,14 @@
       - status
       - timestamp
       - invoiceNo
+      - totalPieces
+      - totalAmount
+      - shippingCost
+      - paymentMethod
+      - buyerName
   - NjPSzFaqO1k3iRkoA9G3:
       - date
       - agentId
-      - shippingCost
       - submitted
       - grandTotal
       - customerId
@@ -305,6 +373,11 @@
       - note
       - status
       - invoiceNo
+      - totalPieces
+      - totalAmount
+      - shippingCost
+      - paymentMethod
+      - buyerName
   - TTwzcoyw348oBLqPg1Fi:
       - agentEmail
       - customerName
@@ -322,10 +395,13 @@
       - agentName
       - status
       - invoiceNo
+      - totalPieces
+      - totalAmount
+      - paymentMethod
+      - buyerName
   - XazNDbrD8HLUZXGh1GKI:
       - date
       - agentId
-      - shippingCost
       - submitted
       - agentEmail
       - grandTotal
@@ -339,6 +415,11 @@
       - note
       - status
       - invoiceNo
+      - totalPieces
+      - totalAmount
+      - shippingCost
+      - paymentMethod
+      - buyerName
 - leave_requests:
   - PXKAGJCrWICOF0CeQC30:
       - userId
@@ -347,8 +428,38 @@
       - reason
       - status
       - timestamp
+- leaves:
+  - 6CP2csJ0wU1YEI9FGhnG:
+      - fromDate
+      - employeeName
+      - reason
+      - toDate
+      - appliedAt
+      - status
+  - qFvujwLPpa1smHy56iNS:
+      - fromDate
+      - employeeName
+      - reason
+      - toDate
+      - appliedAt
+      - status
 - loan_requests:
   - 4plCUd8NM4UXTUHZJzXq:
+      - amount
+      - userId
+      - status
+      - timestamp
+  - KHcXtL2cfBawIQ66Af6B:
+      - amount
+      - userId
+      - status
+      - timestamp
+  - aKRuSQn0e2liWKz1ZOFI:
+      - amount
+      - userId
+      - status
+      - timestamp
+  - yhdBh5I9DksJX2ysUS0b:
       - amount
       - userId
       - status
@@ -374,12 +485,54 @@
       - targetAmount
       - achievedAmount
       - incentiveEligible
+- marketing_incentive:
+  - herok@wigbd.com_June_2025_sales:
+      - totalPieces
+      - purchaseCost
+      - agentEmail
+      - year
+      - netSales
+      - salesTarget
+      - totalSales
+      - netProfit
+      - incentive
+      - month
+      - achievedPercent
+      - payment
+      - totalIncentive
+      - totalShipping
+      - timestamp
 - marketing_incentives:
   - BRX2nGqul24k3SBnVn4Y:
       - agentId
       - month
       - amount
       - approved
+      - createdAt
+      - other
+      - total
+      - bonus
+      - name
+      - designation
+      - preset
+      - base
+      - verifiedBy
+  - herok@wigbd.com_June_2025_sales:
+      - totalPieces
+      - purchaseCost
+      - agentEmail
+      - year
+      - netSales
+      - salesTarget
+      - totalSales
+      - netProfit
+      - incentive
+      - month
+      - achievedPercent
+      - payment
+      - totalIncentive
+      - totalShipping
+      - timestamp
 - marketing_orders:
   - yc4fPmtaS7Sh4X8cFm7l:
       - agentId
@@ -480,6 +633,12 @@
       - title
       - timestamp
       - attachments
+  - zmpFbmceHQxKWuKWoZLS:
+      - publishedBy
+      - description
+      - fileUrl
+      - title
+      - timestamp
 - orders:
   - lV2oElq2h1Z6knlXkuQS:
       - agentId
@@ -498,6 +657,24 @@
       - status
       - processedAt
       - userId
+  - DXhbOh3eNg7XSKszWIKE:
+      - period
+      - loanDeduction
+      - generatedAt
+      - employeeId
+      - netSalary
+      - department
+      - grossSalary
+      - loanBreakdown
+  - HMh2JZvd4jVo1pewoaTL:
+      - period
+      - loanDeduction
+      - generatedAt
+      - employeeId
+      - netSalary
+      - department
+      - grossSalary
+      - loanBreakdown
   - MKMyDQkyMuswljP1aDA6:
       - userId
       - month
@@ -507,33 +684,15 @@
       - netSalary
       - status
       - processedAt
-  - hR9pWMqBrxWpvQbKZgmi:
-      - userId
-      - month
-      - baseSalary
-      - bonus
-      - deductions
+  - cvg1yKzddUKmHO5hWYWF:
+      - period
+      - loanDeduction
+      - generatedAt
+      - employeeId
       - netSalary
-      - status
-      - processedAt
-  - iJNewscA3d3qPPE9qoXo:
-      - userId
-      - month
-      - baseSalary
-      - bonus
-      - deductions
-      - netSalary
-      - status
-      - processedAt
-  - rZjgui6GJw7yNMBxxrFg:
-      - userId
-      - month
-      - baseSalary
-      - bonus
-      - deductions
-      - netSalary
-      - status
-      - processedAt
+      - department
+      - grossSalary
+      - loanBreakdown
 - payslips:
   - 8etpLcWs0XdBXML2DKeL:
       - userId
@@ -547,6 +706,31 @@
   - 6lQuRH6pCZcfujoNf0Bn:
       - userId
       - score
+- procurements:
+  - 2aHCecuDNTyGKdlsVEAJ:
+      - item
+      - quantity
+      - requestedAt
+      - vendor
+      - status
+  - WpoqHzFpZwEUunQeCPH4:
+      - item
+      - quantity
+      - requestedAt
+      - vendor
+      - status
+  - gsKIdMN77W4capkmPvk2:
+      - item
+      - quantity
+      - requestedAt
+      - vendor
+      - status
+  - ik81vqlpQTEhYHLUYllS:
+      - item
+      - quantity
+      - requestedAt
+      - vendor
+      - status
 - production:
   - template:
       - modelName
@@ -713,49 +897,70 @@
       - sentToCEO
       - trainingRecords
       - status
-  - sOPPEMAFf5Gxdi0KKVnE:
-      - fullName
-      - name
-      - personalEmail
+  - 9u1szhlGfi48at72n1tL:
       - personalPhone
       - governmentIdUrl
-      - profilePhotoUrl
-      - cvUrl
-      - ndaUrl
-      - employmentContractUrl
-      - workPermitUrl
-      - taxFormUrl
-      - certifications
-      - trainingRecords
+      - reasons
       - previousEmployers
       - probationReviews
-      - recommendation
-      - createdAt
-      - status
-      - reasons
-      - sentToCEO
-  - soGwJK4xYckEwUNeeKhz:
+      - ndaUrl
       - fullName
-      - name
+      - recommendation
+      - certifications
       - personalEmail
+      - profilePhotoUrl
+      - employmentContractUrl
+      - createdAt
+      - workPermitUrl
+      - cvUrl
+      - name
+      - taxFormUrl
+      - sentToCEO
+      - trainingRecords
+      - status
+  - F7soY060AgIdipmYrKmV:
       - personalPhone
       - governmentIdUrl
-      - profilePhotoUrl
-      - cvUrl
-      - ndaUrl
-      - employmentContractUrl
-      - workPermitUrl
-      - taxFormUrl
-      - certifications
-      - trainingRecords
+      - reasons
       - previousEmployers
       - probationReviews
+      - ndaUrl
+      - fullName
       - recommendation
+      - certifications
+      - personalEmail
+      - profilePhotoUrl
+      - employmentContractUrl
       - createdAt
-      - status
-      - reasons
+      - workPermitUrl
+      - cvUrl
+      - name
+      - taxFormUrl
       - sentToCEO
-  - yQzwKH9yOlRiGnssfHTB:
+      - trainingRecords
+      - status
+  - HOexlVyA02PktuS1NwYx:
+      - personalPhone
+      - governmentIdUrl
+      - reasons
+      - previousEmployers
+      - probationReviews
+      - ndaUrl
+      - fullName
+      - recommendation
+      - certifications
+      - personalEmail
+      - profilePhotoUrl
+      - employmentContractUrl
+      - createdAt
+      - workPermitUrl
+      - cvUrl
+      - name
+      - taxFormUrl
+      - sentToCEO
+      - trainingRecords
+      - status
+  - NHpYDvfx9Z4TPcjhnt6R:
       - personalPhone
       - governmentIdUrl
       - reasons
@@ -810,15 +1015,18 @@
       - deduction
       - bonus
       - base
-  - p6LAeHpKtBjMtSWcS5rc:
+  - j4sc6isM1WAlFHbaWomU:
       - employeeName
       - month
-      - baseSalary
+      - deduction
       - bonus
-      - deductions
-      - netSalary
-      - status
-      - processedAt
+      - base
+  - jns5fezqGdO13JNg63SI:
+      - employeeName
+      - month
+      - deduction
+      - bonus
+      - base
 - salary_templates:
   - template:
       - baseSalary
@@ -841,12 +1049,24 @@
       - buyerId
       - date
 - shifts:
+  - SVmFCw6kuvoPXcCEZZc7:
+      - date
+      - employeeName
+      - shift
   - TcFTcrBcDp6lIjay7dZn:
       - userId
       - shiftDate
       - startTime
       - endTime
       - shiftType
+  - nXhbPuXPTPZHwvatEZ7Q:
+      - date
+      - employeeName
+      - shift
+  - s2v3lHlvittRpc12k3pj:
+      - date
+      - employeeName
+      - shift
 - suppliers:
   - io1iHtZ4yR5kdYC5aZLk:
       - name

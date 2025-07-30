@@ -18,6 +18,9 @@ import 'package:uddoygi/features/admin/presentation/screens/admin_messages_scree
 import 'package:uddoygi/features/admin/presentation/widgets/admin_allbuyer.dart';
 import 'package:uddoygi/features/admin/presentation/screens/employee_management_screen.dart';
 
+// 🆕 Admin - Incentive Reports
+import 'package:uddoygi/features/admin/presentation/screens/incentives.dart';
+
 // 👥 Employee Management Screens
 import 'package:uddoygi/features/employee_management/add_employee_page.dart';
 import 'package:uddoygi/features/employee_management/all_employees_page.dart';
@@ -75,7 +78,6 @@ import 'package:uddoygi/features/common/presentation/screens/welfare_screen.dart
 import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
 
 final Map<String, WidgetBuilder> appRoutes = {
-  // 🔐 Auth
   '/login': (context) => const LoginScreenWrapper(),
   '/profile': (context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -91,6 +93,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/employees/promotions': (context) => const TransitionsPage(),
   '/admin/reports': (context) => const ReportsScreen(),
   '/admin/reports/graphs': (context) => const AdminReportsWithGraphsScreen(),
+  '/admin/reports/incentives': (context) => const IncentiveScreen(), // ✅ NEW ROUTE
   '/admin/welfare': (context) => const WelfareSchemeScreen(),
   '/admin/complaints': (context) => const ComplaintsScreen(),
   '/admin/salary': (context) => const SalaryScreen(),
@@ -111,7 +114,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/hr/salary_management': (context) => const SalaryManagementScreen(),
   '/hr/benefits_compensation': (context) => const BenefitsCompensationScreen(),
   '/hr/loan_approval': (context) => const LoanApprovalScreen(),
-  '/hr/incentives': (context) => const IncentiveScreen(),
+  '/hr/incentives': (context) => const IncentivehrScreen(),
   '/hr/general_ledger': (context) => const GeneralLedgerScreen(),
   '/hr/accounts_payable': (context) => const AccountsPayableScreen(),
   '/hr/accounts_receivable': (context) => const AccountsReceivableScreen(),

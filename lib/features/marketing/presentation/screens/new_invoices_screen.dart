@@ -1,5 +1,3 @@
-// lib/features/marketing/presentation/screens/new_invoices_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -20,10 +18,10 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   String selectedCustomerName = '';
   DateTime selectedDate = DateTime.now();
   final _shippingController = TextEditingController();
-  final _taxController      = TextEditingController();
-  final _noteController     = TextEditingController();
-  final _countryController  = TextEditingController();
-  String selectedStatus     = 'Invoice Created';
+  final _taxController = TextEditingController();
+  final _noteController = TextEditingController();
+  final _countryController = TextEditingController();
+  String selectedStatus = 'Invoice Created';
 
   List<Map<String, dynamic>> items = [];
   List<DocumentSnapshot<Map<String, dynamic>>> _products = [];
@@ -65,101 +63,94 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   double _calculateGrandTotal() {
     double subtotal = 0;
     for (var itm in items) {
-      final model  = itm['model']  as String?;
+      final model = itm['model'] as String?;
       final colour = itm['colour'] as String?;
-      final size   = itm['size']   as String?;
+      final size = itm['size'] as String?;
       DocumentSnapshot<Map<String, dynamic>>? match;
       if (model != null && colour != null && size != null) {
         for (var p in _products) {
           final d = p.data()!;
           if (d['model_name'] == model &&
-              d['colour']     == colour &&
-              d['size']       == size) {
+              d['colour'] == colour &&
+              d['size'] == size) {
             match = p;
             break;
           }
         }
       }
-      if (match != null) {
-        final price = (match.data()!['unit_price'] as num).toDouble();
-        subtotal += price * (itm['qty'] as int);
-      }
+      final price = (match?.data()?['unit_price'] as num?)?.toDouble() ?? 0.0;
+      subtotal += price * (itm['qty'] ?? 1);
     }
     final ship = double.tryParse(_shippingController.text) ?? 0;
-    final tax  = double.tryParse(_taxController.text)      ?? 0;
+    final tax = double.tryParse(_taxController.text) ?? 0;
     return subtotal + ship + tax;
   }
 
   Future<void> _submitInvoice() async {
     if (!_formKey.currentState!.validate() || selectedCustomer == null) return;
 
-    // get currently signed‑in user
     final currentUser = FirebaseAuth.instance.currentUser;
-    final uid         = currentUser?.uid;
-    final agentEmail  = currentUser?.email ?? '';
-    // fetch full name from Firestore, fallback to displayName
+    final uid = currentUser?.uid;
+    final agentEmail = currentUser?.email ?? '';
     final userDoc = uid != null
         ? await FirebaseFirestore.instance.collection('users').doc(uid).get()
         : null;
-    final agentName = userDoc?.data()?['fullName'] as String?
-        ?? currentUser?.displayName
-        ?? '';
+    final agentName =
+        userDoc?.data()?['fullName'] as String? ?? currentUser?.displayName ?? '';
 
-    // generate invoiceNo
     final invoiceNo = '${selectedCustomerName.toLowerCase()}_'
         '${DateFormat('ddMMyyyy').format(selectedDate)}_'
         '${_calculateGrandTotal().toStringAsFixed(0)}';
 
-    // build items array
     final invoiceItems = <Map<String, dynamic>>[];
     for (var itm in items) {
-      final model  = itm['model']  as String?;
+      final model = itm['model'] as String?;
       final colour = itm['colour'] as String?;
-      final size   = itm['size']   as String?;
+      final size = itm['size'] as String?;
       DocumentSnapshot<Map<String, dynamic>>? prod;
       if (model != null && colour != null && size != null) {
         for (var p in _products) {
           final d = p.data()!;
           if (d['model_name'] == model &&
-              d['colour']     == colour &&
-              d['size']       == size) {
+              d['colour'] == colour &&
+              d['size'] == size) {
             prod = p;
             break;
           }
         }
       }
-      final price = prod != null
-          ? (prod.data()!['unit_price'] as num).toDouble()
-          : 0.0;
+
+      final price = (prod?.data()?['unit_price'] as num?)?.toDouble() ?? 0.0;
       final qty = itm['qty'] as int;
+
       invoiceItems.add({
-        'productId' : prod?.id,
-        'model'     : model,
-        'colour'    : colour,
-        'size'      : size,
-        'qty'       : qty,
-        'unit_price': price,
-        'total'     : price * qty,
+        'productId': prod?.id,
+        'model': model,
+        'colour': colour,
+        'size': size,
+        'qty': qty,
+        'price': price,
+        'total': price * qty,
       });
     }
 
-    // assemble invoice data
     final invoiceData = {
-      'invoiceNo'   : invoiceNo,
-      'customerId'  : selectedCustomer,
+      'invoiceNo': invoiceNo,
+      'customerId': selectedCustomer,
       'customerName': selectedCustomerName,
-      'agentId'     : uid,
-      'agentEmail'  : agentEmail,
-      'agentName'   : agentName,
-      'date'        : selectedDate,
-      'items'       : invoiceItems,
+      'agentId': uid,
+      'agentEmail': agentEmail,
+      'agentName': agentName,
+      'date': selectedDate,
+      'items': invoiceItems,
       'shippingCost': double.tryParse(_shippingController.text) ?? 0,
-      'tax'         : double.tryParse(_taxController.text)      ?? 0,
-      'grandTotal'  : _calculateGrandTotal(),
-      'country'     : _countryController.text,
-      'note'        : _noteController.text,
-      'status'      : selectedStatus,
-      'timestamp'   : Timestamp.now(),
+      'tax': double.tryParse(_taxController.text) ?? 0,
+      'grandTotal': _calculateGrandTotal(),
+      'country': _countryController.text,
+      'note': _noteController.text,
+      'status': selectedStatus,
+      'timestamp': Timestamp.fromDate(selectedDate),
+
     };
 
     try {
@@ -178,6 +169,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       );
     }
   }
+
 
   InputDecoration _fieldDecoration([String? label]) {
     return InputDecoration(

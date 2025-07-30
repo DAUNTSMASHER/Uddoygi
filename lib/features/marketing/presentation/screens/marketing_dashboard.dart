@@ -1,7 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:uddoygi/features/marketing/presentation/screens/products.dart'; // ✅ Updated
+import 'package:uddoygi/features/marketing/presentation/screens/products.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/renumeration_dashboard.dart';
 import '../widgets/marketing_drawer.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
@@ -28,6 +29,7 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     _DashboardItem('Orders', Icons.shopping_bag, '/marketing/orders'),
     _DashboardItem('Loans', Icons.request_page, '/marketing/loan_request'),
     _DashboardItem('Products', Icons.inventory, ''), // route handled manually
+    _DashboardItem('Renumeration', Icons.paid, ''), // ✅ new: manual navigation
   ];
 
   @override
@@ -59,10 +61,15 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ProductsPage(userEmail: email!), // ✅ updated target
+            builder: (_) => ProductsPage(userEmail: email!),
           ),
         );
       }
+    } else if (item.title == 'Renumeration') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RenumerationDashboard()),
+      );
     } else {
       Navigator.pushNamed(context, item.route);
     }
