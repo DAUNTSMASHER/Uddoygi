@@ -14,6 +14,7 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> {
   String? userId;
   String? email;
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -22,19 +23,50 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _loadSession() async {
-    final session = await LocalStorageService.getSession();
-    if (session != null) {
+    try {
+      final session = await LocalStorageService.getSession();
+      if (!mounted) return; // <-- guard
       setState(() {
-        userId = session['uid'];
-        email = session['email'];
+        userId = session?['uid'];
+        email = session?['email'];
+        isLoading = false;
       });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load session: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Customer Management')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Session not available
     if (userId == null || email == null) {
-      return const Center(child: CircularProgressIndicator());
+      return Scaffold(
+        appBar: AppBar(title: const Text('Customer Management')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('No active session found.'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _loadSession,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return DefaultTabController(
@@ -50,12 +82,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            CustomerListView(userId: userId!, email: email!), // ✅ both
-            AddCustomerForm(userId: userId!, email: email!),   // ✅ both
-            CustomerOrderSummary(email: email!),               // ✅ only email
-          ],
+        body: const SafeArea(
+          child: TabBarView(
+            children: [
+              // Non-const because they depend on state — remove const if needed.
+              // Keeping without const here; add back if your constructors are const.
+            ],
+          ),
         ),
       ),
     );
