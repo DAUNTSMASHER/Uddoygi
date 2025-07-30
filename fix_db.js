@@ -1,55 +1,60 @@
-// fix_db.js
-// Usage: node fix_db.js
+const admin = require("firebase-admin");
+const fs = require("fs");
 
-const admin = require('firebase-admin');
-const path = require('path');
+// 🔐 Replace with your service account key file path
+const serviceAccount = require("./serviceAccountKey.json");
 
-// Replace with your actual service account key path
-const serviceAccount = require(path.join(__dirname, 'serviceAccountKey.json'));
-
-// Initialize Firebase Admin
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
 });
 
-// Get Firestore DB instance
 const db = admin.firestore();
 
-async function ensureCollections() {
-  try {
-    // Check/Create `marketing_sales` collection
-    const marketing_sales_ref = db.collection('marketing_sales');
-    console.log('✅ Checked: marketing_sales – For tracking agent sales (quantity, amount, customer).');
+async function patchMissingRowsInSalesReports() {
+  const colRef = db.collection("marketing_incentives");
+  const snapshot = await colRef.get();
 
-    // Check/Create `products` collection
-    const products_ref = db.collection('products');
-    console.log('✅ Checked: products – Contains unit price and production cost for calculating profit.');
+  const defaultRows = [
+    {
+      productName: "All Skin",
+      quantity: 10,
+      sellingPrice: 200,
+      purchaseCost: 100,
+    },
+    {
+      productName: "Mono Regular",
+      quantity: 5,
+      sellingPrice: 220,
+      purchaseCost: 140,
+    },
+  ];
 
-    // Check/Create `buyers` collection
-    const buyers_ref = db.collection('buyers');
-    console.log('✅ Checked: buyers – Links customers to contact info and their agent.');
+  const batch = db.batch();
 
-    // Check/Create `marketing_incentives` collection
-    const marketing_incentives_ref = db.collection('marketing_incentives');
-    console.log('✅ Checked: marketing_incentives – Used to store calculated monthly incentives.');
+  snapshot.forEach((doc) => {
+    const docId = doc.id;
 
-    // Check/Create `users` collection
-    const users_ref = db.collection('users');
-    console.log('✅ Checked: users – Connects agentId with employee information.');
+    // 🔍 Only apply to documents ending with "_sales"
+    if (!docId.endsWith("_sales")) return;
 
-    // Optional: Check/Create `invoices` collection
-    const invoices_ref = db.collection('invoices');
-    console.log('✅ Checked: invoices – Useful for grand total, shipping cost, and tax info.');
+    const data = doc.data();
+    const hasRows = Array.isArray(data.rows) && data.rows.length > 0;
 
-    // Optional: Check/Create `expenses` collection
-    const expenses_ref = db.collection('expenses');
-    console.log('✅ Checked: expenses – Can hold additional deduction records if needed.');
+    if (!hasRows) {
+      const ref = colRef.doc(docId);
+      batch.update(ref, { rows: defaultRows });
+      console.log(`✅ Patched: ${docId}`);
+    } else {
+      console.log(`✔️ Already has rows: ${docId}`);
+    }
+  });
 
-    console.log('\n🎉 Firestore structure successfully validated for incentive calculation!');
-  } catch (error) {
-    console.error('❌ Error checking Firestore collections:', error);
+  if (batch._ops.length === 0) {
+    console.log("🎉 All sales reports are already patched.");
+  } else {
+    await batch.commit();
+    console.log("✅ Missing rows added to unpatched sales reports.");
   }
 }
 
-// Run the script
-ensureCollections();
+patchMissingRowsInSalesReports().catch(console.error);

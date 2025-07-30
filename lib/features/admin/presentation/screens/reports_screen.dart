@@ -1,5 +1,3 @@
-// lib/features/admin/presentation/screens/reports_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -12,7 +10,7 @@ class ReportsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Reports Overview'),
+        title: const Text(('Reports Overview') , style: TextStyle(color: Colors.white)),
         backgroundColor: _darkBlue,
       ),
       backgroundColor: Colors.white,
@@ -31,6 +29,7 @@ class ReportsScreen extends StatelessWidget {
           _PerformanceTile(),
           _ExpensesTile(),
           _RndProjectsTile(),
+          _IncentiveTile(), // ✅ NEW
         ],
       ),
     );
@@ -43,7 +42,6 @@ class _TotalSalesTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      // <— listen to your invoices, not a non‑existent “sales” collection
       stream: FirebaseFirestore.instance.collection('invoices').snapshots(),
       builder: (ctx, snap) {
         if (!snap.hasData) return const _ReportTile.loading();
@@ -67,6 +65,7 @@ class _TotalSalesTile extends StatelessWidget {
 
 class _TotalBuyersTile extends StatelessWidget {
   const _TotalBuyersTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -86,6 +85,7 @@ class _TotalBuyersTile extends StatelessWidget {
 
 class _TotalSuppliersTile extends StatelessWidget {
   const _TotalSuppliersTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -105,6 +105,7 @@ class _TotalSuppliersTile extends StatelessWidget {
 
 class _BudgetTile extends StatelessWidget {
   const _BudgetTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -126,6 +127,7 @@ class _BudgetTile extends StatelessWidget {
 
 class _TotalWorkersTile extends StatelessWidget {
   const _TotalWorkersTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -148,6 +150,7 @@ class _TotalWorkersTile extends StatelessWidget {
 
 class _AttendanceTile extends StatelessWidget {
   const _AttendanceTile();
+
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now().toIso8601String().split('T').first;
@@ -172,6 +175,7 @@ class _AttendanceTile extends StatelessWidget {
 
 class _PerformanceTile extends StatelessWidget {
   const _PerformanceTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -197,6 +201,7 @@ class _PerformanceTile extends StatelessWidget {
 
 class _ExpensesTile extends StatelessWidget {
   const _ExpensesTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -220,6 +225,7 @@ class _ExpensesTile extends StatelessWidget {
 
 class _RndProjectsTile extends StatelessWidget {
   const _RndProjectsTile();
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -233,6 +239,20 @@ class _RndProjectsTile extends StatelessWidget {
           onTap: () => Navigator.pushNamed(context, '/admin/reports/rnd'),
         );
       },
+    );
+  }
+}
+
+class _IncentiveTile extends StatelessWidget {
+  const _IncentiveTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return _ReportTile(
+      title: 'Incentives & Bonus',
+      value: 'View',
+      icon: Icons.monetization_on,
+      onTap: () => Navigator.pushNamed(context, '/admin/reports/incentives'),
     );
   }
 }
