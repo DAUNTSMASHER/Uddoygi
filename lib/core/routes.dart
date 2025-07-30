@@ -93,7 +93,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/employees/promotions': (context) => const TransitionsPage(),
   '/admin/reports': (context) => const ReportsScreen(),
   '/admin/reports/graphs': (context) => const AdminReportsWithGraphsScreen(),
-  '/admin/reports/incentives': (context) => const IncentiveScreen(), // ✅ NEW ROUTE
+  '/admin/reports/incentives': (context) => const IncentiveScreen(),
   '/admin/welfare': (context) => const WelfareSchemeScreen(),
   '/admin/complaints': (context) => const ComplaintsScreen(),
   '/admin/salary': (context) => const SalaryScreen(),
@@ -129,9 +129,9 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/clients': (context) => const CustomersScreen(),
   '/marketing/sales': (context) => const SalesScreen(),
   '/marketing/task_assignment': (context) => const TaskAssignmentScreen(),
-  '/marketing/campaign': (context) => const CampaignScreen(),
+
   '/marketing/orders': (context) => const OrdersScreen(),
-  '/marketing/loan_request': (context) => const LoanRequestScreen(),
+
   '/marketing/sales/new': (context) => const NewInvoicesScreen(),
   '/marketing/sales/all': (context) => const AllInvoicesScreen(),
   '/marketing/sales/report': (context) => const SalesReportScreen(),

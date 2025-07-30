@@ -13,8 +13,8 @@ class IncentivehrScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.blue.shade800,
       appBar: AppBar(
-        title: const Text('HR Incentive Dashboard'),
-        backgroundColor: Colors.indigo.shade900,
+        title: const Text('HR Dashboard'),
+        backgroundColor: const Color(0xFF003087),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
