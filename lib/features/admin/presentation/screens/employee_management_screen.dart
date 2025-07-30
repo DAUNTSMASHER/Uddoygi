@@ -48,7 +48,10 @@ class EmployeeManagementScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Employee Dashboard'),
+        title: const Text(
+          'Employee Dashboard',
+          style: TextStyle(color: Colors.white), // ✅ Text color changed to white
+        ),
         backgroundColor: _darkBlue,
       ),
       backgroundColor: Colors.white,
