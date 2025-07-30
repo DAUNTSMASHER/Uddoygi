@@ -13,8 +13,12 @@ class BalanceUpdateScreen extends StatefulWidget {
 }
 
 class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
-  String _updateType = 'Add';
-  String _accountType = 'Cash';
+  static const _updateTypes = ['Add', 'Subtract'];
+  static const _accountTypes = ['Cash', 'Bank', 'Wallet'];
+
+  String _updateType = _updateTypes.first;
+  String _accountType = _accountTypes.first;
+
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
@@ -48,57 +52,24 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
           children: [
             _balanceCard(),
             const SizedBox(height: 20),
-            _buildDropdown('Update Type', ['Add', 'Subtract'], _updateType, (value) {
-              setState(() => _updateType = value);
-            }),
+            _buildDropdown('Update Type', _updateTypes, _updateType, (val) => setState(() => _updateType = val)),
             const SizedBox(height: 16),
-            _buildDropdown('Account Type', ['Cash', 'Bank', 'Wallet'], _accountType, (value) {
-              setState(() => _accountType = value);
-            }),
+            _buildDropdown('Account Type', _accountTypes, _accountType, (val) => setState(() => _accountType = val)),
             const SizedBox(height: 16),
-            TextFormField(
+            _buildTextField(
               controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixIcon: Icon(Icons.currency_exchange),
-                border: OutlineInputBorder(),
-              ),
+              label: 'Amount',
+              icon: Icons.currency_exchange,
+              inputType: TextInputType.number,
             ),
             const SizedBox(height: 16),
-            TextFormField(
+            _buildTextField(
               controller: _noteController,
+              label: 'Note / Reason',
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Note / Reason',
-                border: OutlineInputBorder(),
-              ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Date:', style: TextStyle(fontWeight: FontWeight.w600)),
-                TextButton.icon(
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (picked != null) {
-                      setState(() => _selectedDate = picked);
-                    }
-                  },
-                  icon: const Icon(Icons.calendar_today, color: Colors.indigo),
-                  label: Text(
-                    DateFormat('yyyy-MM-dd').format(_selectedDate),
-                    style: const TextStyle(color: Colors.indigo),
-                  ),
-                ),
-              ],
-            ),
+            _buildDatePicker(),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               icon: const Icon(Icons.check),
@@ -125,9 +96,9 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
         color: Colors.indigo,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
+      child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text('Current Balance', style: TextStyle(color: Colors.white70)),
           SizedBox(height: 8),
           Text(
@@ -141,103 +112,5 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
 
   Widget _buildDropdown(String label, List<String> options, String currentValue, void Function(String) onChanged) {
     return DropdownButtonFormField<String>(
-      value: currentValue,
-      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-      items: options
-          .map((value) => DropdownMenuItem(value: value, child: Text(value)))
-          .toList(),
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
-    );
-  }
-
-  Future<void> _submitUpdate() async {
-    final amount = double.tryParse(_amountController.text.trim());
-    final note = _noteController.text.trim();
-    final accountKey = _accountType.toLowerCase();
-
-    if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
-      return;
-    }
-
-    final logData = {
-      'amount': amount,
-      'type': _updateType,
-      'account': _accountType,
-      'note': note,
-      'date': _selectedDate,
-      'updatedBy': 'admin@email.com', // replace with actual auth
-    };
-
-    final accountRef = FirebaseFirestore.instance.collection('accounts').doc('main');
-    final logRef = FirebaseFirestore.instance.collection('balance_logs');
-
-    try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snapshot = await transaction.get(accountRef);
-        double currentBalance = snapshot.data()?[accountKey]?.toDouble() ?? 0;
-        double newBalance = _updateType == 'Add'
-            ? currentBalance + amount
-            : currentBalance - amount;
-
-        transaction.update(accountRef, {
-          accountKey: newBalance,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-
-        transaction.set(logRef.doc(), logData);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Balance updated successfully')),
-      );
-      Navigator.pop(context);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
-
-  Future<void> generatePdfReport() async {
-    final logSnapshot = await FirebaseFirestore.instance
-        .collection('balance_logs')
-        .orderBy('date', descending: true)
-        .get();
-
-    final pdf = pw.Document();
-    final logs = logSnapshot.docs;
-
-    pdf.addPage(
-      pw.MultiPage(
-        build: (context) => [
-          pw.Text('Balance Logs Report', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 16),
-          pw.Table.fromTextArray(
-            headers: ['Date', 'Type', 'Amount', 'Account', 'Note'],
-            data: logs.map((doc) {
-              final data = doc.data();
-              return [
-                DateFormat('yyyy-MM-dd').format((data['date'] as Timestamp).toDate()),
-                data['type'] ?? '',
-                '৳ ${data['amount'].toString()}',
-                data['account'] ?? '',
-                data['note'] ?? '',
-              ];
-            }).toList(),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            cellAlignment: pw.Alignment.centerLeft,
-            border: pw.TableBorder.all(color: PdfColors.grey),
-            cellPadding: const pw.EdgeInsets.all(6),
-          ),
-        ],
-      ),
-    );
-
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-    );
-  }
-}
+        value: currentValue,
+        decoration: InputDecoration(labelText:
