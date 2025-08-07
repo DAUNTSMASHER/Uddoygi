@@ -1,7 +1,7 @@
 const admin = require("firebase-admin");
 const fs = require("fs");
 
-// 🔐 Replace with your service account key file path
+// 🔐 Replace with your Firebase service account path
 const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({
@@ -10,51 +10,43 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-async function patchMissingRowsInSalesReports() {
-  const colRef = db.collection("marketing_incentives");
-  const snapshot = await colRef.get();
+async function initializeTodayAttendance() {
+  const today = new Date();
+  const formattedDate = today.toISOString().split("T")[0]; // yyyy-mm-dd
+  const attendanceRef = db.collection("attendance").doc(formattedDate).collection("records");
 
-  const defaultRows = [
-    {
-      productName: "All Skin",
-      quantity: 10,
-      sellingPrice: 200,
-      purchaseCost: 100,
-    },
-    {
-      productName: "Mono Regular",
-      quantity: 5,
-      sellingPrice: 220,
-      purchaseCost: 140,
-    },
-  ];
-
+  const usersSnapshot = await db.collection("users").get();
   const batch = db.batch();
 
-  snapshot.forEach((doc) => {
-    const docId = doc.id;
+  let addedCount = 0;
 
-    // 🔍 Only apply to documents ending with "_sales"
-    if (!docId.endsWith("_sales")) return;
+  usersSnapshot.forEach((doc) => {
+    const user = doc.data();
+    const empId = user.employeeId;
+    if (!empId) return;
 
-    const data = doc.data();
-    const hasRows = Array.isArray(data.rows) && data.rows.length > 0;
+    const ref = attendanceRef.doc(empId);
 
-    if (!hasRows) {
-      const ref = colRef.doc(docId);
-      batch.update(ref, { rows: defaultRows });
-      console.log(`✅ Patched: ${docId}`);
-    } else {
-      console.log(`✔️ Already has rows: ${docId}`);
-    }
+    batch.set(ref, {
+      employeeId: empId,
+      email: user.email || "",
+      name: user.name || "",
+      department: user.department || "",
+      status: "present", // ✅ Default can be "present"
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      markedBy: "system", // or HR email if available
+    });
+
+    console.log(`✅ Prepared attendance record for ${empId}`);
+    addedCount++;
   });
 
-  if (batch._ops.length === 0) {
-    console.log("🎉 All sales reports are already patched.");
+  if (addedCount === 0) {
+    console.log("⚠️ No users found to initialize attendance.");
   } else {
     await batch.commit();
-    console.log("✅ Missing rows added to unpatched sales reports.");
+    console.log(`✅ Attendance initialized for ${addedCount} employees on ${formattedDate}`);
   }
 }
 
-patchMissingRowsInSalesReports().catch(console.error);
+initializeTodayAttendance().catch(console.error);

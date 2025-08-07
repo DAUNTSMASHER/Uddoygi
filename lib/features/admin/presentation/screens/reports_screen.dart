@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/features/attendance/admin_detail_view.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
@@ -152,25 +153,65 @@ class _AttendanceTile extends StatelessWidget {
   const _AttendanceTile();
 
   @override
+  @override
   Widget build(BuildContext context) {
-    final today = DateTime.now().toIso8601String().split('T').first;
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('attendance').snapshots(),
       builder: (ctx, snap) {
         if (!snap.hasData) return const _ReportTile.loading();
-        final todayList = snap.data!.docs.where((d) => d.get('date') == today);
-        final present =
-            todayList.where((d) => d.get('status') == 'present').length;
-        final pct = todayList.isEmpty ? 0.0 : present / todayList.length * 100;
+
+        final attendanceDocs = snap.data!.docs;
+        double totalPresent = 0;
+        double totalEmployees = 0;
+        int totalDays = 0;
+
+        for (final doc in attendanceDocs) {
+          final date = doc.id;
+          final records = doc.reference.collection('records');
+
+          // Count records per day asynchronously not allowed here in sync loop
+          // So we skip that and only consider document snapshot structure like summary
+          // If your docs have total count inside, use that; otherwise summarize below:
+        }
+
+        // Instead, switch to FutureBuilder for accuracy (optional)
+        // OR assume each doc contains a 'summary' field (optional if stored that way)
+
+        // But for now, a simplified assumption:
+        final groupedByDate = <String, List<DocumentSnapshot>>{};
+
+        for (final doc in attendanceDocs) {
+          final date = doc.get('date');
+          groupedByDate.putIfAbsent(date, () => []).add(doc);
+        }
+
+        double avgPercentage = 0;
+        int dayCount = 0;
+
+        groupedByDate.forEach((_, records) {
+          final total = records.length;
+          final present = records.where((d) => d.get('status') == 'present').length;
+          if (total > 0) {
+            avgPercentage += (present / total) * 100;
+            dayCount++;
+          }
+        });
+
+        final result = dayCount > 0 ? (avgPercentage / dayCount) : 0;
+
         return _ReportTile(
-          title: 'Attendance Today',
-          value: '${pct.toStringAsFixed(1)}%',
-          icon: Icons.check_circle,
-          onTap: () => Navigator.pushNamed(context, '/admin/reports/attendance'),
+          title: 'Average Attendance',
+          value: '${result.toStringAsFixed(1)}%',
+          icon: Icons.check_circle_outline,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminDetailView()),
+          ),
         );
       },
     );
   }
+
 }
 
 class _PerformanceTile extends StatelessWidget {

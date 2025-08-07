@@ -11,11 +11,11 @@ class IncentivehrScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue.shade800,
       appBar: AppBar(
-        title: const Text('HR Dashboard'),
+        title: const Text('Incentive Dashboard', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF003087),
       ),
+      backgroundColor: const Color(0xB8E2EBFF),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: GridView.count(

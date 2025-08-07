@@ -10,7 +10,8 @@ class HRDashboard extends StatefulWidget {
   State<HRDashboard> createState() => _HRDashboardState();
 }
 
-class _HRDashboardState extends State<HRDashboard> {
+class _HRDashboardState extends State<HRDashboard>
+    with SingleTickerProviderStateMixin {
   String? userName;
   final ScrollController _scrollController = ScrollController();
   final Map<String, bool> _expandedSections = {};
@@ -60,7 +61,7 @@ class _HRDashboardState extends State<HRDashboard> {
     super.initState();
     _loadSession();
     for (var section in groupedItems.keys) {
-      _expandedSections[section] = true;
+      _expandedSections[section] = false;
     }
   }
 
@@ -82,59 +83,61 @@ class _HRDashboardState extends State<HRDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FB),
+      backgroundColor: const Color(0xFFF5F8FF),
       appBar: AppBar(
-        title: const Text('HR Dashboard'),
-        backgroundColor: const Color(0xFF003087), // PayPal deep blue
+        title: const Text('HR Dashboard', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF003087),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: _logout,
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 14),
+          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+          const Padding(
+            padding: EdgeInsets.only(right: 14),
             child: CircleAvatar(
               backgroundColor: Colors.white,
-              child: const Icon(Icons.person, color: Color(0xFF003087)),
+              child: Icon(Icons.person, color: Color(0xFF003087)),
             ),
           ),
         ],
       ),
       drawer: const HRDrawer(),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
         controller: _scrollController,
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (userName != null && userName!.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Text(
-                  'Welcome, $userName',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Color(0xFF003087)),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: AnimatedOpacity(
+                  opacity: 1.0,
+                  duration: const Duration(milliseconds: 500),
+                  child: Text(
+                    'Welcome, $userName!',
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF003087)),
+                  ),
                 ),
               ),
             ...groupedItems.entries.map((entry) {
               final sectionTitle = entry.key;
               final items = entry.value;
-              final isExpanded = _expandedSections[sectionTitle] ?? true;
-
+              final isExpanded = _expandedSections[sectionTitle] ?? false;
               return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ListTile(
                     tileColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     title: Text(
                       sectionTitle,
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF003087)),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF003087),
+                      ),
                     ),
                     trailing: Icon(
-                      isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                      color: Colors.grey[700],
+                      isExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: const Color(0xFF003087),
                     ),
                     onTap: () {
                       setState(() {
@@ -143,6 +146,10 @@ class _HRDashboardState extends State<HRDashboard> {
                     },
                   ),
                   AnimatedCrossFade(
+                    duration: const Duration(milliseconds: 300),
+                    crossFadeState: isExpanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
                     firstChild: const SizedBox.shrink(),
                     secondChild: Padding(
                       padding: const EdgeInsets.only(top: 10),
@@ -152,18 +159,15 @@ class _HRDashboardState extends State<HRDashboard> {
                         itemCount: items.length,
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 2.6,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 2.8,
                         ),
                         itemBuilder: (context, index) => _DashboardTile(item: items[index]),
                       ),
                     ),
-                    crossFadeState:
-                    isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                    duration: const Duration(milliseconds: 200),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 10),
                 ],
               );
             }),
@@ -187,33 +191,38 @@ class _DashboardTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      elevation: 2,
-      child: InkWell(
-        onTap: () => Navigator.pushNamed(context, item.route),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue.withOpacity(0.1)),
-          ),
-          child: Row(
-            children: [
-              Icon(item.icon, size: 22, color: const Color(0xFF003087)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  item.title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF003087)),
-                  overflow: TextOverflow.ellipsis,
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, item.route),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(item.icon, color: const Color(0xFF003087)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                item.title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF003087),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -80,22 +80,25 @@
   - BXNrbuaNcopPGjL6neX5:
       - amount
       - year
+  - J8feEjgJQAPoTJ3BwM17:
+      - date
+      - amount
+      - year
+      - used
+      - category
   - PIGnSUlVvN5stDM8Yiu9:
       - date
       - amount
       - year
       - used
       - category
-  - dGOo4fWc6aQ4NNIWXzem:
+  - T39O1zw1q3d9VxHrt02f:
       - date
       - amount
       - year
       - used
       - category
-  - gBQPxHKlI4AuhM0ngPhJ:
-      - amount
-      - year
-  - ldshH4pYOewqbeUifjRu:
+  - dGOo4fWc6aQ4NNIWXzem:
       - date
       - amount
       - year
@@ -436,6 +439,13 @@
       - toDate
       - appliedAt
       - status
+  - fkLDSZaQWfNiI5eppwCR:
+      - fromDate
+      - employeeName
+      - reason
+      - toDate
+      - appliedAt
+      - status
   - qFvujwLPpa1smHy56iNS:
       - fromDate
       - employeeName
@@ -517,6 +527,57 @@
       - preset
       - base
       - verifiedBy
+  - herok@wigbd.com_April_2025_sales:
+      - totalPieces
+      - purchaseCost
+      - agentEmail
+      - year
+      - netSales
+      - salesTarget
+      - totalSales
+      - netProfit
+      - incentive
+      - month
+      - achievedPercent
+      - payment
+      - totalShipping
+      - timestamp
+      - totalIncentive
+      - rows
+  - herok@wigbd.com_February_2025_sales:
+      - totalPieces
+      - purchaseCost
+      - agentEmail
+      - year
+      - netSales
+      - salesTarget
+      - totalSales
+      - netProfit
+      - incentive
+      - month
+      - achievedPercent
+      - payment
+      - totalShipping
+      - timestamp
+      - totalIncentive
+      - rows
+  - herok@wigbd.com_July_2025_sales:
+      - totalPieces
+      - purchaseCost
+      - agentEmail
+      - year
+      - netSales
+      - salesTarget
+      - totalSales
+      - netProfit
+      - incentive
+      - month
+      - achievedPercent
+      - payment
+      - totalShipping
+      - timestamp
+      - totalIncentive
+      - rows
   - herok@wigbd.com_June_2025_sales:
       - totalPieces
       - purchaseCost
@@ -530,9 +591,10 @@
       - month
       - achievedPercent
       - payment
-      - totalIncentive
       - totalShipping
       - timestamp
+      - totalIncentive
+      - rows
 - marketing_orders:
   - yc4fPmtaS7Sh4X8cFm7l:
       - agentId
@@ -684,7 +746,7 @@
       - netSalary
       - status
       - processedAt
-  - cvg1yKzddUKmHO5hWYWF:
+  - bo3xP93ihqdndufBt04T:
       - period
       - loanDeduction
       - generatedAt
@@ -1015,13 +1077,13 @@
       - deduction
       - bonus
       - base
-  - j4sc6isM1WAlFHbaWomU:
+  - NQsVTyDA5gFk1V2jkguz:
       - employeeName
       - month
       - deduction
       - bonus
       - base
-  - jns5fezqGdO13JNg63SI:
+  - j4sc6isM1WAlFHbaWomU:
       - employeeName
       - month
       - deduction
