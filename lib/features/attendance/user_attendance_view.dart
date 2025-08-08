@@ -1,94 +1,160 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class UserAttendanceView extends StatefulWidget {
-  const UserAttendanceView({super.key});
+  final String? email;
+  final String? employeeId;
+
+  const UserAttendanceView({
+    super.key,
+    this.email,
+    this.employeeId,
+  });
 
   @override
   State<UserAttendanceView> createState() => _UserAttendanceViewState();
 }
 
 class _UserAttendanceViewState extends State<UserAttendanceView> {
-  final _auth = FirebaseAuth.instance;
-  final _firestore = FirebaseFirestore.instance;
-
-  late String _userEmail;
-  late String _employeeId;
   String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
+  String? _employeeId;
+  String? _userEmail;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _userEmail = _auth.currentUser?.email ?? '';
-    _fetchEmployeeId();
-  }
-
-  Future<void> _fetchEmployeeId() async {
-    final snap = await _firestore
-        .collection('users')
-        .where('email', isEqualTo: _userEmail)
-        .get();
-
-    if (snap.docs.isNotEmpty) {
-      setState(() {
-        _employeeId = snap.docs.first.data()['employeeId'] ?? '';
-      });
+    if (widget.employeeId != null && widget.email != null) {
+      _employeeId = widget.employeeId;
+      _userEmail = widget.email;
+      _loading = false;
+    } else {
+      _fetchEmployeeId();
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchAttendanceRecords() async {
-    final attendanceDates = await _firestore.collection('attendance').get();
-    List<Map<String, dynamic>> allRecords = [];
+  Future<void> _fetchEmployeeId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) {
+        _showPopup("❌ User not logged in!", isError: true);
+        return;
+      }
 
-    for (var doc in attendanceDates.docs) {
-      if (doc.id.startsWith(_selectedMonth)) {
-        final record = await _firestore
-            .collection('attendance')
-            .doc(doc.id)
-            .collection('records')
-            .doc(_employeeId)
+      final firestore = FirebaseFirestore.instance;
+      final userEmail = user.email!;
+
+      // First try with 'email'
+      QuerySnapshot query = await firestore
+          .collection('users')
+          .where('email', isEqualTo: userEmail)
+          .limit(1)
+          .get();
+
+      // If not found, try with 'officeEmail'
+      if (query.docs.isEmpty) {
+        query = await firestore
+            .collection('users')
+            .where('officeEmail', isEqualTo: userEmail)
+            .limit(1)
             .get();
+      }
 
-        if (record.exists) {
-          final data = record.data()!;
-          allRecords.add({
-            'date': doc.id,
-            'status': data['status'],
+      if (query.docs.isEmpty) {
+        _showPopup("❌ No user found with email $userEmail", isError: true);
+        return;
+      }
+
+      final doc = query.docs.first;
+      setState(() {
+        _userEmail = userEmail;
+        _employeeId = doc['employeeId'];
+        _loading = false;
+      });
+
+      _showPopup("✅ Found employee ID: $_employeeId");
+    } catch (e) {
+      _showPopup("❌ Error fetching user info: $e", isError: true);
+    }
+  }
+
+  void _showPopup(String msg, {bool isError = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: isError ? Colors.red : Colors.green,
+        ),
+      );
+    });
+  }
+
+  Stream<List<Map<String, dynamic>>> _attendanceStream() {
+    if (_employeeId == null) return const Stream.empty();
+
+    return FirebaseFirestore.instance
+        .collectionGroup('records')
+        .snapshots()
+        .map((snapshot) {
+      final List<Map<String, dynamic>> filtered = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final recordId = doc.id;
+        final dateId = doc.reference.parent.parent?.id;
+
+        if (recordId == _employeeId &&
+            dateId != null &&
+            dateId.startsWith(_selectedMonth)) {
+          filtered.add({
+            'date': dateId,
+            'status': data['status'] ?? '',
             'remarks': data['remarks'] ?? '',
           });
         }
       }
-    }
-    return allRecords;
+
+      filtered.sort((a, b) => a['date'].compareTo(b['date']));
+      return filtered;
+    });
   }
 
-  Widget _buildPieChart(List<Map<String, dynamic>> records) {
-    final Map<String, int> statusCount = {};
-
-    for (var record in records) {
-      final status = record['status'];
-      statusCount[status] = (statusCount[status] ?? 0) + 1;
-    }
-
-    final total = records.length.toDouble();
-    final sections = statusCount.entries.map((entry) {
-      final value = entry.value.toDouble();
-      return PieChartSectionData(
-        title: '${entry.key}\n${((value / total) * 100).toStringAsFixed(1)}%',
-        value: value,
-        radius: 40,
-        color: _statusColor(entry.key),
-        titleStyle: const TextStyle(fontSize: 11, color: Colors.white),
-      );
-    }).toList();
-
-    return PieChart(PieChartData(sections: sections));
+  Widget _buildAttendanceTable(List<Map<String, dynamic>> records) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor:
+        MaterialStateColor.resolveWith((_) => Colors.grey[200]!),
+        columns: const [
+          DataColumn(label: Text('Date')),
+          DataColumn(label: Text('Status')),
+          DataColumn(label: Text('Remarks')),
+        ],
+        rows: records.map((r) {
+          final status = r['status'].toString().toLowerCase();
+          return DataRow(cells: [
+            DataCell(Text(DateFormat('MMM d, yyyy')
+                .format(DateTime.parse(r['date'])))),
+            DataCell(Row(
+              children: [
+                CircleAvatar(
+                  radius: 5,
+                  backgroundColor: _statusColor(status),
+                ),
+                const SizedBox(width: 6),
+                Text(status[0].toUpperCase() + status.substring(1)),
+              ],
+            )),
+            DataCell(Text(r['remarks'] ?? '')),
+          ]);
+        }).toList(),
+      ),
+    );
   }
 
-  Color _statusColor(String status) {
+  static Color _statusColor(String status) {
     switch (status) {
       case 'present':
         return Colors.green;
@@ -110,89 +176,21 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
         value: _selectedMonth,
         decoration: const InputDecoration(labelText: "Select Month"),
         items: List.generate(12, (i) {
-          final month = DateTime(DateTime.now().year, i + 1);
+          final now = DateTime.now();
+          final month = DateTime(now.year, i + 1);
           final value = DateFormat('yyyy-MM').format(month);
           return DropdownMenuItem(
-              value: value, child: Text(DateFormat('MMMM yyyy').format(month)));
+            value: value,
+            child: Text(DateFormat('MMMM yyyy').format(month)),
+          );
         }),
         onChanged: (val) {
           if (val != null) {
-            setState(() {
-              _selectedMonth = val;
-            });
+            setState(() => _selectedMonth = val);
+            _showPopup("📆 Switched to $val");
           }
         },
       ),
-    );
-  }
-
-  Widget _buildAttendanceSummary(List<Map<String, dynamic>> records) {
-    int present = 0, absent = 0, late = 0, leave = 0;
-
-    for (var r in records) {
-      switch (r['status']) {
-        case 'present':
-          present++;
-          break;
-        case 'absent':
-          absent++;
-          break;
-        case 'late':
-          late++;
-          break;
-        case 'leave':
-          leave++;
-          break;
-      }
-    }
-
-    final total = records.length;
-    final percent = (int v) =>
-    total == 0 ? '0%' : '${((v / total) * 100).toStringAsFixed(1)}%';
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Monthly Summary', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Text("Present: $present (${percent(present)})"),
-            Text("Absent: $absent (${percent(absent)})"),
-            Text("Late: $late (${percent(late)})"),
-            Text("Leave: $leave (${percent(leave)})"),
-            Text("Total Days: $total"),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateWiseCards(List<Map<String, dynamic>> records) {
-    records.sort((a, b) => a['date'].compareTo(b['date']));
-    return Column(
-      children: records.map((r) {
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: _statusColor(r['status']),
-              child: Text(DateFormat('d').format(DateTime.parse(r['date']))),
-            ),
-            title: Text("Date: ${DateFormat('MMM d, yyyy').format(DateTime.parse(r['date']))}"),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Status: ${r['status']}"),
-                if (r['remarks'].toString().isNotEmpty)
-                  Text("Remarks: ${r['remarks']}", style: const TextStyle(fontSize: 12)),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -200,29 +198,53 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Attendance Overview'),
+        title: const Text('My Attendance History'),
         backgroundColor: Colors.indigo,
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchAttendanceRecords(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final records = snapshot.data!;
-          return ListView(
-            children: [
-              _buildMonthSelector(),
-              SizedBox(height: 200, child: _buildPieChart(records)),
-              _buildAttendanceSummary(records),
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text("Date-wise Details",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
-              _buildDateWiseCards(records),
-              const SizedBox(height: 20),
-            ],
-          );
-        },
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+        children: [
+          _buildMonthSelector(),
+          const SizedBox(height: 10),
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _attendanceStream(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Center(
+                      child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  _showPopup(
+                    '🔥 Firestore error: ${snapshot.error}',
+                    isError: true,
+                  );
+                  return Center(
+                      child: Text('Error: ${snapshot.error}'));
+                }
+
+                final records = snapshot.data ?? [];
+                if (records.isEmpty) {
+                  _showPopup(
+                    "❌ No matching records found for this month.",
+                    isError: true,
+                  );
+                  return const Center(
+                      child: Text("No attendance records found."));
+                }
+
+                _showPopup("✅ Found ${records.length} records.");
+                return Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: _buildAttendanceTable(records),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

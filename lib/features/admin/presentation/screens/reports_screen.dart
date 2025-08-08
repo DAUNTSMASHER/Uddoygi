@@ -152,67 +152,88 @@ class _TotalWorkersTile extends StatelessWidget {
 class _AttendanceTile extends StatelessWidget {
   const _AttendanceTile();
 
-  @override
+  Future<double> _calculateAverageAttendance() async {
+    final now = DateTime.now();
+    final String year = now.year.toString();
+    final String month = now.month.toString().padLeft(2, '0');
+
+    final recordSnap =
+    await FirebaseFirestore.instance.collectionGroup('records').get();
+    final userSnap =
+    await FirebaseFirestore.instance.collection('users').get();
+
+    final records = recordSnap.docs;
+    final users = userSnap.docs;
+
+    final Map<String, Map<String, int>> stats = {};
+
+    for (final record in records) {
+      final parentId = record.reference.parent.parent?.id ?? '';
+      final parts = parentId.split('-');
+      if (parts.length != 3 || parts[0] != year || parts[1] != month) continue;
+
+      final data = record.data() as Map<String, dynamic>;
+      final empId = data['employeeId'];
+      final status = (data['status'] ?? '').toLowerCase();
+
+      if (empId == null) continue;
+
+      stats.putIfAbsent(empId, () => {
+        'present': 0,
+        'absent': 0,
+        'leave': 0,
+        'late': 0,
+        'total': 0,
+      });
+
+      if (status == 'present') stats[empId]!['present'] = stats[empId]!['present']! + 1;
+      else if (status == 'absent') stats[empId]!['absent'] = stats[empId]!['absent']! + 1;
+      else if (status == 'leave') stats[empId]!['leave'] = stats[empId]!['leave']! + 1;
+      else if (status == 'late') stats[empId]!['late'] = stats[empId]!['late']! + 1;
+
+      stats[empId]!['total'] = stats[empId]!['total']! + 1;
+    }
+
+    int totalPresent = 0;
+    int totalLate = 0;
+    int totalCount = 0;
+
+    for (final stat in stats.values) {
+      totalPresent += stat['present']!;
+      totalLate += stat['late']!;
+      totalCount += stat['total']!;
+    }
+
+    return totalCount > 0
+        ? ((totalPresent + totalLate) / totalCount) * 100
+        : 0.0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('attendance').snapshots(),
-      builder: (ctx, snap) {
-        if (!snap.hasData) return const _ReportTile.loading();
+    return FutureBuilder<double>(
+      future: _calculateAverageAttendance(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const _ReportTile.loading();
 
-        final attendanceDocs = snap.data!.docs;
-        double totalPresent = 0;
-        double totalEmployees = 0;
-        int totalDays = 0;
-
-        for (final doc in attendanceDocs) {
-          final date = doc.id;
-          final records = doc.reference.collection('records');
-
-          // Count records per day asynchronously not allowed here in sync loop
-          // So we skip that and only consider document snapshot structure like summary
-          // If your docs have total count inside, use that; otherwise summarize below:
-        }
-
-        // Instead, switch to FutureBuilder for accuracy (optional)
-        // OR assume each doc contains a 'summary' field (optional if stored that way)
-
-        // But for now, a simplified assumption:
-        final groupedByDate = <String, List<DocumentSnapshot>>{};
-
-        for (final doc in attendanceDocs) {
-          final date = doc.get('date');
-          groupedByDate.putIfAbsent(date, () => []).add(doc);
-        }
-
-        double avgPercentage = 0;
-        int dayCount = 0;
-
-        groupedByDate.forEach((_, records) {
-          final total = records.length;
-          final present = records.where((d) => d.get('status') == 'present').length;
-          if (total > 0) {
-            avgPercentage += (present / total) * 100;
-            dayCount++;
-          }
-        });
-
-        final result = dayCount > 0 ? (avgPercentage / dayCount) : 0;
+        final avg = snapshot.data!;
 
         return _ReportTile(
           title: 'Average Attendance',
-          value: '${result.toStringAsFixed(1)}%',
+          value: '${avg.toStringAsFixed(1)}%',
           icon: Icons.check_circle_outline,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminDetailView()),
-          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminDetailView()),
+            );
+          },
         );
       },
     );
   }
-
 }
+
 
 class _PerformanceTile extends StatelessWidget {
   const _PerformanceTile();

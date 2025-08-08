@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'user_attendance_view.dart'; // <-- make sure this is imported
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
@@ -148,6 +149,7 @@ class _AdminDetailViewState extends State<AdminDetailView> {
                           final empId = user['employeeId'] ?? '';
                           final name = user['name'] ?? 'Unnamed';
                           final dept = user['department'] ?? 'N/A';
+                          final email = user['email'] ?? user['officeemail'] ?? '';
                           final stat = stats[empId] ??
                               {
                                 'present': 0,
@@ -191,7 +193,15 @@ class _AdminDetailViewState extends State<AdminDetailView> {
                             DataCell(
                               TextButton(
                                 onPressed: () {
-                                  // existing logic
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => UserAttendanceView(
+                                        email: email,
+                                        employeeId: empId,
+                                      ),
+                                    ),
+                                  );
                                 },
                                 child: const Text('View'),
                               ),

@@ -25,7 +25,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Future<void> _loadSession() async {
     try {
       final session = await LocalStorageService.getSession();
-      if (!mounted) return; // <-- guard
+      if (!mounted) return;
+
       setState(() {
         userId = session?['uid'];
         email = session?['email'];
@@ -49,7 +50,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
       );
     }
 
-    // Session not available
     if (userId == null || email == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Customer Management')),
@@ -82,11 +82,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ],
           ),
         ),
-        body: const SafeArea(
+        body: SafeArea(
           child: TabBarView(
             children: [
-              // Non-const because they depend on state — remove const if needed.
-              // Keeping without const here; add back if your constructors are const.
+              CustomerListView(userId: userId!, email: email!),
+              AddCustomerForm(userId: userId!, email: email!),
+              CustomerOrderSummary( email: email!),
             ],
           ),
         ),

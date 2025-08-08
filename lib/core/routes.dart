@@ -71,6 +71,8 @@ import 'package:uddoygi/features/marketing/presentation/work_order/qc_report.dar
 // 🟣 Factory Screens
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_notice.dart';
+import 'package:uddoygi/features/factory/presentation/screens/factory_attendance_screen.dart';
+
 
 // 🔁 Common Screens
 import 'package:uddoygi/features/common/presentation/screens/messages_screen.dart';
@@ -146,6 +148,8 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 🟣 Factory
   '/factory/dashboard': (context) => const FactoryDashboard(),
   '/factory/notices': (context) => const FactoryNoticeScreen(),
+  '/factory/attendance': (context) => const FactoryAttendanceScreen(),
+
 
   // 🔁 Common
   '/common/messages': (context) => const MessagesScreen(),
