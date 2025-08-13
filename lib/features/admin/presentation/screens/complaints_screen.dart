@@ -60,7 +60,10 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Complaints Management'),
+        title: const Text(
+          'Complaints Management',
+          style: TextStyle(color: Colors.white), // Changed to white
+        ),
         centerTitle: true,
       ),
       body: StreamBuilder<QuerySnapshot>(
@@ -100,12 +103,16 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                       if (data['recommendation'] != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Text('Recommendation: ${data['recommendation']}',
-                              style: const TextStyle(color: Colors.blue)),
+                          child: Text(
+                            'Recommendation: ${data['recommendation']}',
+                            style: const TextStyle(color: Colors.blue),
+                          ),
                         ),
                       const SizedBox(height: 4),
-                      Text('Status: ${data['status'] ?? 'pending'}',
-                          style: const TextStyle(fontWeight: FontWeight.w500)),
+                      Text(
+                        'Status: ${data['status'] ?? 'pending'}',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
                     ],
                   ),
                   trailing: IconButton(
