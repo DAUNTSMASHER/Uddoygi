@@ -50,7 +50,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       });
     }
   }
-
   Future<void> _refreshSummary() async {
     setState(() => isLoading = true);
     await Future.delayed(const Duration(seconds: 1));
