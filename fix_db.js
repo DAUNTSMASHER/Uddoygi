@@ -1,52 +1,136 @@
-const admin = require("firebase-admin");
-const fs = require("fs");
+/**
+ * fix_db.js
+ * Creates:
+ *   - `ledger` collection with example journal entries
+ *   - `expenses` collection with example company expenses
+ */
 
-// 🔐 Replace with your Firebase service account path
+const admin = require("firebase-admin");
+
+// 🔐 Replace with your Firebase service account JSON path
 const serviceAccount = require("./serviceAccountKey.json");
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 const db = admin.firestore();
 
-async function initializeTodayAttendance() {
-  const today = new Date();
-  const formattedDate = today.toISOString().split("T")[0]; // yyyy-mm-dd
-  const attendanceRef = db.collection("attendance").doc(formattedDate).collection("records");
+/* -------------------- Seed Ledger -------------------- */
+async function seedLedger() {
+  const examples = [
+    {
+      account: "Cash",
+      description: "Opening balance",
+      date: admin.firestore.Timestamp.fromDate(new Date("2025-08-01")),
+      debit: 100000,
+      credit: 0,
+      journalId: "JRN-OPEN-001",
+    },
+    {
+      account: "Owner’s Equity",
+      description: "Opening balance",
+      date: admin.firestore.Timestamp.fromDate(new Date("2025-08-01")),
+      debit: 0,
+      credit: 100000,
+      journalId: "JRN-OPEN-001",
+    },
+  ];
 
-  const usersSnapshot = await db.collection("users").get();
-  const batch = db.batch();
-
-  let addedCount = 0;
-
-  usersSnapshot.forEach((doc) => {
-    const user = doc.data();
-    const empId = user.employeeId;
-    if (!empId) return;
-
-    const ref = attendanceRef.doc(empId);
-
-    batch.set(ref, {
-      employeeId: empId,
-      email: user.email || "",
-      name: user.name || "",
-      department: user.department || "",
-      status: "present", // ✅ Default can be "present"
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      markedBy: "system", // or HR email if available
+  for (const line of examples) {
+    const ref = db.collection("ledger").doc();
+    await ref.set({
+      account: line.account,
+      description: line.description,
+      date: line.date,
+      debit: line.debit,
+      credit: line.credit,
+      journalId: line.journalId,
+      // optional metadata
+      costCenter: null,
+      project: null,
+      counterparty: null,
+      currency: "BDT",
+      createdAt: admin.firestore.Timestamp.now(),
+      createdBy: "system",
     });
+    console.log(`✅ Added ledger line: ${line.account}`);
+  }
+  console.log("🎉 Ledger collection seeded.");
+}
 
-    console.log(`✅ Prepared attendance record for ${empId}`);
-    addedCount++;
-  });
+/* -------------------- Seed Expenses -------------------- */
+async function seedExpenses() {
+  const examples = [
+    {
+      vendor: "City Power & Light",
+      category: "Utilities",
+      amount: 18000,
+      paidAmount: 0,
+      balance: 18000,
+      dueDate: admin.firestore.Timestamp.fromDate(new Date("2025-08-20")),
+      status: "unpaid", // unpaid | partial | paid
+      notes: "August electricity bill",
+      costCenter: "Factory",
+    },
+    {
+      vendor: "Evergreen Supplies",
+      category: "Office Supplies",
+      amount: 8500,
+      paidAmount: 2000,
+      balance: 6500,
+      dueDate: admin.firestore.Timestamp.fromDate(new Date("2025-08-25")),
+      status: "partial",
+      notes: "Printer cartridges",
+      costCenter: "HR",
+    },
+    {
+      vendor: "Blue Sky Marketing",
+      category: "Marketing",
+      amount: 32000,
+      paidAmount: 32000,
+      balance: 0,
+      dueDate: admin.firestore.Timestamp.fromDate(new Date("2025-08-10")),
+      status: "paid",
+      notes: "Social media campaign",
+      costCenter: "Marketing",
+    },
+  ];
 
-  if (addedCount === 0) {
-    console.log("⚠️ No users found to initialize attendance.");
-  } else {
-    await batch.commit();
-    console.log(`✅ Attendance initialized for ${addedCount} employees on ${formattedDate}`);
+  for (const exp of examples) {
+    const ref = db.collection("expenses").doc();
+    await ref.set({
+      vendor: exp.vendor,
+      category: exp.category,
+      amount: exp.amount,
+      paidAmount: exp.paidAmount,
+      balance: exp.balance,
+      dueDate: exp.dueDate,
+      status: exp.status,
+      notes: exp.notes,
+      costCenter: exp.costCenter,
+      currency: "BDT",
+      attachments: [], // e.g., invoice PDF links
+      createdAt: admin.firestore.Timestamp.now(),
+      createdBy: "system",
+    });
+    console.log(`✅ Added expense: ${exp.vendor}`);
+  }
+  console.log("🎉 Expenses collection seeded.");
+}
+
+/* -------------------- Main -------------------- */
+async function main() {
+  try {
+    await seedLedger();
+    await seedExpenses();
+    console.log("✅ Done seeding ledger & expenses.");
+    process.exit(0);
+  } catch (err) {
+    console.error("❌ Error:", err);
+    process.exit(1);
   }
 }
 
-initializeTodayAttendance().catch(console.error);
+main();

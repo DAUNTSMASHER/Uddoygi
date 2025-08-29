@@ -76,3 +76,4 @@ flutter:
     - assets/icons/
     - assets/videos/               # ✅ Add this
     - assets/config.json
+    - assets/videos/login_bg.mp4
