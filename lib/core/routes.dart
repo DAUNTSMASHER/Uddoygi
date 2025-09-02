@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path/path.dart';
 import 'package:uddoygi/main.dart';
 import 'package:uddoygi/profile.dart';
 
@@ -133,7 +134,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/task_assignment': (context) => const TaskAssignmentScreen(),
 
   '/marketing/orders': (context) => const OrdersScreen(),
-
+  '/marketing/loan_request': (context) => const LoanRequestScreen(),
   '/marketing/sales/new': (context) => const NewInvoicesScreen(),
   '/marketing/sales/all': (context) => const AllInvoicesScreen(),
   '/marketing/sales/report': (context) => const SalesReportScreen(),

@@ -1,136 +1,68 @@
-/**
- * fix_db.js
- * Creates:
- *   - `ledger` collection with example journal entries
- *   - `expenses` collection with example company expenses
- */
+// fix_db.js
+// Backfill userId & userEmail into loan repayment subcollections.
+// Run: node fix_db.js
 
-const admin = require("firebase-admin");
+const admin = require('firebase-admin');
 
-// 🔐 Replace with your Firebase service account JSON path
-const serviceAccount = require("./serviceAccountKey.json");
-
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
+// serviceAccountKey.json = a service account with Firestore access
+const serviceAccount = require('./serviceAccountKey.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 const db = admin.firestore();
 
-/* -------------------- Seed Ledger -------------------- */
-async function seedLedger() {
-  const examples = [
-    {
-      account: "Cash",
-      description: "Opening balance",
-      date: admin.firestore.Timestamp.fromDate(new Date("2025-08-01")),
-      debit: 100000,
-      credit: 0,
-      journalId: "JRN-OPEN-001",
-    },
-    {
-      account: "Owner’s Equity",
-      description: "Opening balance",
-      date: admin.firestore.Timestamp.fromDate(new Date("2025-08-01")),
-      debit: 0,
-      credit: 100000,
-      journalId: "JRN-OPEN-001",
-    },
-  ];
-
-  for (const line of examples) {
-    const ref = db.collection("ledger").doc();
-    await ref.set({
-      account: line.account,
-      description: line.description,
-      date: line.date,
-      debit: line.debit,
-      credit: line.credit,
-      journalId: line.journalId,
-      // optional metadata
-      costCenter: null,
-      project: null,
-      counterparty: null,
-      currency: "BDT",
-      createdAt: admin.firestore.Timestamp.now(),
-      createdBy: "system",
-    });
-    console.log(`✅ Added ledger line: ${line.account}`);
-  }
-  console.log("🎉 Ledger collection seeded.");
+// ───────────────────────── Safety ─────────────────────────
+if (process.env.CONFIRM !== 'DELETE') {
+  console.error('Refusing to run without explicit confirmation.');
+  console.error('Run again with: CONFIRM=DELETE node delete_loans_all.js');
+  process.exit(1);
 }
 
-/* -------------------- Seed Expenses -------------------- */
-async function seedExpenses() {
-  const examples = [
-    {
-      vendor: "City Power & Light",
-      category: "Utilities",
-      amount: 18000,
-      paidAmount: 0,
-      balance: 18000,
-      dueDate: admin.firestore.Timestamp.fromDate(new Date("2025-08-20")),
-      status: "unpaid", // unpaid | partial | paid
-      notes: "August electricity bill",
-      costCenter: "Factory",
-    },
-    {
-      vendor: "Evergreen Supplies",
-      category: "Office Supplies",
-      amount: 8500,
-      paidAmount: 2000,
-      balance: 6500,
-      dueDate: admin.firestore.Timestamp.fromDate(new Date("2025-08-25")),
-      status: "partial",
-      notes: "Printer cartridges",
-      costCenter: "HR",
-    },
-    {
-      vendor: "Blue Sky Marketing",
-      category: "Marketing",
-      amount: 32000,
-      paidAmount: 32000,
-      balance: 0,
-      dueDate: admin.firestore.Timestamp.fromDate(new Date("2025-08-10")),
-      status: "paid",
-      notes: "Social media campaign",
-      costCenter: "Marketing",
-    },
-  ];
+// ───────────────────── Helper functions ───────────────────
+const ROOT_COLLECTION = 'loans';
+const PAGE_SIZE = 200;     // page size for scanning docs
+const CONCURRENCY = 10;    // how many docs to delete in parallel per page
 
-  for (const exp of examples) {
-    const ref = db.collection("expenses").doc();
-    await ref.set({
-      vendor: exp.vendor,
-      category: exp.category,
-      amount: exp.amount,
-      paidAmount: exp.paidAmount,
-      balance: exp.balance,
-      dueDate: exp.dueDate,
-      status: exp.status,
-      notes: exp.notes,
-      costCenter: exp.costCenter,
-      currency: "BDT",
-      attachments: [], // e.g., invoice PDF links
-      createdAt: admin.firestore.Timestamp.now(),
-      createdBy: "system",
-    });
-    console.log(`✅ Added expense: ${exp.vendor}`);
+async function deleteCollectionRecursively(collRef) {
+  // We can’t batch-delete a collection in one call; we page through it.
+  while (true) {
+    const snap = await collRef.limit(PAGE_SIZE).get();
+    if (snap.empty) break;
+
+    // Process in limited parallelism to avoid overloading
+    for (let i = 0; i < snap.docs.length; i += CONCURRENCY) {
+      const chunk = snap.docs.slice(i, i + CONCURRENCY);
+      await Promise.all(chunk.map(d => recursiveDeleteDoc(d.ref)));
+    }
   }
-  console.log("🎉 Expenses collection seeded.");
 }
 
-/* -------------------- Main -------------------- */
-async function main() {
-  try {
-    await seedLedger();
-    await seedExpenses();
-    console.log("✅ Done seeding ledger & expenses.");
+async function recursiveDeleteDoc(docRef) {
+  // Delete subcollections first
+  const subcols = await docRef.listCollections();
+  for (const sub of subcols) {
+    await deleteCollectionRecursively(sub);
+  }
+  // Then delete the doc itself
+  await docRef.delete();
+}
+
+(async () => {
+  console.log(`Starting full recursive delete of "${ROOT_COLLECTION}"…`);
+  const root = db.collection(ROOT_COLLECTION);
+
+  // Optional: quick count (approximate) before delete
+  const firstPage = await root.limit(1).get();
+  if (firstPage.empty) {
+    console.log('Collection is already empty.');
     process.exit(0);
-  } catch (err) {
-    console.error("❌ Error:", err);
-    process.exit(1);
   }
-}
 
-main();
+  await deleteCollectionRecursively(root);
+
+  console.log('✅ Completed recursive delete of "loans". All data removed.');
+  process.exit(0);
+})().catch(err => {
+  console.error('❌ Delete failed:', err);
+  process.exit(1);
+});
