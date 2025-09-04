@@ -1,18 +1,3 @@
-// loan_request_screen.dart
-// Real-time loan request + history UI with month filter & STABLE totals.
-// Firestore collections:
-//   - loans                         (fields: userId, userEmail, amount, status, requestedAt, decisionAt, closedAt, ...)
-//   - loans/{loanId}/repayments     (fields: amount, userEmail, userId, paidAt | timestamp | createdAt | date)
-//
-// Header Sums (respect month filter):
-// - Total  = sum(amount) for loans with status in {approved, disbursed, closed}   // ✅ includes CLOSED
-// - Repaid = sum(amount) of repayments for this user (union of email + uid, de-duplicated)
-// - Due    = max(0, Total - Repaid)
-//
-// Stability improvements:
-// - Only commit new “Repaid” when at least one repayment stream has real data and no errors.
-// - Never overwrite the cache with zero because a stream is late/empty/errored.
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
