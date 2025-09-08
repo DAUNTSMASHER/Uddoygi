@@ -7,8 +7,8 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:uddoygi/services/local_storage_service.dart';
 
-// If you already have your own summary widget, keep this import:
-import 'package:uddoygi/features/marketing/presentation/widgets/customer_order_summary.dart';
+// If you already have your own summary widget, keep this import (unused now):
+// import 'package:uddoygi/features/marketing/presentation/widgets/customer_order_summary.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -122,9 +122,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
         body: SafeArea(
           child: TabBarView(
             children: [
-              _CustomerListTab(ownerEmail: email!),
+              _CustomerListTab(ownerEmail: email!),                    // ✅ only this agent’s customers
               _AddCustomerFormTab(ownerEmail: email!, ownerUid: userId!),
-              CustomerOrderSummary(email: email!), // keep your existing summary widget
+              _OrderSummaryTab(ownerEmail: email!),                    // ✅ only this agent’s orders
             ],
           ),
         ),
@@ -150,7 +150,7 @@ class _CustomerListTabState extends State<_CustomerListTab> {
   Widget build(BuildContext context) {
     final q = FirebaseFirestore.instance
         .collection('customers')
-        .where('ownerEmail', isEqualTo: widget.ownerEmail)
+        .where('ownerEmail', isEqualTo: widget.ownerEmail) // ✅ filter by logged-in user
         .orderBy('createdAt', descending: true);
 
     return Column(
@@ -304,9 +304,23 @@ class _CustomerListTabState extends State<_CustomerListTab> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                      label: const Text('Close'),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Navigate to per-customer orders for this agent only
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => _CustomerOrdersPage(
+                              ownerEmail: widget.ownerEmail,
+                              customerId: id,
+                              customerName: (m['name'] ?? '').toString(),
+                              customerEmail: (m['email'] ?? '').toString(),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.receipt_long),
+                      label: const Text('View Orders'),
                     ),
                   ),
                 ],
@@ -332,6 +346,369 @@ class _CustomerListTabState extends State<_CustomerListTab> {
         const SizedBox(width: 6),
         Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
       ]),
+    );
+  }
+}
+
+/* ========================= Orders Summary (PER-AGENT) =========================
+   Aggregates invoices for only the logged-in user (ownerEmail).
+   Assumed collection: 'invoices' with fields:
+     - ownerEmail (agent email who owns the order)   ✅ filter here
+     - customerId | customerEmail | customerName     🔑 matching keys (best-effort)
+     - total (numeric) OR items[] with qty & unitPrice (fallback)
+     - createdAt (Timestamp) for last order
+===============================================================================*/
+
+class _OrderSummaryTab extends StatelessWidget {
+  final String ownerEmail;
+  const _OrderSummaryTab({required this.ownerEmail});
+
+  num _extractTotal(Map<String, dynamic> inv) {
+    final t = inv['total'];
+    if (t is num) return t;
+    // Fallback: compute from items[]
+    final items = inv['items'];
+    if (items is List) {
+      num sum = 0;
+      for (final it in items) {
+        if (it is Map) {
+          final q = (it['qty'] is num) ? it['qty'] as num : num.tryParse('${it['qty']}') ?? 0;
+          final up = (it['unitPrice'] is num) ? it['unitPrice'] as num : num.tryParse('${it['unitPrice']}') ?? 0;
+          sum += q * up;
+        }
+      }
+      return sum;
+    }
+    return 0;
+  }
+
+  String _keyForInvoice(Map<String, dynamic> inv) {
+    // Prefer stable customerId if present, else email, else name
+    if ((inv['customerId'] ?? '').toString().isNotEmpty) return 'id:${inv['customerId']}';
+    if ((inv['customerEmail'] ?? '').toString().isNotEmpty) return 'em:${(inv['customerEmail']).toString().toLowerCase()}';
+    if ((inv['customerName'] ?? '').toString().isNotEmpty) return 'nm:${inv['customerName']}';
+    return 'unknown';
+  }
+
+  String _keyForCustomer(DocumentSnapshot<Map<String, dynamic>> c) {
+    final m = c.data()!;
+    if ((m['email'] ?? '').toString().isNotEmpty) return 'em:${m['email'].toString().toLowerCase()}';
+    return 'id:${c.id}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customersQ = FirebaseFirestore.instance
+        .collection('customers')
+        .where('ownerEmail', isEqualTo: ownerEmail);
+
+    final invoicesQ = FirebaseFirestore.instance
+        .collection('invoices')
+        .where('ownerEmail', isEqualTo: ownerEmail) // ✅ key filter: only this agent’s orders
+        .orderBy('createdAt', descending: true);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: customersQ.snapshots(),
+      builder: (context, custSnap) {
+        if (!custSnap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final customers = custSnap.data!.docs;
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: invoicesQ.snapshots(),
+          builder: (context, invSnap) {
+            if (!invSnap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final invoices = invSnap.data!.docs;
+
+            // Build quick lookup for customers
+            final Map<String, DocumentSnapshot<Map<String, dynamic>>> customerByKey = {};
+            for (final c in customers) {
+              customerByKey[_keyForCustomer(c)] = c;
+            }
+
+            // Aggregate by customer key
+            final Map<String, _CustAgg> agg = {};
+            for (final d in invoices) {
+              final m = d.data();
+              final key = _keyForInvoice(m);
+              final total = _extractTotal(m);
+              final createdAt = (m['createdAt'] is Timestamp) ? (m['createdAt'] as Timestamp).toDate() : null;
+
+              final a = agg.putIfAbsent(key, () => _CustAgg());
+              a.orderCount += 1;
+              a.totalAmount += total;
+              if (createdAt != null && (a.lastOrderAt == null || createdAt.isAfter(a.lastOrderAt!))) {
+                a.lastOrderAt = createdAt;
+              }
+            }
+
+            // Build rows joined with customer info where possible
+            final rows = <_SummaryRow>[];
+            agg.forEach((key, a) {
+              String displayName = 'Unknown Customer';
+              String? email;
+              String? customerId;
+              // If a matching customer exists, use its info
+              if (customerByKey.containsKey(key)) {
+                final c = customerByKey[key]!;
+                final m = c.data()!;
+                displayName = (m['name'] ?? 'Unnamed').toString();
+                email = (m['email'] ?? '').toString();
+                customerId = c.id;
+              } else {
+                // Try to pull name/email from invoices for display
+                // find one invoice for this key
+                final first = invoices.firstWhere(
+                      (x) => _keyForInvoice(x.data()) == key,
+                  orElse: () => invoices.first,
+                );
+                final im = first.data();
+                displayName = (im['customerName'] ?? displayName).toString();
+                email = (im['customerEmail'] ?? '').toString();
+                if (key.startsWith('id:')) customerId = key.substring(3);
+              }
+
+              rows.add(_SummaryRow(
+                customerKey: key,
+                customerId: customerId,
+                customerName: displayName,
+                customerEmail: email,
+                orders: a.orderCount,
+                total: a.totalAmount,
+                lastOrderAt: a.lastOrderAt,
+              ));
+            });
+
+            rows.sort((a,b){
+              final ad = a.lastOrderAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              final bd = b.lastOrderAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+              return bd.compareTo(ad);
+            });
+
+            if (rows.isEmpty) {
+              return const Center(child: Text('No orders found for your customers.'));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              itemCount: rows.length,
+              itemBuilder: (context, i) { // <- use context, not _
+                final r = rows[i];
+                return Card(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 1,
+                  child: ListTile(
+                    title: Text(r.customerName, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if ((r.customerEmail ?? '').isNotEmpty) Text(r.customerEmail!),
+                        Text('Orders: ${r.orders} • Total: ${r.total.toStringAsFixed(2)}'),
+                        if (r.lastOrderAt != null)
+                          Text('Last: ${r.lastOrderAt!.toIso8601String().split("T").first}', style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => _CustomerOrdersPage(
+                            ownerEmail: ownerEmail,
+                            customerId: r.customerId,
+                            customerName: r.customerName,
+                            customerEmail: r.customerEmail,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+
+          },
+        );
+      },
+    );
+  }
+
+  String _fmtCurrency(num v) {
+    // Keep simple; integrate intl if you prefer
+    return v.toStringAsFixed(2);
+  }
+
+  String _fmtDate(DateTime d) {
+    final y = d.year.toString().padLeft(4,'0');
+    final m = d.month.toString().padLeft(2,'0');
+    final da = d.day.toString().padLeft(2,'0');
+    return '$y-$m-$da';
+  }
+}
+
+class _CustAgg {
+  int orderCount = 0;
+  num totalAmount = 0;
+  DateTime? lastOrderAt;
+}
+
+class _SummaryRow {
+  final String customerKey;
+  final String? customerId;
+  final String customerName;
+  final String? customerEmail;
+  final int orders;
+  final num total;
+  final DateTime? lastOrderAt;
+
+  _SummaryRow({
+    required this.customerKey,
+    required this.customerId,
+    required this.customerName,
+    required this.customerEmail,
+    required this.orders,
+    required this.total,
+    required this.lastOrderAt,
+  });
+}
+
+/* ========================= Per-Customer Orders Page (PER-AGENT) ========================= */
+
+class _CustomerOrdersPage extends StatelessWidget {
+  final String ownerEmail;
+  final String? customerId;
+  final String customerName;
+  final String? customerEmail;
+
+  const _CustomerOrdersPage({
+    required this.ownerEmail,
+    required this.customerName,
+    this.customerEmail,
+    this.customerId,
+  });
+
+  bool _matchesCustomer(Map<String, dynamic> m) {
+    // We stream all invoices for this agent and then filter locally to
+    // avoid multi-OR Firestore queries.
+    final idOk = (customerId != null && (m['customerId'] ?? '') == customerId);
+    final emOk = (customerEmail != null && customerEmail!.isNotEmpty &&
+        (m['customerEmail'] ?? '').toString().toLowerCase() == customerEmail!.toLowerCase());
+    final nameOk = (m['customerName'] ?? '') == customerName;
+    return idOk || emOk || nameOk;
+  }
+
+  num _extractTotal(Map<String, dynamic> inv) {
+    final t = inv['total'];
+    if (t is num) return t;
+    final items = inv['items'];
+    if (items is List) {
+      num sum = 0;
+      for (final it in items) {
+        if (it is Map) {
+          final q = (it['qty'] is num) ? it['qty'] as num : num.tryParse('${it['qty']}') ?? 0;
+          final up = (it['unitPrice'] is num) ? it['unitPrice'] as num : num.tryParse('${it['unitPrice']}') ?? 0;
+          sum += q * up;
+        }
+      }
+      return sum;
+    }
+    return 0;
+  }
+
+  String _fmtDate(DateTime d) {
+    final y = d.year.toString().padLeft(4,'0');
+    final m = d.month.toString().padLeft(2,'0');
+    final da = d.day.toString().padLeft(2,'0');
+    return '$y-$m-$da';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = FirebaseFirestore.instance
+        .collection('invoices')
+        .where('ownerEmail', isEqualTo: ownerEmail)       // ✅ only this agent
+        .orderBy('createdAt', descending: true);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Orders • $customerName'),
+        backgroundColor: const Color(0xFF001863),
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: q.snapshots(),
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final all = snap.data!.docs;
+          final mine = all.where((d) => _matchesCustomer(d.data())).toList();
+
+          if (mine.isEmpty) {
+            return const Center(child: Text('No orders for this customer.'));
+          }
+
+          num total = 0;
+          for (final d in mine) {
+            total += _extractTotal(d.data());
+          }
+
+          return Column(
+            children: [
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0B2D9F), Color(0xFF1D5DF1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Text(
+                  'Total Orders: ${mine.length}   •   Total Amount: ${total.toStringAsFixed(2)}',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  itemCount: mine.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) {
+                    final inv = mine[i].data();
+                    final amt = _extractTotal(inv).toStringAsFixed(2);
+                    final createdAt = (inv['createdAt'] is Timestamp)
+                        ? (inv['createdAt'] as Timestamp).toDate()
+                        : null;
+                    final id = mine[i].id;
+                    return Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 1,
+                      child: ListTile(
+                        title: Text('Invoice #$id', style: const TextStyle(fontWeight: FontWeight.w800)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (createdAt != null) Text('Date: ${_fmtDate(createdAt)}'),
+                            if ((inv['status'] ?? '').toString().isNotEmpty) Text('Status: ${inv['status']}'),
+                          ],
+                        ),
+                        trailing: Text(amt, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -436,7 +813,7 @@ class _AddCustomerFormTabState extends State<_AddCustomerFormTab> {
 
     try {
       await FirebaseFirestore.instance.collection('customers').add({
-        'ownerEmail': widget.ownerEmail,
+        'ownerEmail': widget.ownerEmail,  // ✅ tie customer to logged-in user
         'ownerUid': widget.ownerUid,
         'name': _nameCtl.text.trim(),
         'email': _emailCtl.text.trim(),

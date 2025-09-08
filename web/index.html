@@ -1,38 +1,362 @@
+<!-- web/index.html -->
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
+  <meta charset="UTF-8" />
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+  <meta name="description" content="Uddyogi" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Uddyogi</title>
+  <base href="/" />
 
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
+  <!-- ===== Styles for the confirmation view ===== -->
+  <style>
+    :root { --darkBlue:#0D47A1; --panel:#F7F8FB; }
+    html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial}
+    /* Flutter splash stays hidden when showing confirm page */
+    #splash { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#fff }
+    /* Confirmation UI (only visible on /address-confirm routes) */
+    #confirm-root{display:none; background:var(--panel); min-height:100vh}
+    .wrap{max-width:640px;margin:0 auto;padding:16px}
+    .card{background:#fff;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.08);padding:18px}
+    .title{color:var(--darkBlue);font-weight:800;text-align:center;margin:8px 0 0 0}
+    .subtitle{color:#111;text-align:center;margin:8px 0 16px 0;font-weight:600}
+    .row{display:flex;gap:8px;align-items:stretch;margin:8px 0}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid rgba(0,0,0,.08);background:rgba(0,0,0,.03);width:100%}
+    .pill .label{color:var(--darkBlue);font-weight:700}
+    .pill .value{margin-left:auto;font-weight:800;text-align:right;max-width:65%}
+    .status{display:flex;gap:8px;align-items:center;margin:12px 0;padding:12px;border-radius:10px;border:1px solid rgba(0,0,0,.12)}
+    .status.ok{background:rgba(76,175,80,.08);border-color:rgba(76,175,80,.35)}
+    .status.wait{background:rgba(255,152,0,.08);border-color:rgba(255,152,0,.35)}
+    .addr{display:flex;gap:10px;align-items:flex-start;border:1px solid rgba(0,0,0,.12);border-radius:10px;padding:12px}
+    .addr h4{margin:0 0 6px 0;color:var(--darkBlue);font-weight:800}
+    .btn{display:block;width:100%;padding:12px 14px;border:none;border-radius:10px;font-weight:800;color:#fff;background:#2e7d32;cursor:pointer}
+    .btn[disabled]{opacity:.6;cursor:not-allowed}
+    .note{font-size:12px;color:#555;text-align:center;margin-top:8px}
+    .center{display:flex;justify-content:center;align-items:center}
+    .muted{color:#666}
+    .icon{color:var(--darkBlue);font-size:42px}
+    .toolbar{margin-top:10px; text-align:center}
+    .link-btn{background:transparent;border:1px solid #ddd;border-radius:8px;padding:8px 12px;cursor:pointer}
+  </style>
 
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+  <!-- Flutter loader (will be loaded conditionally) -->
+  <script src="flutter.js" defer></script>
 
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
-  <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="uddoygi">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>uddoygi</title>
-  <link rel="manifest" href="manifest.json">
+  <!-- Firebase SDKs (compat for simplicity) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+
+<!-- ===== Confirmation root (only shown on /address-confirm) ===== -->
+<div id="confirm-root">
+  <div class="wrap">
+    <div class="card">
+      <div class="center"><div class="icon">🛡️</div></div>
+      <h2 class="title">Confirm Address</h2>
+      <p class="subtitle" id="c-subtitle">Loading…</p>
+
+      <div id="c-content" style="display:none">
+        <div class="row">
+          <div class="pill"><span class="label">Work Order No</span><span class="value" id="c-wo">—</span></div>
+        </div>
+        <div class="row">
+          <div class="pill"><span class="label">Invoice No</span><span class="value" id="c-inv">—</span></div>
+        </div>
+        <div class="row">
+          <div class="pill"><span class="label">Buyer</span><span class="value" id="c-buyer">—</span></div>
+        </div>
+
+        <div class="row" id="c-addrbox" style="display:none">
+          <div class="addr">
+            <div>📍</div>
+            <div>
+              <h4>Shipping Address</h4>
+              <div id="c-addr"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="status wait" id="c-status">
+          <div id="c-status-text" class="muted">PENDING</div>
+        </div>
+
+        <button class="btn" id="c-confirm">It’s OK — Confirm Address</button>
+        <div class="note">By confirming, you agree that the above shipping address is correct.</div>
+
+        <div class="toolbar">
+          <button class="link-btn" id="c-open-app">Open Uddyogi app</button>
+        </div>
+      </div>
+
+      <div id="c-error" style="display:none;text-align:center;margin:8px 0 0 0">
+        <strong>Invalid or expired link.</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Default Flutter splash; hidden when confirm page is active ===== -->
+<div id="splash">
+  <noscript>Please enable JavaScript to run this app.</noscript>
+  <span>Loading…</span>
+</div>
+
+<!-- ===== App bootstrap logic ===== -->
+<script>
+  // ---------- ROUTE DETECTION ----------
+  function parseToken() {
+    const url = new URL(window.location.href);
+    // ?token=...
+    let token = url.searchParams.get('token');
+
+    // #/address-confirm?token=...
+    if (!token && url.hash) {
+      const frag = url.hash;
+      const qIdx = frag.indexOf('?');
+      if (qIdx !== -1 && qIdx + 1 < frag.length) {
+        const qp = new URLSearchParams(frag.substring(qIdx + 1));
+        token = qp.get('token');
+      }
+    }
+
+    // /address-confirm/<token>
+    if (!token) {
+      const segs = window.location.pathname.split('/').filter(Boolean);
+      const i = segs.indexOf('address-confirm');
+      if (i !== -1 && i + 1 < segs.length) token = segs[i + 1];
+    }
+    return token || null;
+  }
+
+  const isConfirmRoute =
+    window.location.pathname.includes('/address-confirm') ||
+    window.location.hash.includes('address-confirm');
+
+  // ---------- FIREBASE (same project as Flutter app) ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyCyEBCN8D4OBhJ5fF3AfG4MtbfbV3Lwe8Q",
+    appId: "1:308795588138:web:2f43ef195bb1b8f0decd53",
+    messagingSenderId: "308795588138",
+    projectId: "uddyogi",
+    authDomain: "uddyogi.firebaseapp.com",
+    databaseURL: "https://uddyogi-default-rtdb.asia-southeast1.firebasedatabase.app",
+    storageBucket: "uddyogi.firebasestorage.app"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  // ---------- HELPERS ----------
+  const $ = (sel) => document.querySelector(sel);
+  function setText(sel, v){ const el=$(sel); if(el) el.textContent = v ?? '—'; }
+  function show(sel, yes){ const el=$(sel); if(el) el.style.display = yes ? '' : 'none'; }
+  function readPath(obj, dotted){
+    if (!obj || typeof obj !== 'object') return null;
+    if (!dotted.includes('.')) return obj[dotted];
+    return dotted.split('.').reduce((acc, k) => (acc && typeof acc==='object') ? acc[k] : null, obj);
+  }
+  function pickString(source, keys){
+    for(const k of keys){
+      const v = readPath(source, k);
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return null;
+  }
+  function extractAddress(obj){
+    const shipping = (obj && (obj.shipping || obj.shippingAddress || obj.address)) || {};
+    const billing  = (obj && (obj.billing  || obj.billingAddress)) || {};
+    const build = (a) => {
+      const s = (v) => (typeof v === 'string' && v.trim()) ? v.trim() : null;
+      const lines = [];
+      const line1 = s(a.addressLine1 || a.line1 || a.street || a.road);
+      const line2 = s(a.addressLine2 || a.line2 || a.area || a.block);
+      const city  = s(a.city || a.town);
+      const state = s(a.state || a.province || a.region);
+      const zip   = s(a.zip || a.postalCode || a.postcode);
+      const country = s(a.country || a.countryCode);
+      if (line1) lines.push(line1);
+      if (line2) lines.push(line2);
+      const csz = [city,state,zip].filter(Boolean).join(', ');
+      if (csz) lines.push(csz);
+      if (country) lines.push(country);
+      return lines;
+    };
+    let lines = build(shipping);
+    if (lines.length) return lines;
+    lines = build(billing);
+    if (lines.length) return lines;
+    const flat = pickString(obj || {}, ['shippingAddressString','addressString','fullAddress']);
+    return flat ? [flat] : [];
+  }
+
+  async function ensureAnon(){
+    try { if (!auth.currentUser) await auth.signInAnonymously(); } catch(e){ console.warn(e); }
+  }
+
+  async function loadAll(token){
+    const vRef = db.collection('address_validations').doc(token);
+    const vSnap = await vRef.get();
+    if (!vSnap.exists) return { vSnap:null };
+
+    let orderId = (vSnap.data() || {}).workOrderId || null;
+    let oSnap = null;
+    if (orderId){
+      oSnap = await db.collection('work_orders').doc(orderId).get();
+    } else {
+      const q = await db.collection('work_orders')
+        .where('addressValidation.token','==', token).limit(1).get();
+      if (!q.empty) { oSnap = q.docs[0]; orderId = oSnap.id; }
+    }
+
+    const order = (oSnap && oSnap.data()) || {};
+    const invoiceId = pickString(order, ['invoiceId','invoice_id','invoiceRef','invoice.ref']);
+    const invoiceNo = pickString(order, ['invoiceNo','invoice_no','invoice.number','invoiceNumber']);
+    const workOrderNo = pickString(order, ['workOrderNo','orderNo']);
+
+    let iSnap = null;
+    if (invoiceId){
+      const t = await db.collection('invoices').doc(invoiceId).get();
+      if (t.exists) iSnap = t;
+    }
+    if (!iSnap && invoiceNo){
+      const q2 = await db.collection('invoices').where('invoiceNo','==', invoiceNo).limit(1).get();
+      if (!q2.empty) iSnap = q2.docs[0];
+    }
+    if (!iSnap && workOrderNo){
+      const q3 = await db.collection('invoices').where('workOrderNo','==', workOrderNo).limit(1).get();
+      if (!q3.empty) iSnap = q3.docs[0];
+    }
+
+    return { vSnap, oSnap, iSnap };
+  }
+
+  async function confirm(token, vSnap, oSnap){
+    const batch = db.batch();
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+
+    const vRef = db.collection('address_validations').doc(token);
+    batch.update(vRef, { status:'confirmed', confirmedAt: now });
+
+    const workOrderId = (vSnap && vSnap.data() && vSnap.data().workOrderId) || (oSnap && oSnap.id) || null;
+    if (workOrderId){
+      const oRef = db.collection('work_orders').doc(workOrderId);
+      batch.update(oRef, {
+        'addressValidation.status':'confirmed',
+        'addressValidation.confirmedAt': now,
+        'lastUpdated': now
+      });
+    }
+    await batch.commit();
+  }
+
+  // ---------- MAIN BOOTSTRAP ----------
+  (async function boot(){
+    if (isConfirmRoute) {
+      // Show confirmation page, hide Flutter
+      document.getElementById('confirm-root').style.display = 'block';
+      document.getElementById('splash').style.display = 'none';
+
+      const token = parseToken();
+      if (!token){
+        setText('#c-subtitle', 'Invalid confirmation link.');
+        show('#c-error', true);
+        return;
+      }
+
+      setText('#c-subtitle', 'Loading order details…');
+      await ensureAnon();
+
+      try {
+        const { vSnap, oSnap, iSnap } = await loadAll(token);
+
+        if (!vSnap){
+          setText('#c-subtitle', 'Invalid or expired link.');
+          show('#c-error', true);
+          return;
+        }
+
+        const v = vSnap.data() || {};
+        const status = (v.status || 'pending').toString().toLowerCase();
+        const confirmed = status === 'confirmed';
+
+        const order = (oSnap && oSnap.data()) || {};
+        const invoice = (iSnap && iSnap.data()) || {};
+
+        const woNo = pickString(order, ['workOrderNo','orderNo']) || pickString(invoice, ['workOrderNo']) || '—';
+        const invNo = pickString(invoice, ['invoiceNo','invoice_no','invoiceNumber']) || '—';
+        const buyer =
+          pickString(invoice, ['buyerName','customerName','partyName','billing.name','customer.name']) ||
+          pickString(order,  ['buyerName','customerName','clientName','name']) || '—';
+        const addr = extractAddress(invoice).length ? extractAddress(invoice) : extractAddress(order);
+
+        setText('#c-wo', woNo);
+        setText('#c-inv', invNo);
+        setText('#c-buyer', buyer);
+
+        if (addr.length){
+          $('#c-addr').innerHTML = addr.map(l => `<div>${l}</div>`).join('');
+          show('#c-addrbox', true);
+        } else {
+          show('#c-addrbox', false);
+        }
+
+        const statusBox = $('#c-status');
+        const statusText = $('#c-status-text');
+        statusBox.className = 'status ' + (confirmed ? 'ok' : 'wait');
+        statusText.textContent = confirmed ? 'CONFIRMED' : 'PENDING';
+
+        setText('#c-subtitle', 'Please review the details below and confirm if correct.');
+        show('#c-content', true);
+
+        const btn = $('#c-confirm');
+        btn.disabled = confirmed;
+        btn.textContent = confirmed ? 'Already Confirmed' : 'It’s OK — Confirm Address';
+        btn.addEventListener('click', async () => {
+          if (btn.disabled) return;
+          btn.disabled = true; btn.textContent = 'Working…';
+          try {
+            await confirm(token, vSnap, oSnap);
+            statusBox.className = 'status ok';
+            statusText.textContent = 'CONFIRMED';
+            btn.textContent = 'Already Confirmed';
+          } catch (e) {
+            console.error(e);
+            alert('Could not confirm: ' + e);
+            btn.disabled = false;
+            btn.textContent = 'It’s OK — Confirm Address';
+          }
+        });
+
+        $('#c-open-app').addEventListener('click', () => {
+          // Send them to your app root (Flutter app will load)
+          window.location.href = '/';
+        });
+
+      } catch (e) {
+        console.error(e);
+        setText('#c-subtitle', 'Something went wrong loading your link.');
+        show('#c-error', true);
+      }
+
+    } else {
+      // Normal Flutter web boot
+      window.addEventListener('load', function() {
+        _flutter.loader.loadEntrypoint({
+          serviceWorker: {
+            serviceWorkerVersion: Date.now().toString(),
+          }
+        }).then(function(engineInitializer) {
+          return engineInitializer.initializeEngine();
+        }).then(function(appRunner) {
+          document.getElementById('splash').style.display = 'none';
+          return appRunner.runApp();
+        });
+      });
+    }
+  })();
+</script>
 </body>
 </html>

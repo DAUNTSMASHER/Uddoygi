@@ -49,5 +49,12 @@
   },
   "database": {
     "rules": "database.rules.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "rewrites": [
+      { "source": "/address-confirm/**", "destination": "/index.html" },
+      { "source": "**", "destination": "/index.html" }
+    ]
   }
 }

@@ -32,9 +32,13 @@ dependencies:
 
   # UI & UX
   carousel_slider: ^5.1.1
-  fl_chart: ^1.0.0       # ✅ Used for pie chart
+  fl_chart: 1.0.0      # ✅ Used for pie chart
   iconsax: ^0.0.8
   pie_chart: ^5.4.0
+  qr_flutter: ^4.1.0
+  flutter_email_sender: ^6.0.3
+  mailer: ^6.1.0
+
 
   # Utilities
   http: ^1.2.1
