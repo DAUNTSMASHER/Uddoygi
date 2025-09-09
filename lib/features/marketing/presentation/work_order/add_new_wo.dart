@@ -1,12 +1,33 @@
 // lib/features/marketing/presentation/screens/add_new_wo.dart
+//
+// Work Orders — create from stock or from an invoice.
+// - Buyer name field (+ auto-fill from invoice)
+// - Tracking number REQUIRED (auto from invoice or manual/generate; unique per WO)
+// - Item selector via dropdowns from `products` (model → colour → size + optional base/curl/density)
+// - Instant preview of items
+// - Clean, mobile-first UI
+//
+// Firestore writes include:
+//   workOrderNo, invoiceId (nullable), linkedToInvoice,
+//   items[{model, colour, size, qty, (optional) base, curl, density}],
+//   buyerName, makerName/makerEmail/makerUid, agentEmail,
+//   deliveryDays, finalDate, instructions,
+//   status, submittedToFactory, timestamp,
+//   tracking_number (REQUIRED & UNIQUE).
+//
+// Uniqueness is enforced by a transaction that first creates
+// tracking_index/{tracking_number}. If it already exists, submit is rejected.
 
-import 'package:flutter/material.dart';
+import 'dart:collection';
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-const _indigo  = Color(0xFF0D47A1);
-const _chipBg  = Color(0xFFEFF3FF);
+const _indigo = Color(0xFF0D47A1);
+const _chipBg = Color(0xFFEFF3FF);
 const _surface = Color(0xFFF7F9FC);
 
 class AddNewWorkOrderScreen extends StatefulWidget {
@@ -18,36 +39,70 @@ class AddNewWorkOrderScreen extends StatefulWidget {
 
 class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
   // Create form state
-  final _formKey       = GlobalKey<FormState>();
-  final _makerNameCtrl = TextEditingController();
-  final _notesCtrl     = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _buyerNameCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  final _trackingCtrl = TextEditingController();
 
   /// Source dropdown value: 'stock' or an invoice document id
   String _sourceId = 'stock';
   Map<String, dynamic>? _invoiceData; // null when source is 'stock'
 
   final List<Map<String, dynamic>> _items = [];
-  final List<TextEditingController> _qtyCtrls = [];
 
   int _deliveryDays = 7;
   DateTime _finalDate = DateTime.now().add(const Duration(days: 7));
 
+  // Products for dropdowns
+  List<DocumentSnapshot<Map<String, dynamic>>> _products = [];
+
   @override
   void initState() {
     super.initState();
+    _loadProducts();
+    // Default buyer name from current user (as a convenience)
     final u = FirebaseAuth.instance.currentUser;
-    _makerNameCtrl.text = u?.displayName ?? '';
+    _buyerNameCtrl.text = u?.displayName ?? '';
   }
 
   @override
   void dispose() {
-    _makerNameCtrl.dispose();
+    _buyerNameCtrl.dispose();
     _notesCtrl.dispose();
-    for (final c in _qtyCtrls) c.dispose();
+    _trackingCtrl.dispose();
     super.dispose();
   }
 
+  Future<void> _loadProducts() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('products')
+        .orderBy('model_name')
+        .get();
+    setState(() => _products = snap.docs);
+  }
+
   String _niceDate(DateTime d) => DateFormat('dd-MM-yyyy').format(d);
+
+  // ---------- helpers (tracking) ----------
+
+  String _deriveTrackingFromInvoice(Map<String, dynamic> inv) {
+    final fromField = (inv['tracking_number'] ?? '').toString().trim();
+    if (fromField.isNotEmpty) return fromField;
+    final invNo = (inv['invoiceNo'] ?? '').toString();
+    if (invNo.isNotEmpty) {
+      return 'TRK-${invNo.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '').toUpperCase()}';
+    }
+    // ultimate fallback, time-based
+    final ts = DateFormat('yyyyMMddHHmmss').format(DateTime.now());
+    final rnd = (Random().nextInt(900) + 100).toString();
+    return 'TRK-WO-$ts$rnd';
+  }
+
+  String _generateTracking() {
+    final ts = DateFormat('yyyyMMddHHmm').format(DateTime.now());
+    final rnd = (Random().nextInt(9000) + 1000).toString();
+    return 'TRK-WO-$ts$rnd';
+  }
 
   // ------------------------- UI -------------------------
 
@@ -73,10 +128,10 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       body: Column(
         children: [
           const SizedBox(height: 8),
+          _onboardingBanner(),
           const Divider(height: 1),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              // All of MY work orders, regardless of status.
               stream: FirebaseFirestore.instance
                   .collection('work_orders')
                   .where('agentEmail', isEqualTo: userEmail)
@@ -86,18 +141,35 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final all = (snap.data?.docs ?? []).toList();
+                // base list
+                final allDocs = (snap.data?.docs ?? []).toList();
 
-                // Sort by timestamp DESC (client-side)
-                all.sort((a, b) {
-                  final ta = a.data()['timestamp'];
-                  final tb = b.data()['timestamp'];
-                  final da = (ta is Timestamp) ? ta.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
-                  final db = (tb is Timestamp) ? tb.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+                // Map → filter out docs without tracking_number (empty / missing)
+                final list = allDocs
+                    .map((d) => d.data())
+                    .where((m) => (m['tracking_number'] ?? '').toString().trim().isNotEmpty)
+                    .toList();
+
+                // Sort by timestamp DESC
+                list.sort((a, b) {
+                  DateTime toDate(dynamic x) {
+                    if (x is Timestamp) return x.toDate();
+                    return DateTime.fromMillisecondsSinceEpoch(0);
+                  }
+                  final da = toDate(a['timestamp']);
+                  final db = toDate(b['timestamp']);
                   return db.compareTo(da);
                 });
 
-                if (all.isEmpty) {
+                // De-duplicate by tracking_number (show latest only if legacy dupes exist)
+                final byTrk = LinkedHashMap<String, Map<String, dynamic>>();
+                for (final m in list) {
+                  final trk = (m['tracking_number'] ?? '').toString();
+                  if (!byTrk.containsKey(trk)) byTrk[trk] = m;
+                }
+                final finalList = byTrk.values.toList();
+
+                if (finalList.isEmpty) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
@@ -106,9 +178,9 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                         children: [
                           Icon(Icons.assignment_outlined, size: 64, color: Colors.blueGrey.shade300),
                           const SizedBox(height: 10),
-                          const Text('No work orders yet', style: TextStyle(fontWeight: FontWeight.w800)),
+                          const Text('No tracked work orders yet', style: TextStyle(fontWeight: FontWeight.w800)),
                           const SizedBox(height: 6),
-                          Text('Tap “New Work Order” to create one.',
+                          Text('Create a work order with a tracking number to see it here.',
                               style: TextStyle(color: Colors.blueGrey.shade600)),
                         ],
                       ),
@@ -118,9 +190,9 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
 
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-                  itemCount: all.length,
+                  itemCount: finalList.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) => _orderCard(all[i].data()),
+                  itemBuilder: (_, i) => _orderCard(finalList[i]),
                 );
               },
             ),
@@ -132,12 +204,47 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
 
   // ------------------------- Widgets -------------------------
 
+  Widget _onboardingBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F0FE),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _indigo.withValues(alpha: .2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: _indigo),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Tracking number is required and must be unique. Linking invoices will auto-fill it, or you can paste/generate.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _orderCard(Map<String, dynamic> m) {
-    final wo     = (m['workOrderNo'] ?? '').toString();
-    final status = (m['status'] ?? 'Pending').toString();
-    final items  = (m['items'] as List?)?.fold<int>(0, (s, it) => s + (it['qty'] as int? ?? 0)) ?? 0;
-    final fdTs   = m['finalDate'];
+    final buyer = (m['buyerName'] ?? m['makerName'] ?? 'Buyer').toString();
+    final trk = (m['tracking_number'] ?? '').toString();
+    final items = (m['items'] as List?)?.fold<int>(0, (s, it) => s + (it['qty'] as int? ?? 0)) ?? 0;
+    final fdTs = m['finalDate'];
     final finalDate = (fdTs is Timestamp) ? fdTs.toDate() : DateTime.now();
+
+    int daysLeft = finalDate.difference(DateTime.now()).inDays;
+    String dueLabel;
+    if (daysLeft > 0) {
+      dueLabel = '$daysLeft day${daysLeft == 1 ? '' : 's'} left';
+    } else if (daysLeft == 0) {
+      dueLabel = 'Due today';
+    } else {
+      dueLabel = 'Overdue ${-daysLeft}d';
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -146,21 +253,35 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
         border: Border.all(color: Colors.blueGrey.shade100),
       ),
       child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         leading: Container(
-          width: 42, height: 42, alignment: Alignment.center,
-          decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.assignment_turned_in, color: _indigo),
+          width: 54,
+          height: 54,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _chipBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blueGrey.shade100),
+          ),
+          child: Text(
+            '$items',
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: _indigo),
+          ),
         ),
-        title: Text(wo, style: const TextStyle(fontWeight: FontWeight.w800)),
+        title: Text(
+          buyer,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Wrap(
             spacing: 10,
             runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _pill('$items pcs'),
-              _pill('Due ${_niceDate(finalDate)}'),
-              _statusPill(status),
+              _pill(trk),
+              _pill(dueLabel),
             ],
           ),
         ),
@@ -171,37 +292,13 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
 
   Widget _pill(String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: Colors.blueGrey.shade100),
       ),
       child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-    );
-  }
-
-  Widget _statusPill(String s) {
-    // Support many possible status values
-    final v = s.toLowerCase();
-    Color c;
-    switch (v) {
-      case 'submitted':   c = Colors.indigo;      break;
-      case 'in progress': c = Colors.deepPurple;  break;
-      case 'completed':   c = Colors.green;       break;
-      case 'accepted':    c = Colors.green;       break;
-      case 'rejected':    c = Colors.redAccent;   break;
-      case 'cancelled':   c = Colors.redAccent;   break;
-      default:            c = Colors.orange;      // pending/others
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: c.withOpacity(.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.withOpacity(.35)),
-      ),
-      child: Text(s, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c)),
     );
   }
 
@@ -220,7 +317,9 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       builder: (_) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-          left: 16, right: 16, top: 12,
+          left: 16,
+          right: 16,
+          top: 12,
         ),
         child: Form(
           key: _formKey,
@@ -228,7 +327,8 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Center(
                 child: Container(
-                  width: 48, height: 5,
+                  width: 48,
+                  height: 5,
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(10)),
                 ),
@@ -236,16 +336,16 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
               const Text('Create Work Order', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
               const SizedBox(height: 12),
 
-              // Maker
+              // Buyer
               _section(
-                title: 'Maker',
+                title: 'Buyer',
                 child: Column(
                   children: [
                     SizedBox(
                       width: double.infinity,
                       child: TextFormField(
-                        controller: _makerNameCtrl,
-                        decoration: _fieldDeco('Your Name *'),
+                        controller: _buyerNameCtrl,
+                        decoration: _fieldDeco('Buyer Name *'),
                         textInputAction: TextInputAction.next,
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
@@ -278,13 +378,51 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                 ),
               ),
 
+              // Tracking
+              _section(
+                title: 'Tracking (required)',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextFormField(
+                      controller: _trackingCtrl,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      decoration: _fieldDeco('Tracking Number (paste or generate)').copyWith(
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Generate',
+                              icon: const Icon(Icons.auto_awesome, color: _indigo),
+                              onPressed: () => setState(() => _trackingCtrl.text = _generateTracking()),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                        ),
+                      ),
+                      validator: (v) {
+                        final t = (v ?? '').trim();
+                        if (t.isEmpty) return 'Tracking number is required';
+                        if (t.length < 4) return 'Too short';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    _hintStrip(
+                      'One work order per tracking number. If you selected an invoice, the number is auto-filled. '
+                          'Otherwise paste one or tap Generate.',
+                    ),
+                  ],
+                ),
+              ),
+
               // Items
               _section(
                 title: 'Items',
                 trailing: OutlinedButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('Add Item'),
-                  onPressed: () => _addOrEditItem(),
+                  onPressed: () => _openItemSheet(),
                 ),
                 child: Column(
                   children: [
@@ -295,14 +433,6 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                         decoration: _panelDeco(),
                         child: const Text('No items yet. Select an invoice or tap "Add Item".'),
                       ),
-                    // Ensure controllers exist
-                    Builder(builder: (_) {
-                      while (_qtyCtrls.length < _items.length) {
-                        final i = _qtyCtrls.length;
-                        _qtyCtrls.add(TextEditingController(text: '${_items[i]['qty'] ?? 1}'));
-                      }
-                      return const SizedBox.shrink();
-                    }),
                     ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -310,9 +440,18 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, i) {
                         final it = _items[i];
-                        final model  = (it['model']  ?? '').toString();
+                        final model = (it['model'] ?? '').toString();
                         final colour = (it['colour'] ?? '-').toString();
-                        final size   = (it['size']   ?? '-').toString();
+                        final size = (it['size'] ?? '-').toString();
+                        final base = (it['base'] ?? '').toString();
+                        final curl = (it['curl'] ?? '').toString();
+                        final density = (it['density'] ?? '').toString();
+                        final qty = (it['qty'] as int?) ?? 1;
+
+                        final extraChips = <Widget>[];
+                        if (base.isNotEmpty) extraChips.add(_pill('Base: $base'));
+                        if (curl.isNotEmpty) extraChips.add(_pill('Curl: $curl'));
+                        if (density.isNotEmpty) extraChips.add(_pill('Density: $density'));
 
                         return Container(
                           padding: const EdgeInsets.all(10),
@@ -328,19 +467,25 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                                       style: const TextStyle(fontWeight: FontWeight.w800),
                                     ),
                                     const SizedBox(height: 4),
-                                    Wrap(spacing: 6, children: [
+                                    Wrap(spacing: 6, runSpacing: 6, children: [
                                       _pill('Colour: $colour'),
                                       _pill('Size: $size'),
+                                      ...extraChips,
                                     ]),
                                   ],
                                 ),
                               ),
-                              _qtyStepper(i),
+                              _qtyMiniStepper(
+                                qty: qty,
+                                onChanged: (newQty) {
+                                  setState(() => _items[i]['qty'] = newQty);
+                                },
+                              ),
                               const SizedBox(width: 6),
                               PopupMenuButton<String>(
                                 onSelected: (v) {
-                                  if (v == 'edit') _addOrEditItem(index: i);
-                                  if (v == 'del')  _removeItem(i);
+                                  if (v == 'edit') _openItemSheet(index: i);
+                                  if (v == 'del') _removeItem(i);
                                 },
                                 itemBuilder: (_) => const [
                                   PopupMenuItem(
@@ -451,8 +596,6 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
 
   // ---------- helpers for sheet / source dropdown ----------
 
-  /// Stream + client filtering so we only show **my** invoices,
-  /// even if the collection uses different keys for owner identity.
   Widget _buildSourceDropdown() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('invoices').snapshots(),
@@ -472,20 +615,21 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
               ),
             ),
             items: base,
-            onChanged: (v) { if (v != null) _onSelectSource(v); },
+            onChanged: (v) {
+              if (v != null) _onSelectSource(v);
+            },
           );
         }
 
         final user = FirebaseAuth.instance.currentUser;
         final email = user?.email ?? '';
-        final uid   = user?.uid ?? '';
+        final uid = user?.uid ?? '';
 
-        // Post-filter the snapshot for several common ownership markers
         final docs = (snap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[])
             .where((d) {
           final m = d.data();
-          final ownerEmail = (m['agentEmail'] ?? m['makerEmail'] ?? m['createdByEmail'] ?? '').toString();
-          final ownerUid   = (m['agentUid']   ?? m['ownerUid']   ?? m['createdByUid']   ?? '').toString();
+          final ownerEmail = (m['ownerEmail'] ?? m['agentEmail'] ?? '').toString();
+          final ownerUid = (m['ownerUid'] ?? m['agentId'] ?? '').toString();
           return (email.isNotEmpty && ownerEmail == email) || (uid.isNotEmpty && ownerUid == uid);
         })
             .toList()
@@ -495,6 +639,7 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
               if (x is int) return DateTime.fromMillisecondsSinceEpoch(x);
               return DateTime.fromMillisecondsSinceEpoch(0);
             }
+
             final da = toDate(a.data()['timestamp']);
             final db = toDate(b.data()['timestamp']);
             return db.compareTo(da);
@@ -503,9 +648,9 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
         final items = [
           ...base,
           ...docs.map((d) {
-            final m     = d.data();
+            final m = d.data();
             final invNo = (m['invoiceNo'] as String?) ?? d.id;
-            final cust  = (m['customerName'] as String?) ?? 'N/A';
+            final cust = (m['customerName'] as String?) ?? 'N/A';
             return DropdownMenuItem<String>(
               value: d.id,
               child: Text('Inv $invNo • $cust', maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -522,13 +667,17 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
           value: _sourceId,
           decoration: _fieldDeco('Select Source'),
           items: items,
-          onChanged: (v) { if (v != null) _onSelectSource(v); },
+          onChanged: (v) {
+            if (v != null) _onSelectSource(v);
+          },
         );
       },
     );
   }
 
-  /// Robustly extract items from many possible invoice shapes.
+  /// Extract items from invoices using your common schema keys:
+  /// model/model_name/modelName/productModel, colour/color, size, base, curl, density,
+  /// and qty/quantity/pcs/count. Also supports nested `product{...}`.
   List<Map<String, dynamic>> _extractInvoiceItems(Map<String, dynamic> data) {
     List<dynamic> rawList = const [];
     dynamic raw = data['items'] ?? data['lineItems'] ?? data['products'] ?? data['orderItems'];
@@ -537,79 +686,318 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       rawList = raw;
     } else if (raw is Map) {
       rawList = raw.values.toList();
-    } else {
-      rawList = const [];
     }
 
-    final mapped = rawList.map<Map<String, dynamic>>((e) {
-      final m = (e is Map) ? Map<String, dynamic>.from(e) : <String, dynamic>{};
+    String _getStr(Map<String, dynamic> m, List<String> keys) {
+      for (final k in keys) {
+        final v = m[k];
+        if (v != null && '$v'.trim().isNotEmpty) return '$v'.trim();
+      }
+      return '';
+    }
 
-      // Nested product object support
+    int _getQty(Map<String, dynamic> m) {
+      final q = m['qty'] ?? m['quantity'] ?? m['pcs'] ?? m['count'] ?? 1;
+      if (q is num) return q.toInt().clamp(1, 999999);
+      return int.tryParse('$q')?.clamp(1, 999999) ?? 1;
+    }
+
+    return rawList.map<Map<String, dynamic>>((e) {
+      final m = (e is Map) ? Map<String, dynamic>.from(e) : <String, dynamic>{};
       final prod = (m['product'] is Map) ? Map<String, dynamic>.from(m['product']) : <String, dynamic>{};
 
-      String model = (m['model'] ??
-          m['productName'] ??
-          m['name'] ??
-          m['item'] ??
-          prod['model'] ??
-          prod['name'] ??
-          '').toString();
+      final pick = {...prod, ...m};
 
-      String colour = (m['colour'] ?? m['color'] ?? prod['colour'] ?? prod['color'] ?? '').toString();
-      String size   = (m['size'] ?? m['variant'] ?? prod['size'] ?? prod['variant'] ?? '').toString();
+      final model   = _getStr(pick, ['model', 'model_name', 'modelName', 'productModel', 'name', 'productName', 'item']);
+      final colour  = _getStr(pick, ['colour', 'color']);
+      final size    = _getStr(pick, ['size', 'variant']);
+      final base    = _getStr(pick, ['base']);
+      final curl    = _getStr(pick, ['curl']);
+      final density = _getStr(pick, ['density']);
+      final qty     = _getQty(pick);
 
-      final qtyRaw = m['qty'] ?? m['quantity'] ?? m['pcs'] ?? m['count'] ?? 1;
-      final qty = (qtyRaw is num) ? qtyRaw.toInt() : int.tryParse('$qtyRaw') ?? 1;
-
-      return {
-        'model' : model.trim(),
-        'colour': colour.trim(),
-        'size'  : size.trim(),
-        'qty'   : qty <= 0 ? 1 : qty,
+      final out = <String, dynamic>{
+        'model': model,
+        'colour': colour,
+        'size': size,
+        'qty': qty,
       };
-    }).where((m) => (m['model'] as String).isNotEmpty).toList();
+      if (base.isNotEmpty) out['base'] = base;
+      if (curl.isNotEmpty) out['curl'] = curl;
+      if (density.isNotEmpty) out['density'] = density;
 
-    return mapped;
+      return out;
+    }).where((m) => (m['model'] as String).isNotEmpty).toList();
   }
 
   Future<void> _onSelectSource(String v) async {
     setState(() => _sourceId = v);
 
     if (v == 'stock') {
-      // clear items (manual entry)
-      for (final c in _qtyCtrls) c.dispose();
-      _qtyCtrls.clear();
       _items.clear();
-      setState(() => _invoiceData = null);
+      _invoiceData = null;
+      _trackingCtrl.clear();
+      setState(() {});
       return;
     }
 
     // Load selected invoice and map its items
-    final doc  = await FirebaseFirestore.instance.collection('invoices').doc(v).get();
+    final doc = await FirebaseFirestore.instance.collection('invoices').doc(v).get();
     final data = doc.data();
     if (data == null) return;
 
     final mapped = _extractInvoiceItems(data);
 
-    // If nothing mapped, let the user know (common cause: field names differ)
     if (mapped.isEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No items found on the invoice to add automatically.')),
       );
     }
 
-    // Update state in one setState so UI refreshes reliably
     setState(() {
-      for (final c in _qtyCtrls) c.dispose();
-      _qtyCtrls.clear();
-
       _items
         ..clear()
         ..addAll(mapped);
 
-      _qtyCtrls.addAll(_items.map((it) => TextEditingController(text: '${it['qty']}')));
       _invoiceData = data;
+
+      // auto-fill tracking & buyer
+      _trackingCtrl.text = _deriveTrackingFromInvoice(data);
+      _buyerNameCtrl.text = (data['customerName'] ?? _buyerNameCtrl.text).toString();
     });
+  }
+
+  // ---------- Item bottom sheet ----------
+
+  Future<void> _openItemSheet({int? index}) async {
+    // Local state for the sheet
+    String? model;
+    String? colour;
+    String? size;
+    String? base;
+    String? curl;
+    String? density;
+    int qty = 1;
+
+    if (index != null) {
+      final it = _items[index];
+      model = (it['model'] ?? '') as String?;
+      colour = (it['colour'] ?? '') as String?;
+      size = (it['size'] ?? '') as String?;
+      base = (it['base'] ?? '') as String?;
+      curl = (it['curl'] ?? '') as String?;
+      density = (it['density'] ?? '') as String?;
+      qty = (it['qty'] as int?) ?? 1;
+    }
+
+    List<String> _models() =>
+        _products.map((p) => (p.data()!['model_name'] ?? '').toString()).where((s) => s.isNotEmpty).toSet().toList()
+          ..sort();
+
+    List<String> _colours(String m) => _products
+        .where((p) => (p.data()!['model_name'] ?? '') == m)
+        .map((p) => (p.data()!['colour'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    List<String> _sizes(String m, String c) => _products
+        .where((p) => (p.data()!['model_name'] ?? '') == m && (p.data()!['colour'] ?? '') == c)
+        .map((p) => (p.data()!['size'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    List<String> _vals(String m, String c, String s, String key) => _products
+        .where((p) =>
+    (p.data()!['model_name'] ?? '') == m &&
+        (p.data()!['colour'] ?? '') == c &&
+        (p.data()!['size'] ?? '') == s)
+        .map((p) => (p.data()![key] ?? '').toString())
+        .where((v) => v.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setLocal) {
+          final models = _models();
+          final colours = (model != null) ? _colours(model!) : <String>[];
+          final sizes = (model != null && colour != null) ? _sizes(model!, colour!) : <String>[];
+          final bases = (model != null && colour != null && size != null) ? _vals(model!, colour!, size!, 'base') : <String>[];
+          final curls = (model != null && colour != null && size != null) ? _vals(model!, colour!, size!, 'curl') : <String>[];
+          final densities = (model != null && colour != null && size != null) ? _vals(model!, colour!, size!, 'density') : <String>[];
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+              top: 12,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Add Item', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: model,
+                  items: models.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+                  onChanged: (v) {
+                    setLocal(() {
+                      model = v;
+                      colour = null;
+                      size = null;
+                      base = null;
+                      curl = null;
+                      density = null;
+                    });
+                  },
+                  decoration: _fieldDeco('Model *'),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: colour,
+                  items: colours.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) {
+                    setLocal(() {
+                      colour = v;
+                      size = null;
+                      base = null;
+                      curl = null;
+                      density = null;
+                    });
+                  },
+                  decoration: _fieldDeco('Colour *'),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: size,
+                  items: sizes.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (v) {
+                    setLocal(() {
+                      size = v;
+                      base = null;
+                      curl = null;
+                      density = null;
+                    });
+                  },
+                  decoration: _fieldDeco('Size *'),
+                  validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: base?.isEmpty == true ? null : base,
+                  items: (bases.isEmpty ? [''] : bases).map((b) => DropdownMenuItem(value: b, child: Text(b.isEmpty ? '(none)' : b))).toList(),
+                  onChanged: (v) => setLocal(() => base = (v ?? '').isEmpty ? null : v),
+                  decoration: _fieldDeco('Base'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: curl?.isEmpty == true ? null : curl,
+                  items: (curls.isEmpty ? [''] : curls).map((c) => DropdownMenuItem(value: c, child: Text(c.isEmpty ? '(none)' : c))).toList(),
+                  onChanged: (v) => setLocal(() => curl = (v ?? '').isEmpty ? null : v),
+                  decoration: _fieldDeco('Curl'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: density?.isEmpty == true ? null : density,
+                  items: (densities.isEmpty ? [''] : densities).map((d) => DropdownMenuItem(value: d, child: Text(d.isEmpty ? '(none)' : d))).toList(),
+                  onChanged: (v) => setLocal(() => density = (v ?? '').isEmpty ? null : v),
+                  decoration: _fieldDeco('Density'),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Text('Qty', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 8),
+                    _qtyMiniStepper(
+                      qty: qty,
+                      onChanged: (v) => setLocal(() => qty = v),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 6),
+                    ElevatedButton(
+                      onPressed: (model == null || colour == null || size == null)
+                          ? null
+                          : () {
+                        final m = <String, dynamic>{
+                          'model': model!,
+                          'colour': colour!,
+                          'size': size!,
+                          'qty': qty.clamp(1, 999),
+                        };
+                        if ((base ?? '').isNotEmpty) m['base'] = base!;
+                        if ((curl ?? '').isNotEmpty) m['curl'] = curl!;
+                        if ((density ?? '').isNotEmpty) m['density'] = density!;
+                        setState(() {
+                          if (index != null) {
+                            _items[index] = m;
+                          } else {
+                            _items.add(m);
+                          }
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: _indigo, foregroundColor: Colors.white),
+                      child: const Text('Save'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        });
+      },
+    );
+  }
+
+  Widget _qtyMiniStepper({required int qty, required ValueChanged<int> onChanged}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _roundBtn(Icons.remove, () => onChanged((qty - 1).clamp(1, 999))),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text('$qty', style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+        _roundBtn(Icons.add, () => onChanged((qty + 1).clamp(1, 999))),
+      ],
+    );
+  }
+
+  Widget _roundBtn(IconData icon, VoidCallback onTap) {
+    return InkResponse(
+      onTap: onTap,
+      radius: 22,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: _chipBg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.blueGrey.shade100),
+        ),
+        child: Icon(icon, color: _indigo, size: 18),
+      ),
+    );
+  }
+
+  void _removeItem(int index) {
+    setState(() => _items.removeAt(index));
   }
 
   // ---------- generic helpers ----------
@@ -658,58 +1046,19 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
     );
   }
 
-  Widget _qtyStepper(int i) {
-    return Row(
-      children: [
-        _roundBtn(Icons.remove, () {
-          final cur = int.tryParse(_qtyCtrls[i].text) ?? 1;
-          _qtyCtrls[i].text = '${(cur - 1).clamp(1, 999)}';
-          setState(() {});
-        }),
-        const SizedBox(width: 6),
-        SizedBox(
-          width: 64,
-          child: TextFormField(
-            controller: _qtyCtrls[i],
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            decoration: _fieldDeco('Qty'),
-            validator: (v) => ((int.tryParse(v ?? '') ?? 0) <= 0) ? 'Req' : null,
-          ),
-        ),
-        const SizedBox(width: 6),
-        _roundBtn(Icons.add, () {
-          final cur = int.tryParse(_qtyCtrls[i].text) ?? 1;
-          _qtyCtrls[i].text = '${(cur + 1).clamp(1, 999)}';
-          setState(() {});
-        }),
-      ],
-    );
-  }
-
-  Widget _roundBtn(IconData icon, VoidCallback onTap) {
-    return InkResponse(
-      onTap: onTap,
-      radius: 22,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: _chipBg,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.blueGrey.shade100),
-        ),
-        child: Icon(icon, color: _indigo, size: 20),
-      ),
+  Widget _hintStrip(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(8)),
+      child: Text(text, style: const TextStyle(fontSize: 11)),
     );
   }
 
   Widget _invoicePreview(Map<String, dynamic> m) {
-    final inv   = (m['invoiceNo'] ?? '').toString();
-    final cust  = (m['customerName'] ?? '—').toString();
+    final inv = (m['invoiceNo'] ?? '').toString();
+    final cust = (m['customerName'] ?? '—').toString();
     final total = ((m['grandTotal'] as num?) ?? 0).toDouble();
-
-    // Count items robustly
     final cnt = _extractInvoiceItems(m).length;
 
     DateTime date;
@@ -722,6 +1071,8 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       date = DateTime.now();
     }
 
+    final trk = _deriveTrackingFromInvoice(m);
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: _panelDeco(),
@@ -730,14 +1081,14 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
           const Icon(Icons.receipt_long, color: _indigo),
           const SizedBox(width: 8),
           Text('Invoice $inv', style: const TextStyle(fontWeight: FontWeight.w900)),
-          const Spacer(),
-          _pill(_niceDate(date)),
         ]),
         const SizedBox(height: 6),
-        Wrap(spacing: 10, children: [
+        Wrap(spacing: 10, runSpacing: 6, children: [
           _pill('Customer: $cust'),
           _pill('Items: $cnt'),
           _pill('৳${total.toStringAsFixed(2)}'),
+          _pill(_niceDate(date)),
+          _pill('Tracking: $trk'),
         ]),
       ]),
     );
@@ -745,11 +1096,13 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
 
   Widget _previewCard() {
     final totalItems = _items.fold<int>(0, (s, it) => s + (it['qty'] as int? ?? 0));
-    final invNo      = (_invoiceData?['invoiceNo'] ?? '').toString();
+    final invNo = (_invoiceData?['invoiceNo'] ?? '').toString();
 
     final woNo = _invoiceData == null
         ? 'WO_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}'
         : 'INV${invNo}_WO_${DateFormat('yyyyMMdd').format(_finalDate)}';
+
+    final trk = _trackingCtrl.text.trim();
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -759,9 +1112,11 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
         runSpacing: 10,
         children: [
           Text('WO No: $woNo', style: const TextStyle(fontWeight: FontWeight.w800)),
+          _pill('Buyer: ${_buyerNameCtrl.text.trim().isEmpty ? '—' : _buyerNameCtrl.text.trim()}'),
           _pill('Items: $totalItems'),
           _pill('Delivery: $_deliveryDays day(s)'),
           _pill('Final: ${_niceDate(_finalDate)}'),
+          _pill(trk.isEmpty ? 'Tracking: — (required)' : 'Tracking: $trk'),
         ],
       ),
     );
@@ -772,89 +1127,19 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
     _sourceId = 'stock';
     _invoiceData = null;
     _items.clear();
-    for (final c in _qtyCtrls) c.dispose();
-    _qtyCtrls.clear();
     _deliveryDays = 7;
     _finalDate = DateTime.now().add(const Duration(days: 7));
     _notesCtrl.clear();
+    _trackingCtrl.clear();
     setState(() {});
   }
 
-  Future<void> _addOrEditItem({int? index}) async {
-    final isEdit = index != null;
-    final model  = TextEditingController(text: isEdit ? (_items[index!]['model']  ?? '') : '');
-    final colour = TextEditingController(text: isEdit ? (_items[index!]['colour'] ?? '') : '');
-    final size   = TextEditingController(text: isEdit ? (_items[index!]['size']   ?? '') : '');
-    final qty    = TextEditingController(text: isEdit ? '${_items[index!]['qty'] ?? 1}' : '1');
-    final key    = GlobalKey<FormState>();
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(isEdit ? 'Edit Item' : 'Add Item'),
-        content: Form(
-          key: key,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(controller: model,  decoration: _fieldDeco('Model *'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null),
-            const SizedBox(height: 8),
-            TextFormField(controller: colour, decoration: _fieldDeco('Colour')),
-            const SizedBox(height: 8),
-            TextFormField(controller: size,   decoration: _fieldDeco('Size')),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: qty,
-              keyboardType: TextInputType.number,
-              decoration: _fieldDeco('Qty *'),
-              validator: (v) => ((int.tryParse(v ?? '') ?? 0) <= 0) ? 'Invalid' : null,
-            ),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (!key.currentState!.validate()) return;
-              Navigator.pop(context, true);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: _indigo, foregroundColor: Colors.white),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    ) ?? false;
-
-    if (!ok) return;
-
-    final m = {
-      'model' : model.text.trim(),
-      'colour': colour.text.trim(),
-      'size'  : size.text.trim(),
-      'qty'   : int.tryParse(qty.text) ?? 1,
-    };
-
-    setState(() {
-      if (isEdit) {
-        _items[index!] = m;
-        _qtyCtrls[index].text = '${m['qty']}';
-      } else {
-        _items.add(m);
-        _qtyCtrls.add(TextEditingController(text: '${m['qty']}'));
-      }
-    });
-  }
-
-  void _removeItem(int index) {
-    setState(() {
-      _items.removeAt(index);
-      _qtyCtrls.removeAt(index).dispose();
-    });
-  }
+  // ---------- Submit (with hard uniqueness) ----------
 
   Future<void> _submit() async {
-    final user  = FirebaseAuth.instance.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
     final email = user?.email ?? '';
-    final uid   = user?.uid ?? '';
+    final uid = user?.uid ?? '';
 
     if (!_formKey.currentState!.validate()) return;
     if (_items.isEmpty) {
@@ -862,46 +1147,85 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       return;
     }
 
-    // sync qty from editors
-    for (int i = 0; i < _items.length; i++) {
-      final q = int.tryParse(_qtyCtrls[i].text) ?? 1;
-      _items[i]['qty'] = q <= 0 ? 1 : q;
+    final tracking = _trackingCtrl.text.trim();
+    if (tracking.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tracking number is required.')));
+      return;
     }
 
     final workNo = _invoiceData == null
         ? 'WO_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}'
         : '${_invoiceData!['invoiceNo']}_WO_${DateFormat('yyyyMMdd').format(_finalDate)}';
 
-    final doc = <String, dynamic>{
-      'workOrderNo'      : workNo,
-      'invoiceId'        : _sourceId == 'stock' ? null : _sourceId,
-      'linkedToInvoice'  : _sourceId != 'stock',
-      'items'            : _items.map((e) => {
-        'model' : e['model'],
+    // build items list; include optional fields only if present
+    final itemsForWrite = _items.map((e) {
+      final m = <String, dynamic>{
+        'model': e['model'],
         'colour': e['colour'],
-        'size'  : e['size'],
-        'qty'   : e['qty'],
-      }).toList(),
+        'size': e['size'],
+        'qty': e['qty'],
+      };
+      if ((e['base'] ?? '').toString().isNotEmpty) m['base'] = e['base'];
+      if ((e['curl'] ?? '').toString().isNotEmpty) m['curl'] = e['curl'];
+      if ((e['density'] ?? '').toString().isNotEmpty) m['density'] = e['density'];
+      return m;
+    }).toList();
 
-      // maker identity
-      'makerName'  : _makerNameCtrl.text.trim(),
-      'makerEmail' : email,
-      'makerUid'   : uid,
-      // legacy for other screens
-      'agentEmail' : email,
+    final woData = <String, dynamic>{
+      'workOrderNo': workNo,
+      'invoiceId': _sourceId == 'stock' ? null : _sourceId,
+      'linkedToInvoice': _sourceId != 'stock',
+      'items': itemsForWrite,
 
-      'deliveryDays'      : _deliveryDays,
-      'finalDate'         : Timestamp.fromDate(_finalDate),
-      'instructions'      : _notesCtrl.text.trim(),
-      'status'            : 'Pending',
+      // identities
+      'buyerName': _buyerNameCtrl.text.trim(),
+      'makerName': _buyerNameCtrl.text.trim(), // legacy compatibility
+      'makerEmail': email,
+      'makerUid': uid,
+      'agentEmail': email, // legacy
+
+      'deliveryDays': _deliveryDays,
+      'finalDate': Timestamp.fromDate(_finalDate),
+      'instructions': _notesCtrl.text.trim(),
+      'status': 'Pending',
       'submittedToFactory': false,
-      'timestamp'         : FieldValue.serverTimestamp(),
+      'timestamp': FieldValue.serverTimestamp(),
+      'tracking_number': tracking, // REQUIRED
     };
 
-    await FirebaseFirestore.instance.collection('work_orders').doc(workNo).set(doc);
+    final woRef = FirebaseFirestore.instance.collection('work_orders').doc(workNo);
+    final idxRef = FirebaseFirestore.instance.collection('tracking_index').doc(tracking);
+
+    try {
+      await FirebaseFirestore.instance.runTransaction((tx) async {
+        final idxSnap = await tx.get(idxRef);
+        if (idxSnap.exists) {
+          throw StateError('TRACKING_TAKEN');
+        }
+        // Reserve the tracking first (acts like a uniqueness lock).
+        tx.set(idxRef, {
+          'workOrderNo': workNo,
+          'makerEmail': email,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        // Then create the work order.
+        tx.set(woRef, woData);
+      });
+    } on StateError catch (e) {
+      if (e.message == 'TRACKING_TAKEN') {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('A work order already exists for tracking “$tracking”.')),
+        );
+        return;
+      }
+      rethrow;
+    }
 
     if (!mounted) return;
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Work order submitted')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Work order submitted • Tracking: $tracking')),
+    );
   }
 }

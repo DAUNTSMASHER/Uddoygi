@@ -34,7 +34,7 @@ class OrdersScreen extends StatelessWidget {
       _SectionItem(
         label: 'Shipping Agents',
         icon: Icons.person_pin_circle,
-        page: const ShippingAgentDirectoryPage(),
+        page: const shippingAgentDirectoryPage(),
       ),
     ];
 

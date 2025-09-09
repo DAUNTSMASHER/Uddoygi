@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'new_invoices_screen.dart';
 import 'all_invoices_screen.dart';
 import 'sales_report_screen.dart';
@@ -15,6 +14,14 @@ const Color _ink = Color(0xFF1D5DF1);
 const Color _surface = Color(0xFFF4F6FA);
 const Color _cardBg = Colors.white;
 const Color _okGreen = Color(0xFF2ECC71);
+
+/// Quick-action model (top-level)
+class _Feature {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  _Feature(this.icon, this.label, this.onTap);
+}
 
 class SalesScreen extends StatefulWidget {
   const SalesScreen({Key? key}) : super(key: key);
@@ -34,8 +41,8 @@ class _SalesScreenState extends State<SalesScreen> {
   String? userEmail;
   bool   targetReached = false;
   DateTime selectedMonth = DateTime.now();
-  bool showSummary = true;
-  bool showPie     = false;
+
+  int _activeTabIndex = 0;
 
   @override
   void initState() {
@@ -48,6 +55,7 @@ class _SalesScreenState extends State<SalesScreen> {
     if (session != null && mounted) {
       userEmail = session['email'];
       await _calculateUserSales();
+      setState(() {});
     }
   }
 
@@ -99,8 +107,24 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final double achievement =
-    (totalSales / salesTarget * 100).clamp(0.0, 100.0).toDouble();
+    final media = MediaQuery.of(context);
+    final sw = media.size.width;
+    final isSmall = sw < 360;
+
+    if (userEmail == null) {
+      return const Scaffold(
+        backgroundColor: _surface,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Last 30 days invoices for header counters + recent list
+    final since = DateTime.now().subtract(const Duration(days: 30));
+    final invQuery = FirebaseFirestore.instance
+        .collection('invoices')
+        .where('agentEmail', isEqualTo: userEmail)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+        .orderBy('timestamp', descending: true);
 
     return Scaffold(
       backgroundColor: _surface,
@@ -109,7 +133,13 @@ class _SalesScreenState extends State<SalesScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Sales Dashboard', style: TextStyle(fontSize: _fontLarge)),
+        title: Text(
+          'Sales Dashboard',
+          style: TextStyle(
+            fontSize: isSmall ? _fontRegular : _fontLarge,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         centerTitle: true,
         elevation: 0,
         flexibleSpace: Container(
@@ -128,243 +158,631 @@ class _SalesScreenState extends State<SalesScreen> {
           )
         ],
       ),
-      body: userEmail == null
-          ? const Center(child: CircularProgressIndicator())
-          : LayoutBuilder(
-        builder: (context, constraints) {
-          // Responsive counts
-          final bool wide = constraints.maxWidth >= 900;
-          final int statCols = constraints.maxWidth >= 1200
-              ? 4
-              : (constraints.maxWidth >= 700 ? 2 : 1);
-          final int actionCols = constraints.maxWidth >= 700 ? 3 : 2;
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: invQuery.snapshots(),
+        builder: (ctx, snap) {
+          final docs = snap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top bar (month + filter)
-                _pageHeader(achievement),
+          // Header counters for list tabs
+          final totalInvoices = docs.length;
+          final paid = docs.where((d) {
+            final m = d.data();
+            final paidByFlag = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
+            final status = (m['status'] ?? '').toString().toLowerCase();
+            return paidByFlag || status.contains('paid') || status.contains('payment taken');
+          }).length;
+          final pending = totalInvoices - paid;
 
-                const SizedBox(height: 14),
+          return CustomScrollView(
+            slivers: [
+              // Glass header with 4 KPIs + month pill
+              SliverToBoxAdapter(
+                child: _glassHeader(
+                  totalInvoices: totalInvoices,
+                  paid: paid,
+                  pending: pending,
+                ),
+              ),
 
-                // KPI row: Target / Sales / Orders / Achievement (grid, responsive)
-                _sectionHeader('Summary', showSummary, () {
-                  setState(() => showSummary = !showSummary);
-                }),
-                if (showSummary) ...[
-                  const SizedBox(height: 8),
-                  GridView(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: statCols,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: wide ? 2.8 : 2.2,
+              // Five quick actions
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                sliver: SliverToBoxAdapter(child: _featuresGrid(context)),
+              ),
+
+              // Section title
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    'Recent transactions',
+                    style: TextStyle(
+                      fontSize: _fontLarge,
+                      fontWeight: FontWeight.w900,
+                      color: _darkBlue,
                     ),
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _kpiCard(
-                        title: 'Revenue',
-                        value: '৳${totalSales.toStringAsFixed(0)}',
-                        icon: Icons.payments,
-                        accent: _okGreen,
-                        footer: 'This month • ${DateFormat.yMMM().format(selectedMonth)}',
-                      ),
-                      _kpiCard(
-                        title: 'Sales Target',
-                        value: '৳${salesTarget.toStringAsFixed(0)}',
-                        icon: Icons.flag,
-                        accent: _darkBlue,
-                        footer: 'Progress shown below',
-                        trailing: _miniProgress(achievement),
-                      ),
-                      _kpiCard(
-                        title: 'Orders',
-                        value: '$orderCount',
-                        icon: Icons.receipt_long,
-                        accent: const Color(0xFF20B2AA),
-                        footer: 'Created this month',
-                      ),
-                      _kpiCard(
-                        title: 'Achievement',
-                        value: '${achievement.toStringAsFixed(1)}%',
-                        icon: Icons.trending_up,
-                        accent: _ink,
-                        footer: targetReached ? 'Target achieved 🎉' : 'Keep going!',
-                      ),
-                    ],
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                // Pie chart section
-                _sectionHeader('Achievement Chart', showPie, () {
-                  setState(() => showPie = !showPie);
-                }),
-                if (showPie) ...[
-                  const SizedBox(height: 8),
-                  _card(
-                    child: SizedBox(
-                      height: 200,
-                      child: PieChart(
-                        PieChartData(
-                          centerSpaceRadius: 48,
-                          sectionsSpace: 2,
-                          sections: [
-                            PieChartSectionData(
-                              value: achievement,
-                              color: _darkBlue,
-                              title: '${achievement.toStringAsFixed(1)}%',
-                              radius: 72,
-                              titleStyle: const TextStyle(
-                                fontSize: _fontRegular,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            PieChartSectionData(
-                              value: 100 - achievement,
-                              color: Colors.grey.shade300,
-                              title: '',
-                              radius: 64,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 18),
-
-                // Actions
-                Text(
-                  'Actions',
-                  style: const TextStyle(
-                    fontSize: _fontLarge,
-                    color: _darkBlue,
-                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 12),
-                GridView(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: actionCols,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.25,
-                  ),
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _actionTile(
-                      icon: Icons.add_circle,
-                      label: 'New Invoice',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const NewInvoicesScreen()),
-                        );
-                      },
-                    ),
-                    _actionTile(
-                      icon: Icons.list_alt,
-                      label: 'All Invoices',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const AllInvoicesScreen()),
-                        );
-                      },
-                    ),
-                    _actionTile(
-                      icon: Icons.work,
-                      label: 'Work Orders',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const WorkOrderScreen()),
-                        );
-                      },
-                    ),
-                    _actionTile(
-                      icon: Icons.bar_chart,
-                      label: 'Report',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SalesReportScreen()),
-                        );
-                      },
-                    ),
-                    _actionTile(
-                      icon: Icons.timeline,
-                      label: 'Progress',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const OrderProgressScreen()),
-                        );
-                      },
-                    ),
-                    // Empty slot for symmetry on large screens
-                    const SizedBox.shrink(),
-                  ],
+              ),
+
+              // Segmented control
+              SliverToBoxAdapter(child: _segmentedTabs()),
+
+              // Content
+              SliverToBoxAdapter(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: _activeTabIndex == 0
+                      ? _recentInvoicesList(docs)
+                      : (_activeTabIndex == 1 ? _expensesList() : _incomeList()),
                 ),
-              ],
-            ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            ],
           );
         },
       ),
     );
   }
 
-  // ——————————————————— UI helpers ———————————————————
+  // ——————————————————— Header ———————————————————
+  Widget _glassHeader({
+    required int totalInvoices,
+    required int paid,
+    required int pending,
+  }) {
+    final achievement = (salesTarget == 0)
+        ? 0.0
+        : (totalSales / salesTarget * 100).clamp(0.0, 100.0).toDouble();
 
-  Widget _pageHeader(double achievement) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Sales Overview',
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: _darkBlue,
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFDEFDF4), Color(0xFFF4FAFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(color: Color(0x12000000), blurRadius: 16, offset: Offset(0, 6)),
+        ],
+        border: Border.all(color: Colors.white, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Greeting + month pill
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Your business at a glance',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _darkBlue,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _pillButton(
+                icon: Icons.calendar_month_rounded,
+                label: DateFormat.yMMMM().format(selectedMonth),
+                onTap: () => _selectMonth(context),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // 4 KPIs (Target, Achieved, Orders, Progress)
+          LayoutBuilder(
+            builder: (context, c) {
+              final wide = c.maxWidth >= 720;
+              final cross = wide ? 4 : 2;
+              final aspect = wide ? 3.1 : 2.2;
+              return GridView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cross,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: aspect,
+                ),
+                children: [
+                  _kpiTiny(
+                    label: 'Target',
+                    value: '৳${salesTarget.toStringAsFixed(0)}',
+                    icon: Icons.flag_rounded,
+                    accent: _darkBlue,
+                  ),
+                  _kpiTiny(
+                    label: 'Achieved',
+                    value: '৳${totalSales.toStringAsFixed(0)}',
+                    icon: Icons.payments_rounded,
+                    accent: _okGreen,
+                  ),
+                  _kpiTiny(
+                    label: 'Orders',
+                    value: '$orderCount',
+                    icon: Icons.receipt_long_rounded,
+                    accent: const Color(0xFF20B2AA),
+                  ),
+                  _kpiTiny(
+                    label: 'Progress',
+                    value: '${achievement.toStringAsFixed(0)}%',
+                    icon: Icons.trending_up_rounded,
+                    accent: _ink,
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 10),
+
+          // Inline quick counters for last 30d (kept subtle)
+          Row(
+            children: [
+              Expanded(child: _pillStat('Total', totalInvoices.toString())),
+              const SizedBox(width: 8),
+              Expanded(child: _pillStat('Paid', paid.toString(), color: const Color(0xFF21C7A8))),
+              const SizedBox(width: 8),
+              Expanded(child: _pillStat('Pending', pending.toString(), color: Colors.orange)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kpiTiny({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color accent,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: accent.withOpacity(.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: accent, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: _darkBlue,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pillStat(String label, String value, {Color color = _darkBlue}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 8, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '$label: $value',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ——————————————————— Quick actions (5 only) ———————————————————
+  Widget _featuresGrid(BuildContext context) {
+    final tiles = <_Feature>[
+      _Feature(Icons.description_rounded, 'New invoice', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()));
+      }),
+      _Feature(Icons.list_alt_rounded, 'All invoices', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()));
+      }),
+      _Feature(Icons.work_history_rounded, 'Work orders', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()));
+      }),
+      _Feature(Icons.bar_chart_rounded, 'Reports', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()));
+      }),
+      _Feature(Icons.timeline_rounded, 'Progress', () {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()));
+      }),
+    ];
+
+    // 3 per row on phones, 5 in one row on wide screens
+    return LayoutBuilder(
+      builder: (context, c) {
+        final wide = c.maxWidth >= 720;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: tiles.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: wide ? 5 : 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: wide ? 1.15 : .98,
+          ),
+          itemBuilder: (_, i) => _featureTile(tiles[i]),
+        );
+      },
+    );
+  }
+
+  Widget _featureTile(_Feature f) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: f.onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: _darkBlue.withOpacity(.08),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(f.icon, color: _darkBlue),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(
+                f.label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _darkBlue,
+                ),
+              ),
+            ),
+          ],
         ),
-        _pillButton(
-          icon: Icons.filter_alt,
-          label: DateFormat.yMMMM().format(selectedMonth),
-          onTap: () => _selectMonth(context),
-        ),
+      ),
+    );
+  }
+
+  // ——————————————————— Tabs ———————————————————
+  Widget _segmentedTabs() {
+    final tabs = ['All invoices', 'Expenses', 'Income'];
+    return Container(
+      margin: const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 6),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
+      ),
+      child: Row(
+        children: List.generate(tabs.length, (i) {
+          final selected = i == _activeTabIndex;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _activeTabIndex = i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? const Color(0xFF21C7A8).withOpacity(.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Center(
+                  child: Text(
+                    tabs[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? const Color(0xFF21C7A8) : _darkBlue,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  // ——————————————————— Lists ———————————————————
+  Widget _recentInvoicesList(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    if (docs.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: _emptyCard('No invoices in the last 30 days'),
+      );
+    }
+    return Column(
+      key: const ValueKey('invoices'),
+      children: [
+        const SizedBox(height: 6),
+        ...docs.take(15).map((d) => _invoiceRow(d.id, d.data())).toList(),
       ],
     );
   }
 
-  Widget _pillButton({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _expensesList() {
+    return Padding(
+      key: const ValueKey('expenses'),
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: _emptyCard('No expenses recorded'),
+    );
+  }
+
+  Widget _incomeList() {
+    return Padding(
+      key: const ValueKey('income'),
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: _emptyCard('No income records'),
+    );
+  }
+
+  Widget _emptyCard(String msg) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _darkBlue.withOpacity(.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.inbox, color: _darkBlue),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              msg,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _invoiceRow(String id, Map<String, dynamic> m) {
+    final customer = (m['customerName'] ?? 'N/A').toString();
+    final amt      = ((m['grandTotal'] as num?) ?? 0).toDouble();
+    final tracking = (m['tracking_number'] ?? '').toString();
+    final status   = (m['status'] ?? '').toString();
+    final ts       = m['timestamp'];
+    final date     = ts is Timestamp ? ts.toDate() : DateTime.now();
+
+    final isPaid = () {
+      final paidByFlag = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
+      final s = status.toLowerCase();
+      return paidByFlag || s.contains('paid') || s.contains('payment taken');
+    }();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: (isPaid ? const Color(0xFF21C7A8) : Colors.orange).withOpacity(.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(isPaid ? Icons.check_circle : Icons.schedule,
+                color: isPaid ? const Color(0xFF21C7A8) : Colors.orange),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showDetails(id, m),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    customer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: _darkBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      _statusDot(isPaid ? 'Paid' : 'Unpaid',
+                          color: isPaid ? const Color(0xFF21C7A8) : Colors.orange),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          tracking.isEmpty
+                              ? DateFormat('dd MMM, yyyy').format(date)
+                              : tracking,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '৳${amt.toStringAsFixed(0)}',
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              color: _darkBlue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusDot(String text, {required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, size: 8, color: color),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ——————————————————— Shared UI helpers ———————————————————
+  Widget _pillButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return Material(
-      color: _darkBlue.withOpacity(0.08),
+      color: Colors.white,
       borderRadius: BorderRadius.circular(28),
       child: InkWell(
         borderRadius: BorderRadius.circular(28),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.black12.withOpacity(.06)),
+            boxShadow: const [
+              BoxShadow(color: Color(0x12000000), blurRadius: 10, offset: Offset(0, 3)),
+            ],
+            gradient: const LinearGradient(
+              colors: [Color(0xFFF8FBFF), Color(0xFFF5FFFB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
           child: Row(
             children: [
               Icon(icon, color: _darkBlue, size: 18),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: _darkBlue,
-                  fontSize: _fontRegular,
-                  fontWeight: FontWeight.w600,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                    color: _darkBlue,
+                    fontSize: _fontRegular,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -374,158 +792,111 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  Widget _miniProgress(double achievement) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: achievement / 100,
-            minHeight: 8,
-            backgroundColor: Colors.grey.shade300,
-            color: _darkBlue,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '${achievement.toStringAsFixed(0)}%',
-          style: TextStyle(
-            color: Colors.grey.shade700,
-            fontSize: _fontSmall,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _sectionHeader(String text, bool expanded, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: _fontLarge,
-                fontWeight: FontWeight.w800,
-                color: _darkBlue,
-              ),
-            ),
-          ),
-          Icon(expanded ? Icons.expand_less : Icons.expand_more, color: _darkBlue),
-        ],
-      ),
-    );
-  }
-
-  Widget _kpiCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color accent,
-    String? footer,
-    Widget? trailing,
-  }) {
-    return _card(
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: _fontSmall,
-                      fontWeight: FontWeight.w600,
-                    )),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    color: _darkBlue,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (footer != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    footer,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: _fontSmall),
-                  ),
-                ],
-                if (trailing != null) trailing,
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionTile({required IconData icon, required String label, required VoidCallback onTap}) {
-    return _card(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: _darkBlue.withOpacity(.10),
-              child: Icon(icon, color: _darkBlue),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: _fontRegular,
-                color: _darkBlue,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _card({required Widget child, EdgeInsetsGeometry padding = const EdgeInsets.all(14)}) {
     return Container(
       decoration: BoxDecoration(
         color: _cardBg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 4)),
         ],
-        border: Border.all(color: Colors.grey.withOpacity(.1)),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
       ),
       padding: padding,
       child: child,
+    );
+  }
+
+  // Minimal details bottom sheet
+  void _showDetails(String id, Map<String, dynamic> m) {
+    final customer = (m['customerName'] ?? 'N/A').toString();
+    final amt = ((m['grandTotal'] as num?) ?? 0).toDouble();
+    final tracking = (m['tracking_number'] ?? '').toString();
+    final status   = (m['status'] ?? '').toString();
+    final ts       = m['timestamp'];
+    final date = ts is Timestamp ? ts.toDate() : DateTime.now();
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                customer,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: _darkBlue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _kv('Status', status.isEmpty ? '—' : status),
+              _kv('Tracking', tracking.isEmpty ? '—' : tracking),
+              _kv('Date', DateFormat('dd MMM, yyyy').format(date)),
+              _kv('Amount', '৳${amt.toStringAsFixed(0)}'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AllInvoicesScreen()),
+                      ),
+                      icon: const Icon(Icons.open_in_new),
+                      label: const Text('Go to invoice'),
+                      style: OutlinedButton.styleFrom(foregroundColor: _darkBlue),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _kv(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              k,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              v,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: _darkBlue,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

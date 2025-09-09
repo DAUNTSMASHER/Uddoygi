@@ -1,11 +1,20 @@
+import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-const Color _indigo = Color(0xFF0D47A1); // brand primary
-const Color _accent = Color(0xFF448AFF); // blueAccent-ish
+// PDF & share
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+const Color _indigo = Color(0xFF0D47A1);
+const Color _accent = Color(0xFF448AFF);
 const Color _cardBG = Colors.white;
 const Color _chipBg = Color(0xFFEFF3FF);
 
@@ -22,44 +31,44 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   // Session / Agent
   String? _uid;
   String? _agentEmail;
-  String  _agentName = '';
+  String _agentName = '';
 
   // Buyer
   String? selectedCustomerId;
-  String  selectedCustomerName = '';
+  String selectedCustomerName = '';
 
   // Date
   DateTime selectedDate = DateTime.now();
 
   // Charges
   final _shippingController = TextEditingController();
-  final _taxController      = TextEditingController();
-  final _noteController     = TextEditingController();
-  final _countryController  = TextEditingController();
+  final _taxController = TextEditingController();
+  final _noteController = TextEditingController();
+  final _countryController = TextEditingController();
 
   // Pipeline (limit to Payment Taken)
   static const List<String> kFullSteps = [
-    'Invoice Created',                         // 0
-    'Payment Requested',                       // 1
-    'Payment Taken',                           // 2 (max editable here)
-    'Submitted to Factory for Production',     // 3
-    'Production In Progress',                  // 4
-    'Quality Check',                           // 5
-    'Product Received at Warehouse',           // 6
-    'Address Validation of the Customer',      // 7
-    'Packed & Ready',                          // 8
-    'Shipped to Shipping Company',             // 9
-    'In Transit',                              //10
-    'Delivered / Completed',                   //11
+    'Invoice Created', // 0
+    'Payment Requested', // 1
+    'Payment Taken', // 2 (max editable here)
+    'Submitted to Factory for Production', // 3
+    'Production In Progress', // 4
+    'Quality Check', // 5
+    'Product Received at Warehouse', // 6
+    'Address Validation of the Customer', // 7
+    'Packed & Ready', // 8
+    'Shipped to Shipping Company', // 9
+    'In Transit', // 10
+    'Delivered / Completed', // 11
   ];
   static const int kMaxEditableStepIndex = 2;
   int _statusIndex = 0;
 
   // Payment (optional)
-  bool   _isPaymentTaken = false;
-  final  _paymentAmountCtl = TextEditingController();
-  String _paymentMethod    = 'Cash';
-  final  _paymentRefCtl    = TextEditingController();
+  bool _isPaymentTaken = false;
+  final _paymentAmountCtl = TextEditingController();
+  String _paymentMethod = 'Cash';
+  final _paymentRefCtl = TextEditingController();
   DateTime? _paymentDate;
 
   // Products
@@ -101,10 +110,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   }
 
   Future<void> _loadProducts() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('products')
-        .orderBy('model_name')
-        .get();
+    final snapshot = await FirebaseFirestore.instance.collection('products').orderBy('model_name').get();
     setState(() => _products = snapshot.docs);
   }
 
@@ -112,10 +118,10 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   void _addItem() {
     setState(() {
       items.add({
-        'model'    : null,
-        'colour'   : null,
-        'size'     : null,
-        'qty'      : 1,
+        'model': null,
+        'colour': null,
+        'size': null,
+        'qty': 1,
         'autoPrice': true,
         'unitPrice': 0.0,
         'lineTotal': 0.0,
@@ -123,9 +129,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     });
   }
 
-  void _removeItem(int i) {
-    setState(() => items.removeAt(i));
-  }
+  void _removeItem(int i) => setState(() => items.removeAt(i));
 
   double _autoUnitPrice(String? model, String? colour, String? size) {
     if (model == null || colour == null || size == null) return 0.0;
@@ -166,9 +170,17 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     return s;
   }
 
+  int _totalPieces() {
+    int n = 0;
+    for (final itm in items) {
+      n += ((itm['qty'] as int?) ?? 0);
+    }
+    return n;
+  }
+
   double _grandTotal() {
     final ship = double.tryParse(_shippingController.text) ?? 0;
-    final tax  = double.tryParse(_taxController.text) ?? 0;
+    final tax = double.tryParse(_taxController.text) ?? 0;
     return _subtotal() + ship + tax;
   }
 
@@ -191,7 +203,21 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     labelStyle: const TextStyle(fontSize: 12),
   );
 
-  // ---------- submit ----------
+  // ---------- id helpers ----------
+  String _makeInvoiceNo(String buyerName, DateTime date, double grand) {
+    final safeName = buyerName.isEmpty ? 'cust' : buyerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final datePart = DateFormat('yyyyMMdd').format(date);
+    final totalPart = grand.toStringAsFixed(0);
+    final rnd = Random().nextInt(900) + 100;
+    return '${safeName}_$datePart\_${totalPart}_$rnd';
+  }
+
+  String _trackingFromInvoiceNo(String invoiceNo) {
+    // Stable and human readable; aligns with your data workflow
+    return 'TRK-${invoiceNo.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '').toUpperCase()}';
+  }
+
+  // ---------- Firestore submit ----------
   Future<void> _submitInvoice() async {
     if (!_formKey.currentState!.validate()) return;
     if (selectedCustomerId == null) {
@@ -217,73 +243,274 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
 
     _recomputeAll();
 
-    // invoice id
-    final safeName  = selectedCustomerName.isEmpty
-        ? 'cust'
-        : selectedCustomerName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
-    final datePart  = DateFormat('yyyyMMdd').format(selectedDate);
-    final totalPart = _grandTotal().toStringAsFixed(0);
-    final rnd       = Random().nextInt(900) + 100;
-    final invoiceNo = '${safeName}_$datePart\_${totalPart}_$rnd';
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? _uid;
+    final agentEmail = user?.email ?? _agentEmail ?? '';
 
-    // items map
-    final invoiceItems = items.map((itm) => {
-      'model'    : itm['model'],
-      'colour'   : itm['colour'],
-      'size'     : itm['size'],
-      'qty'      : itm['qty'],
+    final invoiceItems = items
+        .map((itm) => {
+      'model': itm['model'],
+      'colour': itm['colour'],
+      'size': itm['size'],
+      'qty': (itm['qty'] as int?) ?? 0,
       'unitPrice': (itm['unitPrice'] is num) ? itm['unitPrice'].toDouble() : double.tryParse('${itm['unitPrice']}') ?? 0.0,
       'lineTotal': (itm['lineTotal'] is num) ? itm['lineTotal'].toDouble() : double.tryParse('${itm['lineTotal']}') ?? 0.0,
-    }).toList();
+    })
+        .toList();
 
-    final user        = FirebaseAuth.instance.currentUser;
-    final uid         = user?.uid ?? _uid;
-    final agentEmail  = user?.email ?? _agentEmail ?? '';
+    final subtotal = _subtotal();
+    final shipping = double.tryParse(_shippingController.text) ?? 0.0;
+    final tax = double.tryParse(_taxController.text) ?? 0.0;
+    final grand = _grandTotal();
+
+    final invoiceNo = _makeInvoiceNo(selectedCustomerName, selectedDate, grand);
+    final tracking = _trackingFromInvoiceNo(invoiceNo);
 
     Map<String, dynamic>? payment;
     if (_isPaymentTaken) {
       payment = {
-        'taken' : true,
+        'taken': true,
         'amount': double.tryParse(_paymentAmountCtl.text) ?? 0.0,
         'method': _paymentMethod,
-        'ref'   : _paymentRefCtl.text.trim(),
-        'date'  : _paymentDate != null ? Timestamp.fromDate(_paymentDate!) : FieldValue.serverTimestamp(),
+        'ref': _paymentRefCtl.text.trim(),
+        'date': _paymentDate != null ? Timestamp.fromDate(_paymentDate!) : FieldValue.serverTimestamp(),
       };
     }
 
-    final payload = {
-      'invoiceNo'   : invoiceNo,
-      'customerId'  : selectedCustomerId,
+    final payload = <String, dynamic>{
+      'invoiceNo': invoiceNo,
+      'tracking_number': tracking,
+      'customerId': selectedCustomerId,
       'customerName': selectedCustomerName,
-      'ownerUid'    : uid,
-      'ownerEmail'  : agentEmail,              // used by summaries
-      'agentId'     : uid,                     // legacy
-      'agentEmail'  : agentEmail,              // legacy
-      'agentName'   : _agentName,
-      'date'        : selectedDate,
-      'createdAt'   : FieldValue.serverTimestamp(),
-      'items'       : invoiceItems,
-      'shippingCost': double.tryParse(_shippingController.text) ?? 0.0,
-      'tax'         : double.tryParse(_taxController.text) ?? 0.0,
-      'grandTotal'  : _grandTotal(),
-      'country'     : _countryController.text.trim(),
-      'note'        : _noteController.text.trim(),
-      'status'      : kFullSteps[_statusIndex],
-      'statusStep'  : _statusIndex,
-      'timestamp'   : Timestamp.fromDate(selectedDate),
-      if (payment != null) 'payment': payment,
+      'buyerName': selectedCustomerName, // mirror for compatibility
+      'ownerUid': uid,
+      'ownerEmail': agentEmail,
+      'agentId': uid, // legacy support
+      'agentEmail': agentEmail,
+      'agentName': _agentName,
+      'date': selectedDate,
+      'createdAt': FieldValue.serverTimestamp(),
+      'items': invoiceItems,
+      'totalPieces': _totalPieces(),
+      'totalAmount': subtotal,
+      'shippingCost': shipping,
+      'tax': tax,
+      'grandTotal': grand,
+      'country': _countryController.text.trim(),
+      'note': _noteController.text.trim(),
+      'status': kFullSteps[_statusIndex],
+      'statusStep': _statusIndex,
+      'submitted': true,
+      'timestamp': Timestamp.fromDate(selectedDate),
+      if (payment != null) ...{
+        'payment': payment,
+        'paymentMethod': _paymentMethod,
+        'paymentRef': _paymentRefCtl.text.trim(),
+      },
     };
 
     try {
       await FirebaseFirestore.instance.collection('invoices').doc(invoiceNo).set(payload);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Invoice saved')));
-      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Invoice saved (Tracking: $tracking)')));
+
+      // After save: Show quick next steps with Work Order tip & PDF actions.
+      _showAfterSaveSheet(invoiceNo, payload);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Failed: $e')));
     }
   }
+
+  // ---------- PDF ----------
+  Future<pw.Document> _buildPdfDoc({
+    required String invoiceNo,
+    required String tracking,
+    required String buyerName,
+    required DateTime invDate,
+    required List<Map<String, dynamic>> rows,
+    required double shipping,
+    required double tax,
+    required double subtotal,
+    required double grand,
+    required String country,
+    String? paymentMethod,
+    String? paymentRef,
+  }) async {
+    final doc = pw.Document();
+
+    final blue = PdfColor.fromInt(0xFF0D47A1);
+    final light = PdfColor.fromInt(0xFFEFF3FF);
+
+    pw.Widget header() => pw.Container(
+      padding: const pw.EdgeInsets.all(14),
+      color: blue,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('INVOICE', style: pw.TextStyle(color: PdfColors.white, fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 4),
+              pw.Text('Wig Bangladesh', style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
+              pw.Text('support@wigbd.com', style: pw.TextStyle(color: PdfColors.white, fontSize: 10)),
+            ],
+          ),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text('Invoice No: $invoiceNo', style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
+              pw.Text('Date: ${DateFormat('yyyy-MM-dd').format(invDate)}', style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
+              pw.Text('Tracking: $tracking', style: pw.TextStyle(color: PdfColors.white, fontSize: 10)),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    pw.Widget parties() => pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(color: light),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('Invoice to:', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
+            pw.SizedBox(height: 4),
+            pw.Text(buyerName),
+            if (country.isNotEmpty) pw.Text(country, style: const pw.TextStyle(fontSize: 10)),
+          ]),
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+            pw.Text('Payment Method', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
+            pw.SizedBox(height: 4),
+            pw.Text(paymentMethod ?? '—'),
+            if ((paymentRef ?? '').isNotEmpty) pw.Text('Ref: $paymentRef', style: const pw.TextStyle(fontSize: 10)),
+          ]),
+        ],
+      ),
+    );
+
+    pw.Widget table() {
+      final headers = ['SL', 'Description', 'Qty', 'Price', 'Total'];
+      final data = <List<String>>[];
+      for (var i = 0; i < rows.length; i++) {
+        final r = rows[i];
+        final desc = '${r['model']} | ${r['colour']} | ${r['size']}';
+        data.add([
+          '${i + 1}',
+          desc,
+          '${r['qty']}',
+          NumberFormat.currency(symbol: '\$').format((r['unitPrice'] ?? 0) * 1.0),
+          NumberFormat.currency(symbol: '\$').format((r['lineTotal'] ?? 0) * 1.0),
+        ]);
+      }
+
+      return pw.TableHelper.fromTextArray(
+        cellAlignment: pw.Alignment.centerLeft,
+        headerDecoration: pw.BoxDecoration(color: blue),
+        headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold),
+        headers: headers,
+        data: data,
+        cellStyle: const pw.TextStyle(fontSize: 10),
+        headerAlignments: {
+          0: pw.Alignment.centerLeft,
+          1: pw.Alignment.centerLeft,
+          2: pw.Alignment.centerRight,
+          3: pw.Alignment.centerRight,
+          4: pw.Alignment.centerRight,
+        },
+        cellAlignments: {
+          0: pw.Alignment.centerLeft,
+          1: pw.Alignment.centerLeft,
+          2: pw.Alignment.centerRight,
+          3: pw.Alignment.centerRight,
+          4: pw.Alignment.centerRight,
+        },
+        columnWidths: {
+          0: const pw.FlexColumnWidth(1),
+          1: const pw.FlexColumnWidth(5),
+          2: const pw.FlexColumnWidth(2),
+          3: const pw.FlexColumnWidth(2),
+          4: const pw.FlexColumnWidth(2),
+        },
+        rowDecoration: const pw.BoxDecoration(border: pw.Border()),
+      );
+    }
+
+    pw.Widget totals() => pw.Container(
+      alignment: pw.Alignment.centerRight,
+      padding: const pw.EdgeInsets.only(top: 8),
+      child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+        _totRow('Sub Total', subtotal),
+        _totRow('Shipping', shipping),
+        _totRow('Tax', tax),
+        pw.SizedBox(height: 4),
+        pw.Container(
+          color: light,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: pw.Text('Grand Total: ${NumberFormat.currency(symbol: '\$').format(grand)}',
+              style: pw.TextStyle(color: blue, fontWeight: pw.FontWeight.bold)),
+        ),
+      ]),
+    );
+
+    doc.addPage(
+      pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          margin: const pw.EdgeInsets.all(20),
+          textDirection: pw.TextDirection.ltr,
+        ),
+        build: (ctx) => [
+          header(),
+          pw.SizedBox(height: 10),
+          parties(),
+          pw.SizedBox(height: 12),
+          table(),
+          pw.SizedBox(height: 8),
+          totals(),
+          pw.SizedBox(height: 18),
+          pw.Text('Terms & Conditions',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
+          pw.Text(
+            'Please pay within 10 days of receiving the invoice. Late payments may incur interest.'
+                ' Tracking number is provided to link factory Work Order and shipping updates.',
+            style: const pw.TextStyle(fontSize: 10),
+          ),
+        ],
+      ),
+    );
+
+    return doc;
+  }
+
+  pw.Widget _totRow(String label, double value) => pw.Row(
+    mainAxisSize: pw.MainAxisSize.min,
+    children: [
+      pw.Text('$label: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+      pw.Text(NumberFormat.currency(symbol: '\$').format(value)),
+    ],
+  );
+
+  Future<void> _savePdfToDevice(Uint8List bytes, String fileName) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final path = '${dir.path}/$fileName.pdf';
+    final file = File(path);
+    await file.writeAsBytes(bytes, flush: true); // no cast needed
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('📄 Saved PDF to $path')));
+  }
+
+  Future<void> _sharePdf(Uint8List bytes, String fileName) async {
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/$fileName.pdf';
+    final file = File(path);
+    await file.writeAsBytes(bytes, flush: true); // no cast needed
+    await Share.shareXFiles([XFile(path)], text: 'Invoice $fileName');
+  }
+
 
   // ---------- UI ----------
   @override
@@ -306,14 +533,100 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
           _recomputeAll();
           _submitInvoice();
         },
+        onPdf: () async {
+          // Build a preview PDF from current form (even before save)
+          _recomputeAll();
+          final tempInvoiceNo = _makeInvoiceNo(selectedCustomerName, selectedDate, _grandTotal());
+          final tracking = _trackingFromInvoiceNo(tempInvoiceNo);
+          final doc = await _buildPdfDoc(
+            invoiceNo: tempInvoiceNo,
+            tracking: tracking,
+            buyerName: selectedCustomerName,
+            invDate: selectedDate,
+            rows: items.map((e) => {
+              'model': e['model'],
+              'colour': e['colour'],
+              'size': e['size'],
+              'qty': (e['qty'] as int?) ?? 0,
+              'unitPrice': (e['unitPrice'] is num) ? e['unitPrice'].toDouble() : 0.0,
+              'lineTotal': (e['lineTotal'] is num) ? e['lineTotal'].toDouble() : 0.0,
+            }).toList(),
+            shipping: double.tryParse(_shippingController.text) ?? 0.0,
+            tax: double.tryParse(_taxController.text) ?? 0.0,
+            subtotal: _subtotal(),
+            grand: _grandTotal(),
+            country: _countryController.text.trim(),
+            paymentMethod: _isPaymentTaken ? _paymentMethod : null,
+            paymentRef: _isPaymentTaken ? _paymentRefCtl.text.trim() : null,
+          );
+          final bytes = await doc.save();
+          await _savePdfToDevice(bytes as Uint8List, tempInvoiceNo);
+        },
+        onShare: () async {
+          _recomputeAll();
+          final tempInvoiceNo = _makeInvoiceNo(selectedCustomerName, selectedDate, _grandTotal());
+          final tracking = _trackingFromInvoiceNo(tempInvoiceNo);
+          final doc = await _buildPdfDoc(
+            invoiceNo: tempInvoiceNo,
+            tracking: tracking,
+            buyerName: selectedCustomerName,
+            invDate: selectedDate,
+            rows: items.map((e) => {
+              'model': e['model'],
+              'colour': e['colour'],
+              'size': e['size'],
+              'qty': (e['qty'] as int?) ?? 0,
+              'unitPrice': (e['unitPrice'] is num) ? e['unitPrice'].toDouble() : 0.0,
+              'lineTotal': (e['lineTotal'] is num) ? e['lineTotal'].toDouble() : 0.0,
+            }).toList(),
+            shipping: double.tryParse(_shippingController.text) ?? 0.0,
+            tax: double.tryParse(_taxController.text) ?? 0.0,
+            subtotal: _subtotal(),
+            grand: _grandTotal(),
+            country: _countryController.text.trim(),
+            paymentMethod: _isPaymentTaken ? _paymentMethod : null,
+            paymentRef: _isPaymentTaken ? _paymentRefCtl.text.trim() : null,
+          );
+          final bytes = await doc.save();
+          await _sharePdf(bytes as Uint8List, tempInvoiceNo);
+        },
+        onPrint: () async {
+          _recomputeAll();
+          final tempInvoiceNo = _makeInvoiceNo(selectedCustomerName, selectedDate, _grandTotal());
+          final tracking = _trackingFromInvoiceNo(tempInvoiceNo);
+          await Printing.layoutPdf(
+            onLayout: (_) async => (await _buildPdfDoc(
+              invoiceNo: tempInvoiceNo,
+              tracking: tracking,
+              buyerName: selectedCustomerName,
+              invDate: selectedDate,
+              rows: items.map((e) => {
+                'model': e['model'],
+                'colour': e['colour'],
+                'size': e['size'],
+                'qty': (e['qty'] as int?) ?? 0,
+                'unitPrice': (e['unitPrice'] is num) ? e['unitPrice'].toDouble() : 0.0,
+                'lineTotal': (e['lineTotal'] is num) ? e['lineTotal'].toDouble() : 0.0,
+              }).toList(),
+              shipping: double.tryParse(_shippingController.text) ?? 0.0,
+              tax: double.tryParse(_taxController.text) ?? 0.0,
+              subtotal: _subtotal(),
+              grand: _grandTotal(),
+              country: _countryController.text.trim(),
+              paymentMethod: _isPaymentTaken ? _paymentMethod : null,
+              paymentRef: _isPaymentTaken ? _paymentRefCtl.text.trim() : null,
+            )).save(),
+          );
+        },
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 90), // leave space for summary bar
+          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 110),
           child: Form(
             key: _formKey,
             child: Column(
               children: [
+                _onboardingCard(),
                 _section(
                   icon: Icons.person_pin_circle,
                   title: 'Buyer & Date',
@@ -348,7 +661,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                             onChanged: (v) {
                               final name = docs.firstWhere((d) => d.id == v)['name'];
                               setState(() {
-                                selectedCustomerId   = v;
+                                selectedCustomerId = v;
                                 selectedCustomerName = (name ?? '').toString();
                               });
                             },
@@ -382,9 +695,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime(2100),
                                 builder: (c, w) => Theme(
-                                  data: Theme.of(c).copyWith(
-                                    colorScheme: const ColorScheme.light(primary: _indigo),
-                                  ),
+                                  data: Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: _indigo)),
                                   child: w!,
                                 ),
                               );
@@ -411,7 +722,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                             .toList(),
                         onChanged: (v) {
                           setState(() {
-                            _statusIndex    = v ?? 0;
+                            _statusIndex = v ?? 0;
                             _isPaymentTaken = _statusIndex >= 2;
                             if (_isPaymentTaken && _paymentDate == null) _paymentDate = DateTime.now();
                           });
@@ -480,8 +791,15 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _noteController,
-                        maxLines: 2,
-                        decoration: _decor('Note'),
+                        maxLines: 3,
+                        decoration: _decor('Notes (How invoice no. is generated is shown below)'),
+                      ),
+                      const SizedBox(height: 6),
+                      _helpStrip(
+                        icon: Icons.info_outline,
+                        text:
+                        'Invoice number = {buyerName}_{yyyyMMdd}_{grandTotalRounded}_{3-digit-random}. '
+                            'Tracking number is auto-created from invoice no (e.g., TRK-{INVOICENO}).',
                       ),
                     ],
                   ),
@@ -545,9 +863,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                                   Expanded(
                                     child: _infoTile(
                                       'Payment Date',
-                                      _paymentDate == null
-                                          ? '-'
-                                          : DateFormat('yyyy-MM-dd').format(_paymentDate!),
+                                      _paymentDate == null ? '-' : DateFormat('yyyy-MM-dd').format(_paymentDate!),
                                       icon: Icons.event_available,
                                     ),
                                   ),
@@ -559,9 +875,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                                         firstDate: DateTime(2020),
                                         lastDate: DateTime(2100),
                                         builder: (c, w) => Theme(
-                                          data: Theme.of(c).copyWith(
-                                            colorScheme: const ColorScheme.light(primary: _indigo),
-                                          ),
+                                          data:
+                                          Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: _indigo)),
                                           child: w!,
                                         ),
                                       );
@@ -580,6 +895,12 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 6),
+                      _helpStrip(
+                        icon: Icons.check_circle_outline,
+                        text:
+                        'No payment yet? No problem—leave this OFF and just create the invoice. You can add payment later.',
+                      ),
                     ],
                   ),
                 ),
@@ -592,21 +913,78 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   }
 
   // ----- widgets -----
+  Widget _onboardingCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F0FE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _indigo.withOpacity(.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lightbulb_outline, color: _indigo),
+          const SizedBox(width: 10),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(color: Colors.black87, fontSize: 12),
+                children: const [
+                  TextSpan(
+                      text: 'How this works:\n',
+                      style: TextStyle(fontWeight: FontWeight.w800, color: _indigo)),
+                  TextSpan(
+                      text:
+                      '1) Fill buyer, items, charges and (optionally) payment → Save to create the invoice with an auto tracking number.\n'),
+                  TextSpan(
+                      text:
+                      '2) To start production, go to the ',
+                      style: TextStyle()),
+                  TextSpan(
+                      text: 'Work Orders',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  TextSpan(
+                      text:
+                      ' section and create a work order using the same tracking number.\n'),
+                  TextSpan(
+                      text:
+                      '3) Use the buttons at the bottom to Save PDF, Share/Send, or Print—just like the sample layout.'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _helpStrip({required IconData icon, required String text}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _chipBg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: _indigo, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 11))),
+        ],
+      ),
+    );
+  }
+
   Widget _itemCard(int i) {
     final itm = items[i];
 
-    final models = _products
-        .map((p) => p.data()!['model_name'] as String)
-        .toSet()
-        .toList()
-      ..sort();
+    final models = _products.map((p) => p.data()!['model_name'] as String).toSet().toList()..sort();
 
     final colours = (itm['model'] != null)
-        ? _products
-        .where((p) => p.data()!['model_name'] == itm['model'])
-        .map((p) => p.data()!['colour'] as String)
-        .toSet()
-        .toList()
+        ? _products.where((p) => p.data()!['model_name'] == itm['model']).map((p) => p.data()!['colour'] as String).toSet().toList()
         : <String>[];
     colours.sort();
 
@@ -637,9 +1015,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                     items: models.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
                     onChanged: (v) {
                       setState(() {
-                        itm['model']  = v;
+                        itm['model'] = v;
                         itm['colour'] = null;
-                        itm['size']   = null;
+                        itm['size'] = null;
                       });
                       _recomputeItem(i);
                     },
@@ -655,7 +1033,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                     onChanged: (v) {
                       setState(() {
                         itm['colour'] = v;
-                        itm['size']   = null;
+                        itm['size'] = null;
                       });
                       _recomputeItem(i);
                     },
@@ -858,50 +1236,186 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     required double tax,
     required double grand,
     required VoidCallback onSubmit,
+    required VoidCallback onPdf,
+    required VoidCallback onShare,
+    required VoidCallback onPrint,
   }) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, -2))],
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, -2))],
       ),
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: SafeArea(
         top: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: DefaultTextStyle(
-                style: const TextStyle(fontSize: 12, color: Colors.black87),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Subtotal: ৳${_money(subtotal)}'),
-                    Text('Shipping: ৳${_money(shipping)}'),
-                    Text('Tax: ৳${_money(tax)}'),
-                    const SizedBox(height: 4),
-                    Text('Grand Total: ৳${_money(grand)}',
-                        style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
-                  ],
+            Row(
+              children: [
+                Expanded(
+                  child: DefaultTextStyle(
+                    style: const TextStyle(fontSize: 12, color: Colors.black87),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Subtotal: ৳${_money(subtotal)}'),
+                        Text('Shipping: ৳${_money(shipping)}'),
+                        Text('Tax: ৳${_money(tax)}'),
+                        const SizedBox(height: 2),
+                        Text('Grand: ৳${_money(grand)}',
+                            style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: onSubmit,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Save'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _indigo,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: onSubmit,
-              icon: const Icon(Icons.send),
-              label: const Text('Submit'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _indigo,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPdf,
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Save PDF'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _indigo,
+                      side: const BorderSide(color: _indigo),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onShare,
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _indigo,
+                      side: const BorderSide(color: _indigo),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPrint,
+                    icon: const Icon(Icons.print),
+                    label: const Text('Print'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _indigo,
+                      side: const BorderSide(color: _indigo),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  void _showAfterSaveSheet(String invoiceNo, Map<String, dynamic> payload) {
+    final tracking = payload['tracking_number'];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Text('Invoice $invoiceNo created',
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _helpStrip(
+                  icon: Icons.local_activity_outlined,
+                  text:
+                  'Tracking Number: $tracking. Use this same tracking number when you go to the Work Orders section to create a work order and track factory stages.',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          // Create and share PDF from saved payload
+                          final doc = await _buildPdfDoc(
+                            invoiceNo: invoiceNo,
+                            tracking: tracking,
+                            buyerName: (payload['customerName'] ?? '') as String,
+                            invDate: (payload['date'] as Timestamp).toDate(),
+                            rows: List<Map<String, dynamic>>.from(payload['items'] as List),
+                            shipping: (payload['shippingCost'] as num?)?.toDouble() ?? 0.0,
+                            tax: (payload['tax'] as num?)?.toDouble() ?? 0.0,
+                            subtotal: (payload['totalAmount'] as num?)?.toDouble() ?? 0.0,
+                            grand: (payload['grandTotal'] as num?)?.toDouble() ?? 0.0,
+                            country: (payload['country'] ?? '') as String,
+                            paymentMethod: payload['paymentMethod'] as String?,
+                            paymentRef: payload['paymentRef'] as String?,
+                          );
+                          final bytes = await doc.save();
+                          await _sharePdf(bytes as Uint8List, invoiceNo);
+                        },
+                        icon: const Icon(Icons.send),
+                        label: const Text('Send PDF now'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _indigo,
+                          side: const BorderSide(color: _indigo),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.done),
+                        label: const Text('Close'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _indigo,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

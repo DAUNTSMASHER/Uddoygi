@@ -1140,11 +1140,9 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   }
 
   Widget _invoiceCard(String docId, Map<String, dynamic> inv) {
-    final invoiceNo = (inv['invoiceNo'] ?? '').toString();
-    final total     = ((inv['grandTotal'] as num?) ?? 0).toDouble();
     final customer  = (inv['customerName'] ?? 'N/A').toString();
-    final itemCount = (inv['items'] as List?)?.length ?? 0;
-    final status    = (inv['status'] ?? 'Invoice Created').toString();
+    final total     = ((inv['grandTotal'] as num?) ?? 0).toDouble();
+    final tracking  = (inv['tracking_number'] ?? '').toString().trim();
 
     DateTime date;
     final ts = inv['timestamp'];
@@ -1156,55 +1154,137 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       date = DateTime.now();
     }
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-        child: Row(
-          children: [
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.receipt_long, color: _indigo),
+    // Detect whether a Work Order exists for this invoice:
+    // Prefer tracking match when available, else fall back to invoiceId.
+    final woColl   = FirebaseFirestore.instance.collection('work_orders');
+    final woStream = (tracking.isNotEmpty)
+        ? woColl.where('tracking_number', isEqualTo: tracking).limit(1).snapshots()
+        : woColl.where('invoiceId', isEqualTo: docId).limit(1).snapshots();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: woStream,
+      builder: (ctx, snap) {
+        final hasWO = (snap.data?.docs.isNotEmpty ?? false);
+
+        // Visual theme toggles
+        final buyerColor   = hasWO ? _indigo : Colors.deepOrange.shade800;
+        final accentColor  = hasWO ? _indigo : Colors.orange.shade700;
+        final borderColor  = hasWO ? Colors.blueGrey.shade100 : Colors.orange.shade200;
+
+        // Subtle background gradient that matches the theme
+        final bgGradient = hasWO
+            ? LinearGradient(
+          colors: [Colors.white, _chipBg.withOpacity(.55)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        )
+            : const LinearGradient(
+          colors: [Color(0xFFFFFCF5), Color(0xFFFFF1DB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        );
+
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: 1,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: bgGradient,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _showDetails(docId, inv),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Invoice #$invoiceNo', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 12, runSpacing: 4,
-                    children: [
-                      Text('৳${_money(total)}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text(_niceDate(date)),
-                      Text('🧑 $customer', overflow: TextOverflow.ellipsis),
-                      Text('📦 $itemCount item(s)'),
-                    ],
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Row(
+              children: [
+                // Left: Buyer (big) + Tracking + Date + badge
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _showDetails(docId, inv),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Buyer big
+                        Text(
+                          customer,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: buyerColor),
+                        ),
+                        const SizedBox(height: 4),
+                        // Tracking (primary id)
+                        Row(
+                          children: [
+                            Icon(Icons.local_shipping_outlined, size: 16, color: tracking.isEmpty ? accentColor : Colors.black54),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                tracking.isEmpty ? 'No Tracking' : tracking,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: tracking.isEmpty ? accentColor : Colors.black87),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        // Secondary row: date + WO badge (NO invoice number shown)
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(_niceDate(date), style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: hasWO ? Colors.green.withOpacity(.12) : accentColor.withOpacity(.15),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: hasWO ? Colors.green.withOpacity(.35) : accentColor.withOpacity(.35)),
+                              ),
+                              child: Text(
+                                hasWO ? 'WO Submitted' : 'No Work Order',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: hasWO ? Colors.green.shade700 : accentColor),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  _statusPill(status),
-                ]),
-              ),
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: _indigo),
-              onSelected: (v) {
-                if (v == 'edit')  _showEditInvoice(docId, inv);
-                if (v == 'pdf')   _generatePdf(inv);
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit), title: Text('Edit'))),
-                const PopupMenuItem(value: 'pdf',  child: ListTile(leading: Icon(Icons.download), title: Text('Download PDF'))),
+                ),
+
+                // Right: Total + Details button
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '৳${_money(total)}',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: buyerColor),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: buyerColor,
+                        side: BorderSide(color: buyerColor),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => _showDetails(docId, inv),
+                      child: const Text('Details'),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
+
 }
+

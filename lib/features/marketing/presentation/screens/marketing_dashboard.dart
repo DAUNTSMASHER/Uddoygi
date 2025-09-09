@@ -11,11 +11,11 @@ const Color _brandTeal = Color(0xFF001863);
 const Color _indigoCard = Color(0xFF0B2D9F);
 const Color _surface = Color(0xFFF4FBFB);
 
-// Summary board colors (like the mock)
+// Summary board colors
 const Color _tileLime   = Color(0xFFFFFFFF);
 const Color _tilePurple = Color(0xFFFFFFFF);
 const Color _tileCyan   = Color(0xFFF3F3F3);
-const Color _boardDark  = Color(0xFF0330AE); // board background
+const Color _boardDark  = Color(0xFF0330AE);
 
 class MarketingDashboard extends StatefulWidget {
   const MarketingDashboard({Key? key}) : super(key: key);
@@ -27,6 +27,7 @@ class MarketingDashboard extends StatefulWidget {
 class _MarketingDashboardState extends State<MarketingDashboard> {
   String? email;
   String _search = '';
+  int _currentTab = 0;
 
   final List<_DashboardItem> _allItems = const [
     _DashboardItem('Notices', Icons.notifications_active, '/marketing/notices'),
@@ -51,7 +52,7 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
-    if (session != null) {
+    if (session != null && mounted) {
       setState(() => email = session['email'] as String?);
     }
   }
@@ -59,7 +60,7 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
   Future<void> _logout() async {
     await FirebaseAuth.instance.signOut();
     await LocalStorageService.clearSession();
-    if (context.mounted) Navigator.pushReplacementNamed(context, '/login');
+    if (mounted) Navigator.pushReplacementNamed(context, '/login');
   }
 
   void _onItemTap(_DashboardItem item) {
@@ -74,6 +75,19 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
       return;
     }
     Navigator.pushNamed(context, item.route);
+  }
+
+  /// Unread messages badge stream (adjust query to your schema if needed)
+  Stream<int> _unreadMessagesStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream<int>.value(0);
+    final mail = user.email ?? '';
+    return FirebaseFirestore.instance
+        .collection('messages')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
   }
 
   @override
@@ -105,10 +119,11 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
         ],
       ),
       drawer: const MarketingDrawer(),
+      bottomNavigationBar: _buildBottomNav(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // Summary board (like “Payroll” mock)
+          // Summary board
           const _MarketingOverview(),
           const SizedBox(height: 16),
 
@@ -139,14 +154,80 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
             ),
             itemBuilder: (_, i) {
               final it = filtered[i];
-              return _DashTile(
-                title: it.title,
-                icon: it.icon,
-                onTap: () => _onItemTap(it),
+              final isMessages = it.title == 'Messages';
+
+              return StreamBuilder<int>(
+                stream: isMessages ? _unreadMessagesStream() : const Stream<int>.empty(),
+                builder: (_, snap) {
+                  final count = snap.data ?? 0;
+                  return _DashTile(
+                    title: it.title,
+                    icon: it.icon,
+                    badgeCount: count,
+                    onTap: () => _onItemTap(it),
+                  );
+                },
               );
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    // Common icons
+    final items = <_NavItem>[
+      _NavItem('Home', Icons.home_rounded, onTap: () => setState(() => _currentTab = 0)),
+      _NavItem('Clients', Icons.people_alt_rounded, onTap: () => Navigator.pushNamed(context, '/marketing/clients')),
+      _NavItem('Sales', Icons.point_of_sale_rounded, onTap: () => Navigator.pushNamed(context, '/marketing/sales')),
+      _NavItem('Products', Icons.inventory_2_rounded, onTap: () {
+        final mail = email;
+        if (mail != null) Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: mail)));
+      }),
+      _NavItem('Messages', Icons.message_rounded, onTap: () => Navigator.pushNamed(context, '/common/messages'), badgeStream: _unreadMessagesStream()),
+    ];
+
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(color: _brandTeal),
+        child: Row(
+          children: items.map((it) {
+            final isSelected = items.indexOf(it) == _currentTab;
+            final color = isSelected ? Colors.white : Colors.white70;
+
+            final iconWidget = it.badgeStream == null
+                ? Icon(it.icon, color: color)
+                : StreamBuilder<int>(
+              stream: it.badgeStream,
+              builder: (_, s) => _BadgeIcon(
+                icon: it.icon,
+                color: color,
+                count: s.data ?? 0,
+              ),
+            );
+
+            return Expanded(
+              child: InkWell(
+                onTap: () {
+                  setState(() => _currentTab = items.indexOf(it));
+                  it.onTap();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      iconWidget,
+                      const SizedBox(height: 4),
+                      Text(it.label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -163,7 +244,6 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
 class _MarketingOverview extends StatelessWidget {
   const _MarketingOverview();
 
-  // ---- date helpers (this month) ----
   ({DateTime a, DateTime b}) _thisMonth() {
     final n = DateTime.now();
     final a = DateTime(n.year, n.month, 1);
@@ -171,7 +251,6 @@ class _MarketingOverview extends StatelessWidget {
     return (a: a, b: b);
   }
 
-  // ---- streams (you can swap to your own fields easily) ----
   Stream<num> _salesThisMonth() {
     final r = _thisMonth();
     return FirebaseFirestore.instance
@@ -210,7 +289,6 @@ class _MarketingOverview extends StatelessWidget {
         .map((s) => s.docs.length);
   }
 
-  // ---- helpers ----
   String _money(num n) {
     final s = n.toStringAsFixed(0);
     final b = StringBuffer();
@@ -224,7 +302,6 @@ class _MarketingOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // board container with dark bg + rounded corners
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
       decoration: BoxDecoration(
@@ -233,13 +310,10 @@ class _MarketingOverview extends StatelessWidget {
       ),
       child: Column(
         children: [
-
           const SizedBox(height: 14),
-
-          // 2×2 summary tiles like the mock
           LayoutBuilder(builder: (context, c) {
             final w = c.maxWidth;
-            final cardW = (w - 12) / 2; // 12 = gap
+            final cardW = (w - 12) / 2;
             return Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -249,7 +323,7 @@ class _MarketingOverview extends StatelessWidget {
                   child: _SquareSummaryCard(
                     color: _tileLime,
                     icon: Icons.receipt_long,
-                    label: 'Total Sale ',
+                    label: 'Total sale',
                     streamText: _salesThisMonth().map(_money),
                   ),
                 ),
@@ -258,7 +332,7 @@ class _MarketingOverview extends StatelessWidget {
                   child: _SquareSummaryCard(
                     color: _tilePurple,
                     icon: Icons.library_books_outlined,
-                    label: 'Total Campaign ',
+                    label: 'Total campaign',
                     streamText: _selectedInvoices().map((n) => '$n'),
                   ),
                 ),
@@ -271,14 +345,13 @@ class _MarketingOverview extends StatelessWidget {
                     streamText: _pendingPayments().map((n) => '$n'),
                   ),
                 ),
-                // Empty dark tile with a plus button (visual)
                 SizedBox(
                   width: cardW,
                   child: _SquareSummaryCard(
                     color: _tileLime,
-                    icon: Icons.receipt_long,
-                    label: 'Pending Order ',
-                    streamText: _salesThisMonth().map(_money),
+                    icon: Icons.playlist_add_check_circle_rounded,
+                    label: 'Pending orders',
+                    streamText: _selectedInvoices().map((n) => '$n'),
                   ),
                 ),
               ],
@@ -286,34 +359,6 @@ class _MarketingOverview extends StatelessWidget {
           }),
         ],
       ),
-    );
-  }
-
-  Widget _segChip(String text, {bool selected = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: selected ? Colors.white : const Color(0xFF1B1C20),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: selected ? Colors.white : Colors.white10),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: selected ? Colors.black : Colors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-
-  Widget _roundIcon(IconData i) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-      child: Icon(i, color: Colors.black, size: 20),
     );
   }
 }
@@ -398,7 +443,13 @@ class _DashTile extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onTap;
-  const _DashTile({required this.title, required this.icon, required this.onTap});
+  final int badgeCount;
+  const _DashTile({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+    this.badgeCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -449,8 +500,75 @@ class _DashTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: _Badge(count: badgeCount),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ========================= Bottom nav helpers ========================= */
+
+class _NavItem {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Stream<int>? badgeStream;
+  _NavItem(this.label, this.icon, {required this.onTap, this.badgeStream});
+}
+
+class _BadgeIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+  const _BadgeIcon({required this.icon, required this.color, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: color),
+        if (count > 0)
+          Positioned(
+            right: -6,
+            top: -6,
+            child: _Badge(count: count, small: true),
+          ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final int count;
+  final bool small;
+  const _Badge({required this.count, this.small = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: small ? 5 : 6, vertical: small ? 2 : 3),
+      decoration: BoxDecoration(
+        color: Colors.redAccent,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: small ? 9 : 10,
+          fontWeight: FontWeight.w800,
+          height: 1.0,
         ),
       ),
     );

@@ -38,6 +38,7 @@ dependencies:
   qr_flutter: ^4.1.0
   flutter_email_sender: ^6.0.3
   mailer: ^6.1.0
+  font_awesome_flutter: ^10.7.0
 
 
   # Utilities

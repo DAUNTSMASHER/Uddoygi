@@ -6,11 +6,46 @@
       - date
       - status
 - address_validations:
-  - y2Jy0F7Z90Y3eKsCbIA5:
-      - clientEmail
+  - 0ftzjvwel7e4:
+      - createdAt
+      - recipient
+      - workOrderId
+      - confirmedAt
+      - workOrderNo
+      - token
       - status
-      - trackingNumber
-      - validatedBy
+  - 0g6ivx5maaiu:
+      - createdAt
+      - recipient
+      - workOrderId
+      - confirmedAt
+      - workOrderNo
+      - token
+      - status
+  - 12djw9mwdt1e:
+      - createdAt
+      - recipient
+      - workOrderId
+      - confirmedAt
+      - workOrderNo
+      - token
+      - status
+  - 16x8i6b5d62w:
+      - createdAt
+      - recipient
+      - workOrderId
+      - confirmedAt
+      - workOrderNo
+      - token
+      - status
+  - 2dhp38e1paie:
+      - createdAt
+      - recipient
+      - workOrderId
+      - confirmedAt
+      - workOrderNo
+      - token
+      - status
 - applicants:
   - 42e3wHmmgOzkduyMqp9x:
       - role
@@ -129,6 +164,14 @@
       - againstEmail
       - resolutionHistory
       - status
+  - MkCTSd4IRPo6EtOWeQbg:
+      - submittedBy
+      - against
+      - subject
+      - department
+      - message
+      - status
+      - timestamp
   - ThGTygsrSnDBVJt1MMLz:
       - submittedBy
       - against
@@ -162,15 +205,6 @@
       - department
       - resolutionHistory
       - status
-  - fjeI2cMlCz3XFOSIeuW4:
-      - submittedBy
-      - against
-      - subject
-      - department
-      - message
-      - timestamp
-      - resolutionHistory
-      - status
 - customers:
   - 4BlSfhMZHxPkK1c0HBcb:
       - country
@@ -192,6 +226,16 @@
       - email
       - status
       - timestamp
+  - WfwwwUHHCyN6pM5fp66n:
+      - photoUrl
+      - address
+      - notes
+      - phone
+      - name
+      - ownerUid
+      - email
+      - ownerEmail
+      - createdAt
   - k3YXb0oMDL7CgmSCiZNe:
       - country
       - address
@@ -212,17 +256,18 @@
       - email
       - status
       - timestamp
-  - xaQ07ZtTHm4y6ISjSuFU:
-      - country
-      - address
-      - phone
-      - createdBy
-      - name
-      - agentName
-      - email
-      - status
-      - timestamp
 - daily_production:
+  - 2VQHXVV8doTF0Tk8WpGe:
+      - managerEmail
+      - productModel
+      - colour
+      - curl
+      - quantity
+      - productionDate
+      - size
+      - forWhom
+      - base
+      - timestamp
   - 3ZAieOuJA7hH6KVmblki:
       - managerEmail
       - productModel
@@ -281,14 +326,56 @@
       - designation
       - status
 - expenses:
+  - G9kK3eDJd1HbS5JOKLMx:
+      - vendor
+      - category
+      - amount
+      - paidAmount
+      - balance
+      - dueDate
+      - status
+      - notes
+      - costCenter
+      - currency
+      - attachments
+      - createdAt
+      - createdBy
   - HdjBNl9Ff0OTNS69Onx1:
       - amount
       - description
       - date
-  - aGAe5j3C9TdxtJvkJzpB:
+  - KLX52ziaMD87oVn6iW5U:
+      - vendor
+      - category
       - amount
-      - description
-      - date
+      - paidAmount
+      - balance
+      - dueDate
+      - status
+      - notes
+      - costCenter
+      - currency
+      - attachments
+      - createdAt
+      - createdBy
+  - QKYrrzhY8kf42ulmtyeR:
+      - createdAt
+      - amount
+      - notes
+      - vendor
+      - costCenter
+      - dueDate
+      - category
+      - status
+  - QvdWMDTrjPwg8BJY60Vb:
+      - createdAt
+      - amount
+      - notes
+      - vendor
+      - costCenter
+      - dueDate
+      - category
+      - status
 - incentives:
   - 4b1NoQgWiPSPEdcWqiWG:
       - createdAt
@@ -439,6 +526,13 @@
       - toDate
       - appliedAt
       - status
+  - XX1GTzfCsJGNWGbh5v02:
+      - fromDate
+      - employeeName
+      - reason
+      - toDate
+      - appliedAt
+      - status
   - fkLDSZaQWfNiI5eppwCR:
       - fromDate
       - employeeName
@@ -453,6 +547,59 @@
       - toDate
       - appliedAt
       - status
+- ledger:
+  - 0lGrK8uZxARF3T9XnvaG:
+      - date
+      - createdAt
+      - costCenter
+      - journalId
+      - costing
+      - description
+      - debit
+      - credit
+      - account
+  - BTG09nmHsLo8RyzdBFfl:
+      - account
+      - description
+      - date
+      - debit
+      - credit
+      - journalId
+      - costCenter
+      - project
+      - counterparty
+      - currency
+      - createdAt
+      - createdBy
+  - IV3h5NBbdnehiUwoCNvk:
+      - account
+      - description
+      - date
+      - debit
+      - credit
+      - journalId
+      - costCenter
+      - project
+      - counterparty
+      - currency
+      - createdAt
+      - createdBy
+  - MB9QVqiUlDmg01dJIWI8:
+      - date
+      - createdAt
+      - description
+      - debit
+      - credit
+      - account
+  - SgdrhULIo1enmaQmjqra:
+      - date
+      - createdAt
+      - costCenter
+      - journalId
+      - description
+      - debit
+      - credit
+      - account
 - loan_requests:
   - 4plCUd8NM4UXTUHZJzXq:
       - amount
@@ -474,6 +621,84 @@
       - userId
       - status
       - timestamp
+- loans:
+  - 74quaK15EtvVRlHaAVzr:
+      - amount
+      - durationMonths
+      - purpose
+      - type
+      - userId
+      - createdBy
+      - userEmail
+      - currency
+      - closedAt
+      - createdAt
+      - requestedAt
+      - notes
+      - decisionAt
+      - decidedBy
+      - status
+  - SaerILHVtRigVWizHsty:
+      - amount
+      - durationMonths
+      - notes
+      - purpose
+      - type
+      - userId
+      - createdBy
+      - userEmail
+      - currency
+      - closedAt
+      - createdAt
+      - requestedAt
+      - decisionAt
+      - decidedBy
+      - status
+  - cJfdrdtgjxDO0ODNKmHA:
+      - amount
+      - durationMonths
+      - notes
+      - purpose
+      - type
+      - userId
+      - createdBy
+      - userEmail
+      - currency
+      - createdAt
+      - requestedAt
+      - decisionAt
+      - decidedBy
+      - status
+  - o5Mx4sMDoOuzpdBa9Hvk:
+      - amount
+      - durationMonths
+      - notes
+      - purpose
+      - type
+      - userId
+      - createdBy
+      - userEmail
+      - currency
+      - createdAt
+      - requestedAt
+      - decisionAt
+      - decidedBy
+      - status
+  - xKKd0Olw9JHectbg6jZL:
+      - amount
+      - durationMonths
+      - notes
+      - purpose
+      - type
+      - userId
+      - createdBy
+      - userEmail
+      - currency
+      - createdAt
+      - requestedAt
+      - decisionAt
+      - decidedBy
+      - status
 - marketing_campaigns:
   - aFbFQ1SeDY77cvQM1bU1:
       - title
@@ -659,6 +884,13 @@
       - from
       - to
       - body
+  - 6qRZnKelGxacDNkI0XMQ:
+      - subject
+      - fromName
+      - from
+      - to
+      - body
+      - timestamp
   - 8WnfcxhCG1qcabja7qmS:
       - subject
       - fromName
@@ -666,14 +898,19 @@
       - to
       - body
       - timestamp
-  - BEpuIB18OPlOT4EBKshm:
-      - subject
-      - fromName
-      - from
-      - to
-      - body
-      - timestamp
 - notices:
+  - 6MMwfhQXxhCpq2991Y6b:
+      - publishedBy
+      - description
+      - fileUrl
+      - title
+      - timestamp
+  - KpHnvnWNOBJDbxLOVEIN:
+      - publishedBy
+      - description
+      - fileUrl
+      - title
+      - timestamp
   - OpiKRqOORG9naxPBRK8H:
       - publishedBy
       - description
@@ -695,12 +932,6 @@
       - title
       - timestamp
       - attachments
-  - zmpFbmceHQxKWuKWoZLS:
-      - publishedBy
-      - description
-      - fileUrl
-      - title
-      - timestamp
 - orders:
   - lV2oElq2h1Z6knlXkuQS:
       - agentId
@@ -746,7 +977,7 @@
       - netSalary
       - status
       - processedAt
-  - bo3xP93ihqdndufBt04T:
+  - WBhnLrxgVLhQM6AoaUyR:
       - period
       - loanDeduction
       - generatedAt
@@ -866,6 +1097,13 @@
       - type
       - timestamp
   - swE8U4CtRW8IhhWPRnc8:
+      - employeeName
+      - newPosition
+      - employeeUid
+      - department
+      - type
+      - timestamp
+  - u6e5moiebs1HVe9p0Fow:
       - employeeName
       - newPosition
       - employeeUid
@@ -1191,7 +1429,6 @@
       - employmentType
       - emergencyContact
       - jobTitle
-      - fullName
       - dateOfBirth
       - joiningDate
       - badgeNumber
@@ -1205,6 +1442,15 @@
       - officeEmail
       - employeeId
       - profile_picture
+      - fullName
+  - 2P33ywZuAeZ60gCsSvAfwfIszJU2:
+      - addedBy
+      - isHead
+      - employeeId
+      - department
+      - email
+      - createdAt
+      - fullName
   - 42UWWdBWMHgtPbW2EeBsGCkHgN93:
       - addedBy
       - isHead
@@ -1253,41 +1499,6 @@
       - officeEmail
       - employeeId
       - profile_picture
-  - 5RjAfPv7mtSfqLJhziC9q8qcRCF3:
-      - createdAt
-      - isHead
-      - department
-      - name
-      - fullName
-      - bankAccount
-      - personalPhone
-      - governmentIdUrl
-      - previousEmployers
-      - probationReviews
-      - employmentType
-      - emergencyContact
-      - jobTitle
-      - ndaUrl
-      - certifications
-      - personalEmail
-      - employmentContractUrl
-      - workPermitUrl
-      - yearsOfExperience
-      - cvUrl
-      - taxFormUrl
-      - trainingRecords
-      - officeLocation
-      - dateOfBirth
-      - workPhone
-      - badgeNumber
-      - managerId
-      - shiftPattern
-      - designation
-      - joiningDate
-      - officeEmail
-      - employeeId
-      - profile_picture
-      - profilePhotoUrl
 - work_order_tracking:
   - 0XugJLtqYw7jvj4sHNaW:
       - timeLimit
@@ -1306,6 +1517,22 @@
       - stage
       - workOrderNo
       - assignedTo
+  - 2QrQHpbegpiW5VWViQdq:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+  - 2Ycbn7MBJePAQ798nJw8:
+      - timeLimit
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
   - C1aSFf5EU9W5uSFHiN4O:
       - timeLimit
       - createdAt
@@ -1315,25 +1542,25 @@
       - workOrderNo
       - assignedTo
       - status
-  - Fyu3NSAdnfagp5cLyw6j:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
-  - HfP6Mrg5AXnvMAzrkN5X:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
 - work_orders:
+  - WO_20250908_155413:
+      - finalDate
+      - instructions
+      - agentEmail
+      - deliveryDays
+      - makerEmail
+      - invoiceId
+      - makerName
+      - makerUid
+      - linkedToInvoice
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - status
+      - currentStage
+      - lastUpdated
+      - currentStageIndex
   - asraf_20250703_7634_WO_20250716:
       - finalDate
       - instructions
@@ -1348,6 +1575,7 @@
       - currentStatus
       - currentStage
       - lastUpdated
+      - addressValidation
   - hafsa_09072025_2152_WO_20250711:
       - finalDate
       - instructions
@@ -1373,18 +1601,6 @@
       - lastUpdated
       - status
   - hafsa_20250703_500090_WO_20250711:
-      - finalDate
-      - instructions
-      - deliveryDays
-      - invoiceId
-      - workOrderNo
-      - items
-      - submittedToFactory
-      - timestamp
-      - agentEmail
-      - lastUpdated
-      - status
-  - hafsa_20250703_500090_WO_20250715:
       - finalDate
       - instructions
       - deliveryDays
