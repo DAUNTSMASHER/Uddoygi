@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:csc_picker/csc_picker.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 
 // PDF & share
 import 'package:pdf/pdf.dart';
@@ -44,7 +46,21 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   final _shippingController = TextEditingController();
   final _taxController = TextEditingController();
   final _noteController = TextEditingController();
-  final _countryController = TextEditingController();
+
+  // ── Shipping state ──
+  String? _shipCountryName;   // e.g., Bangladesh
+  String? _shipCountryCode;   // e.g., BD (infer from phone widget)
+  String? _shipState;         // Division/State/Province
+  String? _shipCity;
+
+  final _addr1Ctl = TextEditingController();
+  final _addr2Ctl = TextEditingController();
+  final _zipCtl   = TextEditingController();
+
+  // Phone (country code picker)
+  String _phoneIso = '';      // e.g., BD
+  String _phoneDial = '';     // e.g., +880
+  String _phoneNational = ''; // national part only
 
   // Pipeline (limit to Payment Taken)
   static const List<String> kFullSteps = [
@@ -91,7 +107,11 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     _shippingController.dispose();
     _taxController.dispose();
     _noteController.dispose();
-    _countryController.dispose();
+
+    _addr1Ctl.dispose();
+    _addr2Ctl.dispose();
+    _zipCtl.dispose();
+
     _paymentAmountCtl.dispose();
     _paymentRefCtl.dispose();
     super.dispose();
@@ -106,12 +126,12 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       final udoc = await FirebaseFirestore.instance.collection('users').doc(_uid).get();
       _agentName = (udoc.data()?['fullName'] as String?) ?? (user?.displayName ?? '');
     }
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadProducts() async {
     final snapshot = await FirebaseFirestore.instance.collection('products').orderBy('model_name').get();
-    setState(() => _products = snapshot.docs);
+    if (mounted) setState(() => _products = snapshot.docs);
   }
 
   // ---------- items ----------
@@ -217,6 +237,169 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     return 'TRK-${invoiceNo.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '').toUpperCase()}';
   }
 
+  // ---------- Modern Date Picker (Bottom Sheet) ----------
+  Future<DateTime?> _showModernDatePicker({
+    required DateTime initialDate,
+    DateTime? firstDate,
+    DateTime? lastDate,
+    bool allowClear = false,
+    String title = 'Select date',
+  }) async {
+    // Work with date-only precision
+    DateTime temp = DateTime(initialDate.year, initialDate.month, initialDate.day);
+
+    // Do NOT name these "min"/"max" to avoid shadowing dart:math
+    final DateTime minDate = firstDate ?? DateTime(2020);
+    final DateTime maxDate = lastDate ?? DateTime(2100);
+
+    DateTime? result;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (c) {
+        return StatefulBuilder(
+          builder: (c, setM) {
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.55, // responsive height
+              minChildSize: 0.40,
+              maxChildSize: 0.95,
+              builder: (_, scrollController) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: LayoutBuilder(
+                    builder: (ctx, constraints) {
+                      // Keep calendar height reasonable on all screens
+                      final double calHeight =
+                      ((constraints.maxHeight * 0.55).clamp(280.0, 420.0)) as double;
+
+                      // Ensure initialDate is in range
+                      final DateTime safeInitial = temp.isBefore(minDate)
+                          ? minDate
+                          : (temp.isAfter(maxDate) ? maxDate : temp);
+
+                      return SingleChildScrollView(
+                        controller: scrollController,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Title row
+                            Row(
+                              children: [
+                                const Icon(Icons.event, color: _indigo),
+                                const SizedBox(width: 8),
+                                Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                                const Spacer(),
+                                if (allowClear)
+                                  TextButton(
+                                    onPressed: () {
+                                      result = null; // clear
+                                      Navigator.pop(c);
+                                    },
+                                    child: const Text('Clear'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+
+                            // Calendar (clamped height to avoid overflow)
+                            SizedBox(
+                              height: calHeight,
+                              child: CalendarDatePicker(
+                                initialDate: safeInitial,
+                                firstDate: minDate,
+                                lastDate: maxDate,
+                                onDateChanged: (d) => setM(() => temp = d),
+                              ),
+                            ),
+
+                            const SizedBox(height: 8),
+
+                            // Quick-pick chips
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ActionChip(
+                                  label: const Text('Today'),
+                                  onPressed: () => setM(() {
+                                    final now = DateTime.now();
+                                    temp = DateTime(now.year, now.month, now.day);
+                                  }),
+                                ),
+                                ActionChip(
+                                  label: const Text('+ 1 week'),
+                                  onPressed: () => setM(() {
+                                    final now = DateTime.now().add(const Duration(days: 7));
+                                    temp = DateTime(now.year, now.month, now.day);
+                                  }),
+                                ),
+                                ActionChip(
+                                  label: const Text('+ 1 month'),
+                                  onPressed: () => setM(() {
+                                    final now = DateTime.now();
+                                    final plus = DateTime(now.year, now.month + 1, now.day);
+                                    temp = plus;
+                                  }),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Actions
+                            Row(
+                              children: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(c),
+                                  child: const Text('Cancel'),
+                                ),
+                                const Spacer(),
+                                ElevatedButton.icon(
+                                  icon: const Icon(Icons.check),
+                                  onPressed: () {
+                                    // Final clamp to be extra safe
+                                    final DateTime picked = temp.isBefore(minDate)
+                                        ? minDate
+                                        : (temp.isAfter(maxDate) ? maxDate : temp);
+                                    result = picked;
+                                    Navigator.pop(c);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _indigo,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  label: const Text('Done'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    return result;
+  }
+
+
+
   // ---------- Firestore submit ----------
   Future<void> _submitInvoice() async {
     if (!_formKey.currentState!.validate()) return;
@@ -241,6 +424,23 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       }
     }
 
+    // Validate Shipping minimal fields
+    if (_addr1Ctl.text.trim().isEmpty ||
+        (_shipCity == null || _shipCity!.trim().isEmpty) ||
+        _zipCtl.text.trim().isEmpty ||
+        ((_shipCountryName == null || _shipCountryName!.trim().isEmpty) &&
+            (_shipCountryCode == null || _shipCountryCode!.trim().isEmpty))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please complete Shipping Address')),
+      );
+      return;
+    }
+    // Phone: basic check
+    if (_phoneNational.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add a shipping phone')));
+      return;
+    }
+
     _recomputeAll();
 
     final user = FirebaseAuth.instance.currentUser;
@@ -253,8 +453,12 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       'colour': itm['colour'],
       'size': itm['size'],
       'qty': (itm['qty'] as int?) ?? 0,
-      'unitPrice': (itm['unitPrice'] is num) ? itm['unitPrice'].toDouble() : double.tryParse('${itm['unitPrice']}') ?? 0.0,
-      'lineTotal': (itm['lineTotal'] is num) ? itm['lineTotal'].toDouble() : double.tryParse('${itm['lineTotal']}') ?? 0.0,
+      'unitPrice': (itm['unitPrice'] is num)
+          ? itm['unitPrice'].toDouble()
+          : double.tryParse('${itm['unitPrice']}') ?? 0.0,
+      'lineTotal': (itm['lineTotal'] is num)
+          ? itm['lineTotal'].toDouble()
+          : double.tryParse('${itm['lineTotal']}') ?? 0.0,
     })
         .toList();
 
@@ -277,6 +481,29 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       };
     }
 
+    // Normalized Shipping object
+    final String phoneE164 = (_phoneDial.isNotEmpty && _phoneNational.isNotEmpty)
+        ? '$_phoneDial$_phoneNational'.replaceAll(' ', '')
+        : '';
+
+    final Map<String, dynamic> shippingObj = {
+      'address1': _addr1Ctl.text.trim(),
+      'address2': _addr2Ctl.text.trim(),
+      'city': _shipCity ?? '',
+      'state': _shipState ?? '',
+      'postalCode': _zipCtl.text.trim(),
+      'country': {
+        'name': _shipCountryName ?? '',
+        if ((_shipCountryCode ?? '').isNotEmpty) 'code': _shipCountryCode,
+      },
+      'phone': {
+        'isoCode': _phoneIso, // e.g., BD
+        'countryDialCode': _phoneDial, // e.g., +880
+        'national': _phoneNational,
+        'e164': phoneE164,
+      },
+    };
+
     final payload = <String, dynamic>{
       'invoiceNo': invoiceNo,
       'tracking_number': tracking,
@@ -288,7 +515,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       'agentId': uid, // legacy support
       'agentEmail': agentEmail,
       'agentName': _agentName,
-      'date': selectedDate,
+      'date': Timestamp.fromDate(selectedDate), // store as Timestamp
       'createdAt': FieldValue.serverTimestamp(),
       'items': invoiceItems,
       'totalPieces': _totalPieces(),
@@ -296,7 +523,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       'shippingCost': shipping,
       'tax': tax,
       'grandTotal': grand,
-      'country': _countryController.text.trim(),
+      'shipping': shippingObj, // NEW normalized shipping block
       'note': _noteController.text.trim(),
       'status': kFullSteps[_statusIndex],
       'statusStep': _statusIndex,
@@ -312,7 +539,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     try {
       await FirebaseFirestore.instance.collection('invoices').doc(invoiceNo).set(payload);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Invoice saved (Tracking: $tracking)')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ Invoice saved (Tracking: $tracking)')),
+      );
 
       // After save: Show quick next steps with Work Order tip & PDF actions.
       _showAfterSaveSheet(invoiceNo, payload);
@@ -352,7 +581,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('INVOICE', style: pw.TextStyle(color: PdfColors.white, fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              pw.Text('INVOICE',
+                  style: pw.TextStyle(
+                      color: PdfColors.white, fontSize: 20, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 4),
               pw.Text('Wig Bangladesh', style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
               pw.Text('support@wigbd.com', style: pw.TextStyle(color: PdfColors.white, fontSize: 10)),
@@ -361,9 +592,12 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
-              pw.Text('Invoice No: $invoiceNo', style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
-              pw.Text('Date: ${DateFormat('yyyy-MM-dd').format(invDate)}', style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
-              pw.Text('Tracking: $tracking', style: pw.TextStyle(color: PdfColors.white, fontSize: 10)),
+              pw.Text('Invoice No: $invoiceNo',
+                  style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
+              pw.Text('Date: ${DateFormat('yyyy-MM-dd').format(invDate)}',
+                  style: pw.TextStyle(color: PdfColors.white, fontSize: 12)),
+              pw.Text('Tracking: $tracking',
+                  style: pw.TextStyle(color: PdfColors.white, fontSize: 10)),
             ],
           ),
         ],
@@ -378,16 +612,19 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text('Invoice to:', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
+            pw.Text('Invoice to:',
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
             pw.SizedBox(height: 4),
             pw.Text(buyerName),
             if (country.isNotEmpty) pw.Text(country, style: const pw.TextStyle(fontSize: 10)),
           ]),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-            pw.Text('Payment Method', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
+            pw.Text('Payment Method',
+                style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: blue)),
             pw.SizedBox(height: 4),
             pw.Text(paymentMethod ?? '—'),
-            if ((paymentRef ?? '').isNotEmpty) pw.Text('Ref: $paymentRef', style: const pw.TextStyle(fontSize: 10)),
+            if ((paymentRef ?? '').isNotEmpty)
+              pw.Text('Ref: $paymentRef', style: const pw.TextStyle(fontSize: 10)),
           ]),
         ],
       ),
@@ -498,7 +735,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     final dir = await getApplicationDocumentsDirectory();
     final path = '${dir.path}/$fileName.pdf';
     final file = File(path);
-    await file.writeAsBytes(bytes, flush: true); // no cast needed
+    await file.writeAsBytes(bytes, flush: true);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('📄 Saved PDF to $path')));
   }
@@ -507,10 +744,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     final dir = await getTemporaryDirectory();
     final path = '${dir.path}/$fileName.pdf';
     final file = File(path);
-    await file.writeAsBytes(bytes, flush: true); // no cast needed
+    await file.writeAsBytes(bytes, flush: true);
     await Share.shareXFiles([XFile(path)], text: 'Invoice $fileName');
   }
-
 
   // ---------- UI ----------
   @override
@@ -534,7 +770,6 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
           _submitInvoice();
         },
         onPdf: () async {
-          // Build a preview PDF from current form (even before save)
           _recomputeAll();
           final tempInvoiceNo = _makeInvoiceNo(selectedCustomerName, selectedDate, _grandTotal());
           final tracking = _trackingFromInvoiceNo(tempInvoiceNo);
@@ -543,24 +778,26 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
             tracking: tracking,
             buyerName: selectedCustomerName,
             invDate: selectedDate,
-            rows: items.map((e) => {
+            rows: items
+                .map((e) => {
               'model': e['model'],
               'colour': e['colour'],
               'size': e['size'],
               'qty': (e['qty'] as int?) ?? 0,
               'unitPrice': (e['unitPrice'] is num) ? e['unitPrice'].toDouble() : 0.0,
               'lineTotal': (e['lineTotal'] is num) ? e['lineTotal'].toDouble() : 0.0,
-            }).toList(),
+            })
+                .toList(),
             shipping: double.tryParse(_shippingController.text) ?? 0.0,
             tax: double.tryParse(_taxController.text) ?? 0.0,
             subtotal: _subtotal(),
             grand: _grandTotal(),
-            country: _countryController.text.trim(),
+            country: _shipCountryName ?? '',
             paymentMethod: _isPaymentTaken ? _paymentMethod : null,
             paymentRef: _isPaymentTaken ? _paymentRefCtl.text.trim() : null,
           );
           final bytes = await doc.save();
-          await _savePdfToDevice(bytes as Uint8List, tempInvoiceNo);
+          await _savePdfToDevice(bytes, tempInvoiceNo);
         },
         onShare: () async {
           _recomputeAll();
@@ -571,24 +808,26 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
             tracking: tracking,
             buyerName: selectedCustomerName,
             invDate: selectedDate,
-            rows: items.map((e) => {
+            rows: items
+                .map((e) => {
               'model': e['model'],
               'colour': e['colour'],
               'size': e['size'],
               'qty': (e['qty'] as int?) ?? 0,
               'unitPrice': (e['unitPrice'] is num) ? e['unitPrice'].toDouble() : 0.0,
               'lineTotal': (e['lineTotal'] is num) ? e['lineTotal'].toDouble() : 0.0,
-            }).toList(),
+            })
+                .toList(),
             shipping: double.tryParse(_shippingController.text) ?? 0.0,
             tax: double.tryParse(_taxController.text) ?? 0.0,
             subtotal: _subtotal(),
             grand: _grandTotal(),
-            country: _countryController.text.trim(),
+            country: _shipCountryName ?? '',
             paymentMethod: _isPaymentTaken ? _paymentMethod : null,
             paymentRef: _isPaymentTaken ? _paymentRefCtl.text.trim() : null,
           );
           final bytes = await doc.save();
-          await _sharePdf(bytes as Uint8List, tempInvoiceNo);
+          await _sharePdf(bytes, tempInvoiceNo);
         },
         onPrint: () async {
           _recomputeAll();
@@ -600,19 +839,21 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
               tracking: tracking,
               buyerName: selectedCustomerName,
               invDate: selectedDate,
-              rows: items.map((e) => {
+              rows: items
+                  .map((e) => {
                 'model': e['model'],
                 'colour': e['colour'],
                 'size': e['size'],
                 'qty': (e['qty'] as int?) ?? 0,
                 'unitPrice': (e['unitPrice'] is num) ? e['unitPrice'].toDouble() : 0.0,
                 'lineTotal': (e['lineTotal'] is num) ? e['lineTotal'].toDouble() : 0.0,
-              }).toList(),
+              })
+                  .toList(),
               shipping: double.tryParse(_shippingController.text) ?? 0.0,
               tax: double.tryParse(_taxController.text) ?? 0.0,
               subtotal: _subtotal(),
               grand: _grandTotal(),
-              country: _countryController.text.trim(),
+              country: _shipCountryName ?? '',
               paymentMethod: _isPaymentTaken ? _paymentMethod : null,
               paymentRef: _isPaymentTaken ? _paymentRefCtl.text.trim() : null,
             )).save(),
@@ -627,6 +868,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
             child: Column(
               children: [
                 _onboardingCard(),
+
+                // Buyer & Date
                 _section(
                   icon: Icons.person_pin_circle,
                   title: 'Buyer & Date',
@@ -656,7 +899,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                             decoration: _decor('Select Buyer'),
                             items: docs.map((d) {
                               final name = (d['name'] ?? 'Unnamed').toString();
-                              return DropdownMenuItem(value: d.id, child: Text(name, style: const TextStyle(fontSize: 13)));
+                              return DropdownMenuItem(
+                                  value: d.id, child: Text(name, style: const TextStyle(fontSize: 13)));
                             }).toList(),
                             onChanged: (v) {
                               final name = docs.firstWhere((d) => d.id == v)['name'];
@@ -689,18 +933,15 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: context,
+                              final picked = await _showModernDatePicker(
+                                title: 'Invoice date',
                                 initialDate: selectedDate,
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime(2100),
-                                builder: (c, w) => Theme(
-                                  data: Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: _indigo)),
-                                  child: w!,
-                                ),
                               );
                               if (picked != null) setState(() => selectedDate = picked);
                             },
+
                           ),
                         ],
                       ),
@@ -708,6 +949,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   ),
                 ),
 
+                // Status
                 _section(
                   icon: Icons.flag,
                   title: 'Status (up to Payment Taken)',
@@ -734,6 +976,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   ),
                 ),
 
+                // Items
                 _section(
                   icon: Icons.shopping_bag,
                   title: 'Items (Auto or Manual Pricing)',
@@ -757,6 +1000,86 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   ),
                 ),
 
+                // Shipping Address (NEW)
+                _section(
+                  icon: Icons.local_shipping_outlined,
+                  title: 'Shipping Address',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CSCPicker(
+                        showStates: true,
+                        showCities: true,
+                        layout: Layout.vertical,
+                        flagState: CountryFlag.ENABLE,
+                        dropdownDecoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFB0BEC5)),
+                          color: Colors.grey[50],
+                        ),
+                        disabledDropdownDecoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFB0BEC5)),
+                          color: Colors.grey[100],
+                        ),
+                        selectedItemStyle: const TextStyle(fontSize: 13, color: Colors.black87),
+                        onCountryChanged: (country) {
+                          setState(() {
+                            _shipCountryName = country;
+                            _shipCountryCode = null; // will infer from phone ISO
+                            _shipState = null;
+                            _shipCity = null;
+                          });
+                        },
+                        onStateChanged: (state) => setState(() => _shipState = state ?? ''),
+                        onCityChanged: (city) => setState(() => _shipCity = city ?? ''),
+                        currentCountry:
+                        (_shipCountryName?.isNotEmpty ?? false) ? _shipCountryName : null,
+                        currentState: (_shipState?.isNotEmpty ?? false) ? _shipState : null,
+                        currentCity: (_shipCity?.isNotEmpty ?? false) ? _shipCity : null,
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _addr1Ctl,
+                        decoration: _decor('Address Line 1 *'),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _addr2Ctl,
+                        decoration: _decor('Address Line 2 (optional)'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _zipCtl,
+                        decoration: _decor('ZIP / Postal Code *'),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 8),
+                      IntlPhoneField(
+                        initialCountryCode:
+                        _phoneIso.isNotEmpty ? _phoneIso : (_shipCountryCode ?? 'BD'),
+                        initialValue: _phoneNational.isNotEmpty ? _phoneNational : null,
+                        decoration: _decor('Phone (with country code) *'),
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
+                        onChanged: (p) {
+                          setState(() {
+                            _phoneIso = p.countryISOCode ?? '';
+                            _phoneDial = '+${p.countryCode}';
+                            _phoneNational = p.number;
+                            _shipCountryCode ??= p.countryISOCode; // infer ISO for country block
+                          });
+                        },
+                        validator: (p) {
+                          if (p == null || p.number.trim().isEmpty) return 'Required';
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Charges & Notes
                 _section(
                   icon: Icons.local_shipping,
                   title: 'Charges & Notes',
@@ -785,11 +1108,6 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
-                        controller: _countryController,
-                        decoration: _decor('Country'),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
                         controller: _noteController,
                         maxLines: 3,
                         decoration: _decor('Notes (How invoice no. is generated is shown below)'),
@@ -805,6 +1123,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   ),
                 ),
 
+                // Payment
                 _section(
                   icon: Icons.payments,
                   title: 'Payment (Optional)',
@@ -816,7 +1135,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                           setState(() {
                             _isPaymentTaken = v ?? false;
                             if (_isPaymentTaken && _statusIndex < 2) _statusIndex = 2;
-                            if (_isPaymentTaken && _paymentDate == null) _paymentDate = DateTime.now();
+                            if (_isPaymentTaken && _paymentDate == null) {
+                              _paymentDate = DateTime.now();
+                            }
                           });
                         },
                         contentPadding: EdgeInsets.zero,
@@ -846,7 +1167,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                                       items: const ['Cash', 'Bank', 'Card', 'Mobile Banking']
                                           .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                                           .toList(),
-                                      onChanged: (v) => setState(() => _paymentMethod = v ?? 'Cash'),
+                                      onChanged: (v) =>
+                                          setState(() => _paymentMethod = v ?? 'Cash'),
                                       decoration: _decor('Method'),
                                     ),
                                   ),
@@ -863,29 +1185,29 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                                   Expanded(
                                     child: _infoTile(
                                       'Payment Date',
-                                      _paymentDate == null ? '-' : DateFormat('yyyy-MM-dd').format(_paymentDate!),
+                                      _paymentDate == null
+                                          ? '-'
+                                          : DateFormat('yyyy-MM-dd').format(_paymentDate!),
                                       icon: Icons.event_available,
                                     ),
                                   ),
                                   OutlinedButton(
                                     onPressed: () async {
-                                      final d = await showDatePicker(
-                                        context: context,
+                                      final picked = await _showModernDatePicker(
+                                        title: 'Payment date',
                                         initialDate: _paymentDate ?? DateTime.now(),
                                         firstDate: DateTime(2020),
                                         lastDate: DateTime(2100),
-                                        builder: (c, w) => Theme(
-                                          data:
-                                          Theme.of(c).copyWith(colorScheme: const ColorScheme.light(primary: _indigo)),
-                                          child: w!,
-                                        ),
+                                        allowClear: true,
                                       );
-                                      if (d != null) setState(() => _paymentDate = d);
+                                      setState(() => _paymentDate = picked);
                                     },
+
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: _indigo,
                                       side: const BorderSide(color: _indigo),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10)),
                                     ),
                                     child: const Text('Change'),
                                   ),
@@ -938,13 +1260,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   TextSpan(
                       text:
                       '1) Fill buyer, items, charges and (optionally) payment → Save to create the invoice with an auto tracking number.\n'),
-                  TextSpan(
-                      text:
-                      '2) To start production, go to the ',
-                      style: TextStyle()),
-                  TextSpan(
-                      text: 'Work Orders',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
+                  TextSpan(text: '2) To start production, go to the '),
+                  TextSpan(text: 'Work Orders', style: TextStyle(fontWeight: FontWeight.w800)),
                   TextSpan(
                       text:
                       ' section and create a work order using the same tracking number.\n'),
@@ -981,16 +1298,23 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   Widget _itemCard(int i) {
     final itm = items[i];
 
-    final models = _products.map((p) => p.data()!['model_name'] as String).toSet().toList()..sort();
+    final models =
+    _products.map((p) => p.data()!['model_name'] as String).toSet().toList()..sort();
 
     final colours = (itm['model'] != null)
-        ? _products.where((p) => p.data()!['model_name'] == itm['model']).map((p) => p.data()!['colour'] as String).toSet().toList()
+        ? _products
+        .where((p) => p.data()!['model_name'] == itm['model'])
+        .map((p) => p.data()!['colour'] as String)
+        .toSet()
+        .toList()
         : <String>[];
     colours.sort();
 
     final sizes = (itm['model'] != null && itm['colour'] != null)
         ? _products
-        .where((p) => p.data()!['model_name'] == itm['model'] && p.data()!['colour'] == itm['colour'])
+        .where((p) =>
+    p.data()!['model_name'] == itm['model'] &&
+        p.data()!['colour'] == itm['colour'])
         .map((p) => p.data()!['size'] as String)
         .toSet()
         .toList()
@@ -1097,7 +1421,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                       const Text('Auto price', style: TextStyle(fontSize: 12)),
                       const SizedBox(width: 4),
                       const Tooltip(
-                        message: 'If ON, price comes from products.unit_price by Model/Colour/Size',
+                        message:
+                        'If ON, price comes from products.unit_price by Model/Colour/Size',
                         triggerMode: TooltipTriggerMode.tap,
                         child: Icon(Icons.info_outline, size: 14),
                       ),
@@ -1109,7 +1434,8 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   width: 140,
                   child: TextFormField(
                     enabled: (items[i]['autoPrice'] == false),
-                    initialValue: _money((items[i]['unitPrice'] as num?)?.toDouble() ?? 0),
+                    initialValue:
+                    _money((items[i]['unitPrice'] as num?)?.toDouble() ?? 0),
                     keyboardType: TextInputType.number,
                     decoration: _decor('Unit Price'),
                     onChanged: (v) {
@@ -1335,6 +1661,10 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
 
   void _showAfterSaveSheet(String invoiceNo, Map<String, dynamic> payload) {
     final tracking = payload['tracking_number'];
+    final shipping = (payload['shipping'] ?? const {}) as Map<String, dynamic>;
+    final countryBlock = (shipping['country'] ?? const {}) as Map<String, dynamic>;
+    final countryName = (countryBlock['name'] ?? '').toString();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1380,12 +1710,12 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                             tax: (payload['tax'] as num?)?.toDouble() ?? 0.0,
                             subtotal: (payload['totalAmount'] as num?)?.toDouble() ?? 0.0,
                             grand: (payload['grandTotal'] as num?)?.toDouble() ?? 0.0,
-                            country: (payload['country'] ?? '') as String,
+                            country: countryName,
                             paymentMethod: payload['paymentMethod'] as String?,
                             paymentRef: payload['paymentRef'] as String?,
                           );
                           final bytes = await doc.save();
-                          await _sharePdf(bytes as Uint8List, invoiceNo);
+                          await _sharePdf(bytes, invoiceNo);
                         },
                         icon: const Icon(Icons.send),
                         label: const Text('Send PDF now'),

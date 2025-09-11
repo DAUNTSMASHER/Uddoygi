@@ -38,7 +38,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     _loadUserIdentity();
   }
 
-  // ---------- Helpers ----------
+  // ---------- Helpers (ID / user) ----------
   Future<void> _loadUserIdentity() async {
     final user = FirebaseAuth.instance.currentUser;
     String? email = user?.email;
@@ -65,8 +65,81 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     }
   }
 
+  // ---------- Small utils ----------
   String _money(num v) => v.toStringAsFixed(2);
   String _niceDate(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    final letters = parts.take(2).map((p) => p[0].toUpperCase()).join();
+    return letters;
+  }
+
+  String _emojiFlag(String? iso) {
+    if (iso == null || iso.length != 2) return '🌐';
+    final code = iso.toUpperCase();
+    const int base = 0x1F1E6; // regional indicator 'A'
+    return String.fromCharCodes(code.codeUnits.map((c) => base + (c - 65)));
+  }
+
+  Map<String, dynamic> _toMap(Object? v) {
+    if (v is Map) {
+      // coerce keys to String to satisfy Map<String, dynamic>
+      return v.map((k, val) => MapEntry(k.toString(), val));
+    }
+    return const <String, dynamic>{};
+  }
+
+  String _countryLabelShort(Map<String, dynamic> inv) {
+    final shipping = _toMap(inv['shipping']);
+    final country  = _toMap(shipping['country']);
+    final name = (country['name'] ?? inv['country'] ?? '').toString().trim();
+    final code = (country['code'] ?? inv['countryCode'] ?? '').toString().trim();
+
+    final words = name.isEmpty ? <String>[] : name.split(RegExp(r'\s+'));
+    final short = words.take(3).join(' '); // up to three words
+    final flag  = _emojiFlag(code.isEmpty ? null : code);
+
+    return [flag, if (short.isNotEmpty) short].join(' ').trim();
+  }
+
+  int _totalQtyFromItems(List? itemsRaw) {
+    final items = (itemsRaw ?? const []).cast<Map>();
+    int sum = 0;
+    for (final it in items) {
+      sum += ((it['qty'] as num?)?.toInt() ?? 0);
+    }
+    return sum;
+  }
+
+  Widget _customerAvatar(String? customerId, String fallbackName) {
+    if (customerId == null || customerId.isEmpty) {
+      return CircleAvatar(
+        radius: 22,
+        backgroundColor: _indigo.withOpacity(.10),
+        child: Text(_initials(fallbackName),
+            style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
+      );
+    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('customers').doc(customerId).snapshots(),
+      builder: (ctx, snap) {
+        final data = snap.data?.data();
+        final url  = (data?['photoUrl'] ?? data?['image'] ?? '').toString();
+        final name = (data?['name'] ?? fallbackName).toString();
+        if (url.isNotEmpty) {
+          return CircleAvatar(radius: 22, backgroundImage: NetworkImage(url));
+        }
+        return CircleAvatar(
+          radius: 22,
+          backgroundColor: _indigo.withOpacity(.10),
+          child: Text(_initials(name),
+              style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
+        );
+      },
+    );
+  }
 
   Color _statusColor(String status) {
     final s = status.toLowerCase();
@@ -207,8 +280,12 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
   // ---------- Details ----------
   void _showDetails(String docId, Map<String, dynamic> inv) {
-    final itemsRaw  = (inv['items'] as List?) ?? [];
-    final items = itemsRaw.cast<Map>().map((e) => e.map((k, v) => MapEntry('$k', v))).toList();
+    final itemsRaw = (inv['items'] as List?) ?? [];
+    final items = itemsRaw
+        .cast<Map>()
+        .map((e) => e.map((k, v) => MapEntry('$k', v)))
+        .toList();
+
     final status = (inv['status'] ?? 'Invoice Created').toString();
 
     showModalBottomSheet(
@@ -228,34 +305,70 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
-                const Icon(Icons.receipt_long, color: _indigo),
-                const SizedBox(width: 8),
-                Text('Invoice #${inv['invoiceNo'] ?? ''}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _indigo)),
-                const Spacer(),
-                _statusPill(status),
-              ]),
-              const SizedBox(height: 10),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                _infoChip(Icons.person, inv['customerName'] ?? 'N/A'),
-                _infoChip(Icons.event, _niceDate(
-                  (inv['timestamp'] is Timestamp)
-                      ? (inv['timestamp'] as Timestamp).toDate()
-                      : (inv['date'] is Timestamp ? (inv['date'] as Timestamp).toDate() : DateTime.now()),
-                )),
-                _infoChip(Icons.attach_money, '৳${_money((inv['grandTotal'] as num?) ?? 0)}'),
-                _infoChip(Icons.inventory_2, '${(inv['items'] as List?)?.length ?? 0} item(s)'),
-              ]),
+              // ---------- Header (no overflow) ----------
+              Row(
+                children: [
+                  const Icon(Icons.receipt_long, color: _indigo),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Invoice #${inv['invoiceNo'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: _indigo,
+                      ),
+                    ),
+                  ),
+                  // (No status here anymore; prevents overflow)
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Status dropped to its own row
+              _statusPill(status),
+
+              const SizedBox(height: 12),
+
+              // ---------- Quick facts ----------
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _infoChip(Icons.person, inv['customerName'] ?? 'N/A'),
+                  _infoChip(
+                    Icons.event,
+                    _niceDate(
+                      (inv['timestamp'] is Timestamp)
+                          ? (inv['timestamp'] as Timestamp).toDate()
+                          : (inv['date'] is Timestamp
+                          ? (inv['date'] as Timestamp).toDate()
+                          : DateTime.now()),
+                    ),
+                  ),
+                  _infoChip(Icons.attach_money,
+                      '৳${_money((inv['grandTotal'] as num?) ?? 0)}'),
+                  _infoChip(Icons.inventory_2,
+                      '${(inv['items'] as List?)?.length ?? 0} item(s)'),
+                ],
+              ),
+
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 8),
+
               const Text('Items', style: TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
+
+              // ---------- Items ----------
               ...items.map((it) {
-                final qty   = (it['qty'] as num?) ?? 0;
-                final unit  = (it['unitPrice'] ?? it['unit_price'] ?? 0) as num;
-                final total = (it['lineTotal'] ?? it['total'] ?? (unit * qty)) as num;
+                final qty = (it['qty'] as num?) ?? 0;
+                final unit = (it['unitPrice'] ?? it['unit_price'] ?? 0) as num;
+                final total =
+                (it['lineTotal'] ?? it['total'] ?? (unit * qty)) as num;
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(10),
@@ -267,54 +380,88 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('${it['model'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 2),
-                          Wrap(spacing: 8, children: [
-                            _tinyTag('Colour: ${it['colour'] ?? '-'}'),
-                            _tinyTag('Size: ${it['size'] ?? '-'}'),
-                          ]),
-                        ]),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${it['model'] ?? ''}',
+                                style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                _tinyTag('Colour: ${it['colour'] ?? '-'}'),
+                                _tinyTag('Size: ${it['size'] ?? '-'}'),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('৳${_money(unit)} × $qty'),
-                        Text('= ৳${_money(total)}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                      ]),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('৳${_money(unit)} × $qty'),
+                          Text('= ৳${_money(total)}',
+                              style:
+                              const TextStyle(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
                     ],
                   ),
                 );
               }),
+
               const SizedBox(height: 8),
               const Divider(),
               const SizedBox(height: 8),
+
+              // ---------- Totals ----------
               Align(
                 alignment: Alignment.centerRight,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('Shipping: ৳${_money((inv['shippingCost'] as num?) ?? 0)}'),
-                  Text('Tax: ৳${_money((inv['tax'] as num?) ?? 0)}'),
-                  const SizedBox(height: 4),
-                  Text('Grand Total: ৳${_money((inv['grandTotal'] as num?) ?? 0)}',
-                      style: const TextStyle(fontWeight: FontWeight.w900)),
-                ]),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('Shipping: ৳${_money((inv['shippingCost'] as num?) ?? 0)}'),
+                    Text('Tax: ৳${_money((inv['tax'] as num?) ?? 0)}'),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Grand Total: ৳${_money((inv['grandTotal'] as num?) ?? 0)}',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
               ),
+
               const SizedBox(height: 16),
+
+              // ---------- Actions ----------
               Row(
                 children: [
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.edit, color: _indigo),
-                    label: const Text('Edit'),
-                    style: OutlinedButton.styleFrom(foregroundColor: _indigo, side: const BorderSide(color: _indigo)),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _showEditInvoice(docId, inv);
-                    },
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.edit, color: _indigo),
+                      label: const Text('Edit'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _indigo,
+                        side: const BorderSide(color: _indigo),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _showEditInvoice(docId, inv);
+                      },
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.download, color: _indigo),
-                    label: const Text('PDF'),
-                    style: OutlinedButton.styleFrom(foregroundColor: _indigo, side: const BorderSide(color: _indigo)),
-                    onPressed: () => _generatePdf(inv),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.download, color: _indigo),
+                      label: const Text('PDF'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _indigo,
+                        side: const BorderSide(color: _indigo),
+                      ),
+                      onPressed: () => _generatePdf(inv),
+                    ),
                   ),
                 ],
               ),
@@ -324,6 +471,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       ),
     );
   }
+
+
 
   // ---------- Edit (bottom sheet form) ----------
   void _showEditInvoice(String docId, Map<String, dynamic> inv) {
@@ -413,7 +562,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
         builder: (_, controller) => StatefulBuilder(
           builder: (c, setSheetState) => SingleChildScrollView(
             controller: controller,
-            padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 24),
+            padding: EdgeInsets.fromLTRB(16, 16, 16,
+                MediaQuery.of(context).viewInsets.bottom + 24),
             child: Form(
               key: formKey,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -615,7 +765,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                           final grand = subtotal + shippingCost + tax;
                           return Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                             Text('Subtotal: ৳${_money(subtotal)}'),
-                            Text('Grand Total: ৳${_money(grand)}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                            Text('Grand Total: ৳${_money(grand)}',
+                                style: const TextStyle(fontWeight: FontWeight.w900)),
                           ]);
                         },
                       ),
@@ -889,7 +1040,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                       .orderBy('timestamp', descending: true);
                 } else {
                   // Fallback: narrow by agent ownership (to avoid loading everything),
-                  // then we’ll client-filter to only our customers.
+                  // then client-filter to only our customers.
                   Filter? ownerOr;
                   if (agentEmail != null && agentUid != null) {
                     ownerOr = Filter.or(
@@ -957,7 +1108,17 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                           (dt.isAtSameMomentAs(_toDate!)   || dt.isBefore(_toDate!));
                     }).toList();
 
-                    final totalAmount = filtered.fold<num>(
+                    // Only count/sum invoices where payment is taken
+                    final paidOnly = filtered.where((d) {
+                      final m = d.data();
+                      final pay = m['payment'];
+                      final takenFlag = (pay is Map && pay['taken'] == true);
+                      final takenByStatus =
+                      (m['status']?.toString().toLowerCase() ?? '').contains('payment taken');
+                      return takenFlag || takenByStatus;
+                    }).toList();
+
+                    final totalPaidAmount = paidOnly.fold<num>(
                       0, (sum, d) => sum + ((d.data()['grandTotal'] as num?) ?? 0),
                     );
 
@@ -965,8 +1126,13 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
                     return Column(
                       children: [
-                        _statsHeader(count: filtered.length, total: totalAmount.toDouble()),
+                        // Show PAID counts & totals in the header
+                        _statsHeader(
+                          count: paidOnly.length,
+                          total: totalPaidAmount.toDouble(),
+                        ),
                         Expanded(
+                          // Keep the list itself as per your filters (not restricted to paid)
                           child: ListView.builder(
                             itemCount: filtered.length,
                             itemBuilder: (context, i) {
@@ -1076,7 +1242,10 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
               selected: _statusFilter == o,
               selectedColor: _chipBg,
               onSelected: (_) => setState(() => _statusFilter = o),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.blueGrey.shade100)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: Colors.blueGrey.shade100),
+              ),
             ),
             const SizedBox(width: 8),
           ]
@@ -1139,11 +1308,15 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
+  // ---------- Responsive card ----------
   Widget _invoiceCard(String docId, Map<String, dynamic> inv) {
-    final customer  = (inv['customerName'] ?? 'N/A').toString();
-    final total     = ((inv['grandTotal'] as num?) ?? 0).toDouble();
-    final tracking  = (inv['tracking_number'] ?? '').toString().trim();
+    final customer   = (inv['customerName'] ?? 'N/A').toString();
+    final total      = ((inv['grandTotal'] as num?) ?? 0).toDouble();
+    final tracking   = (inv['tracking_number'] ?? '').toString().trim();
+    final status     = (inv['status'] ?? 'Invoice Created').toString();
+    final customerId = (inv['customerId'] ?? '').toString();
 
+    // date
     DateTime date;
     final ts = inv['timestamp'];
     if (inv['date'] is Timestamp) {
@@ -1154,137 +1327,140 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       date = DateTime.now();
     }
 
-    // Detect whether a Work Order exists for this invoice:
-    // Prefer tracking match when available, else fall back to invoiceId.
-    final woColl   = FirebaseFirestore.instance.collection('work_orders');
-    final woStream = (tracking.isNotEmpty)
-        ? woColl.where('tracking_number', isEqualTo: tracking).limit(1).snapshots()
-        : woColl.where('invoiceId', isEqualTo: docId).limit(1).snapshots();
+    // quantities
+    final totalQty = _totalQtyFromItems(inv['items'] as List?);
 
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: woStream,
-      builder: (ctx, snap) {
-        final hasWO = (snap.data?.docs.isNotEmpty ?? false);
+    // right-top country label (emoji flag + up to 3 words)
+    final countrySmall = _countryLabelShort(inv);
 
-        // Visual theme toggles
-        final buyerColor   = hasWO ? _indigo : Colors.deepOrange.shade800;
-        final accentColor  = hasWO ? _indigo : Colors.orange.shade700;
-        final borderColor  = hasWO ? Colors.blueGrey.shade100 : Colors.orange.shade200;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _showDetails(docId, inv),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: LayoutBuilder(
+            builder: (ctx, constraints) {
+              final bool compact = constraints.maxWidth < 360;
 
-        // Subtle background gradient that matches the theme
-        final bgGradient = hasWO
-            ? LinearGradient(
-          colors: [Colors.white, _chipBg.withOpacity(.55)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        )
-            : const LinearGradient(
-          colors: [Color(0xFFFFFCF5), Color(0xFFFFF1DB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // LEFT: avatar (fixed)
+                      _customerAvatar(customerId, customer),
 
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: 1,
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: bgGradient,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor),
-            ),
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: Row(
-              children: [
-                // Left: Buyer (big) + Tracking + Date + badge
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _showDetails(docId, inv),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Buyer big
-                        Text(
-                          customer,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: buyerColor),
-                        ),
-                        const SizedBox(height: 4),
-                        // Tracking (primary id)
-                        Row(
+                      const SizedBox(width: 10),
+
+                      // MIDDLE: name, tracking, qty (flexible)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.local_shipping_outlined, size: 16, color: tracking.isEmpty ? accentColor : Colors.black54),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                tracking.isEmpty ? 'No Tracking' : tracking,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: tracking.isEmpty ? accentColor : Colors.black87),
+                            // Name
+                            Text(
+                              customer,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: compact ? 14 : 16,
+                                fontWeight: FontWeight.w900,
+                                color: _indigo,
                               ),
+                            ),
+                            const SizedBox(height: 4),
+
+                            // Tracking + Qty in a single row
+                            Row(
+                              children: [
+                                const Icon(Icons.local_shipping_outlined,
+                                    size: 16, color: Colors.black54),
+                                const SizedBox(width: 6),
+                                // tracking expands, ellipsizes
+                                Expanded(
+                                  child: Text(
+                                    tracking.isEmpty ? 'No Tracking' : tracking,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                // total qty (compact text)
+                                Text(
+                                  'Qty: $totalQty',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        // Secondary row: date + WO badge (NO invoice number shown)
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(_niceDate(date), style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: hasWO ? Colors.green.withOpacity(.12) : accentColor.withOpacity(.15),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: hasWO ? Colors.green.withOpacity(.35) : accentColor.withOpacity(.35)),
-                              ),
-                              child: Text(
-                                hasWO ? 'WO Submitted' : 'No Work Order',
-                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: hasWO ? Colors.green.shade700 : accentColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Right: Total + Details button
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      '৳${_money(total)}',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: buyerColor),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: buyerColor,
-                        side: BorderSide(color: buyerColor),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      onPressed: () => _showDetails(docId, inv),
-                      child: const Text('Details'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+
+                      const SizedBox(width: 8),
+
+                      // RIGHT: top small country, bottom big amount (constrained)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 140),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // Country (small)
+                            Text(
+                              countrySmall.isEmpty ? '🌐' : countrySmall,
+                              textAlign: TextAlign.right,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 10),
+                            // Amount (big, responsive)
+                            Text(
+                              '৳${_money(total)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: compact ? 16 : 18,
+                                fontWeight: FontWeight.w900,
+                                color: _indigo,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+                  const Divider(height: 1),
+                  const SizedBox(height: 8),
+
+                  // Bottom full-width status
+                  Align(alignment: Alignment.centerLeft, child: _statusPill(status)),
+
+                  // Optional: small meta row (date)
+                  const SizedBox(height: 6),
+                  Text(
+                    _niceDate(date),
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+                ],
+              );
+            },
           ),
-        );
-      },
+        ),
+      ),
     );
   }
-
 }
-

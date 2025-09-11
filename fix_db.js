@@ -1,7 +1,5 @@
 // fix_db.js
-// Backfill a shared `tracking_number` across invoices and their work orders,
-// and into work_order_tracking docs (matched by workOrderNo).
-//
+// Normalize & backfill `shipping` object on invoices.
 // Usage:
 //   node fix_db.js                         # DRY RUN (no writes)
 //   CONFIRM=WRITE node fix_db.js           # actually writes changes
@@ -9,60 +7,78 @@
 // Requires: serviceAccountKey.json with Firestore access in the same folder.
 
 const admin = require('firebase-admin');
-const path = require('path');
 
 const serviceAccount = require('./serviceAccountKey.json');
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
 // ───────────────────────── Config ─────────────────────────
-const DRY_RUN = process.env.CONFIRM !== 'WRITE'; // default to dry-run
-const PAGE_SIZE = 300;      // invoices scanned per page
-const BATCH_MAX = 400;      // ops per batch (max 500; keep headroom)
-const WORK_ORDER_COLL = 'work_orders';
+const DRY_RUN = process.env.CONFIRM !== 'WRITE';
+const PAGE_SIZE = 300;
+const BATCH_MAX = 400;
 const INVOICES_COLL = 'invoices';
-const WORK_ORDER_TRACKING_COLL = 'work_order_tracking';
+const CUSTOMERS_COLL = 'customers';
 
 // ───────────────────────── Utils ─────────────────────────
-function normalizeKey(v) {
-  return String(v || '')
-    .trim()
-    .replace(/[^\w-]+/g, ''); // only word chars and dashes
-}
+function println(...a) { console.log(...a); }
+function trim(v) { return (v == null) ? '' : String(v).trim(); }
+function nonEmpty(v) { return trim(v).length > 0; }
 
-function deriveTrackingFromInvoice(invoiceId, invoiceData, fallbackWO) {
-  // Priority:
-  // 1) existing invoice tracking_number
-  // 2) existing invoice trackingNumber (camelCase)
-  // 3) existing work order tracking number (first found)
-  // 4) TRK-<invoiceNo or invoiceId>
-  if (invoiceData.tracking_number) return String(invoiceData.tracking_number);
-  if (invoiceData.trackingNumber) return String(invoiceData.trackingNumber);
-  if (fallbackWO && (fallbackWO.tracking_number || fallbackWO.trackingNumber)) {
-    return String(fallbackWO.tracking_number || fallbackWO.trackingNumber);
+function newBatch() { return { batch: db.batch(), count: 0 }; }
+async function safeCommit(b) { if (b.count > 0 && !DRY_RUN) await b.batch.commit(); }
+async function addUpdateToBatch(bctl, ref, data) {
+  bctl.batch.set(ref, data, { merge: true });
+  bctl.count++;
+  if (bctl.count >= BATCH_MAX) {
+    await safeCommit(bctl);
+    bctl.batch = db.batch();
+    bctl.count = 0;
   }
-
-  const base =
-    invoiceData.invoiceNo ||
-    invoiceData.invoice_number ||
-    invoiceId;
-
-  return `TRK-${normalizeKey(base)}`;
 }
 
-function needsSet(current, desired) {
-  // consider equality with loose stringification
-  if (current === undefined || current === null) return true;
-  return String(current) !== String(desired);
+function normalizeCountry(country, code) {
+  const name = trim(country);
+  const cObj = {};
+  if (nonEmpty(name)) cObj.name = name;
+  if (nonEmpty(code)) cObj.code = code.toUpperCase();
+  return Object.keys(cObj).length ? cObj : null;
 }
 
-async function forEachPaged(collectionRef, pageSize, handler) {
+function normalizePhone(phone, phoneCode) {
+  let national = trim(phone);
+  let dial = trim(phoneCode);
+  if (!nonEmpty(dial) && national.startsWith('+')) {
+    // If the number is already in +E.164 style, split a guess:
+    // crude parse: +<code><rest>
+    const m = national.match(/^\+(\d{1,4})(.*)$/);
+    if (m) {
+      dial = `+${m[1]}`;
+      national = trim(m[2]);
+    }
+  }
+  const e164 = (nonEmpty(dial) && nonEmpty(national)) ? `${dial}${national}`.replace(/\s+/g, '') : '';
+  const obj = {};
+  if (nonEmpty(dial)) obj.countryDialCode = dial;  // e.g. +880
+  if (nonEmpty(national)) obj.national = national; // e.g. 1736...
+  if (nonEmpty(e164)) obj.e164 = e164;
+  // isoCode is hard to infer without a lib; leave blank (Flutter writes it later)
+  return Object.keys(obj).length ? obj : null;
+}
+
+function isShippingComplete(s) {
+  if (!s) return false;
+  const a1 = trim(s.address1);
+  const city = trim(s.city);
+  const zip = trim(s.postalCode || s.zip);
+  const country = s.country && (trim(s.country.name) || trim(s.country) || trim(s.country.code));
+  return !!(a1 && city && zip && country);
+}
+
+async function forEachPaged(collRef, pageSize, handler) {
   let last = null;
   let processed = 0;
   while (true) {
-    let q = collectionRef.orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
+    let q = collRef.orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
     if (last) q = q.startAfter(last);
     const snap = await q.get();
     if (snap.empty) break;
@@ -76,130 +92,108 @@ async function forEachPaged(collectionRef, pageSize, handler) {
   return processed;
 }
 
-function newBatch() {
-  return { batch: db.batch(), count: 0 };
-}
-
-async function safeCommit(b) {
-  if (b.count === 0) return;
-  if (DRY_RUN) return; // skip actual commit
-  await b.batch.commit();
-}
-
-async function addUpdateToBatch(bctl, ref, data) {
-  bctl.batch.update(ref, data);
-  bctl.count++;
-  if (bctl.count >= BATCH_MAX) {
-    await safeCommit(bctl);
-    bctl.batch = db.batch();
-    bctl.count = 0;
-  }
-}
-
-// ───────────────────────── Main logic ─────────────────────────
+// ───────────────────────── Main ─────────────────────────
 (async () => {
-  console.log(`\n=== Backfill shared tracking_number ===`);
-  console.log(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'WRITE'}`);
-  console.log(`Scanning collection: "${INVOICES_COLL}" ...`);
+  println(`\n=== Backfill normalized 'shipping' on invoices ===`);
+  println(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'WRITE'}`);
+  println(`Scanning: "${INVOICES_COLL}" ...`);
 
-  let totals = {
+  const totals = {
     invoicesSeen: 0,
     invoicesUpdated: 0,
-    workOrdersMatched: 0,
-    workOrdersUpdated: 0,
-    trackingDocsUpdated: 0,
+    hadCustomerLookup: 0,
+    customerHits: 0,
   };
 
   let batchCtl = newBatch();
 
-  await forEachPaged(db.collection(INVOICES_COLL), PAGE_SIZE, async (invoiceDoc) => {
+  await forEachPaged(db.collection(INVOICES_COLL), PAGE_SIZE, async (invDoc) => {
     totals.invoicesSeen++;
-    const invoiceId = invoiceDoc.id;
-    const invData = invoiceDoc.data() || {};
+    const invId = invDoc.id;
+    const inv   = invDoc.data() || {};
 
-    // Find linked work orders by invoiceId
-    const woSnap = await db
-      .collection(WORK_ORDER_COLL)
-      .where('invoiceId', '==', invoiceId)
-      .get();
+    // Skip if shipping already looks complete
+    let shipping = (inv.shipping || null);
+    if (isShippingComplete(shipping)) return;
 
-    const firstWO = woSnap.docs[0] ? woSnap.docs[0].data() : null;
-    const tracking = deriveTrackingFromInvoice(invoiceId, invData, firstWO);
+    // Build candidate from invoice itself
+    const cand = {
+      address1  : trim(inv.address1 || (shipping && shipping.address1)),
+      address2  : trim(inv.address2 || (shipping && shipping.address2)),
+      city      : trim(inv.city     || (shipping && shipping.city)),
+      state     : trim(inv.state    || (shipping && shipping.state || shipping && shipping.region)),
+      postalCode: trim(inv.postalCode || inv.zip || (shipping && (shipping.postalCode || shipping.zip))),
+      country   : normalizeCountry(inv.country || (shipping && (shipping.country?.name || shipping.country)), (shipping && shipping.country && shipping.country.code)),
+      phone     : (shipping && shipping.phone) || null,
+    };
 
-    // 1) Update invoice to set tracking_number (and unify camelCase if needed)
-    const invNeeds =
-      needsSet(invData.tracking_number, tracking) ||
-      (invData.trackingNumber && invData.tracking_number === undefined);
+    // If not enough info, try to pull from customers/{customerId}
+    const customerId = trim(inv.customerId);
+    if (customerId) {
+      totals.hadCustomerLookup++;
+      const custRef = db.collection(CUSTOMERS_COLL).doc(customerId);
+      const custSnap = await custRef.get();
+      if (custSnap.exists) {
+        totals.customerHits++;
+        const c = custSnap.data() || {};
+        // map common customer fields
+        cand.address1   = cand.address1   || trim(c.address1 || c.address || c.addr1);
+        cand.address2   = cand.address2   || trim(c.address2 || c.addr2);
+        cand.city       = cand.city       || trim(c.city);
+        cand.state      = cand.state      || trim(c.state || c.region || c.province);
+        cand.postalCode = cand.postalCode || trim(c.postalCode || c.zip);
+        const ctryName  = (cand.country && cand.country.name) || trim(c.country);
+        const ctryCode  = (cand.country && cand.country.code) || trim(c.countryCode || c.countryISO || c.isoCode);
+        cand.country = normalizeCountry(ctryName, ctryCode) || cand.country;
 
-    if (invNeeds) {
-      totals.invoicesUpdated++;
-      const invUpdate = {
-        tracking_number: tracking,
-      };
-      // Optional: keep a one-time back-compat mirror for UIs still reading camelCase
-      if (invData.trackingNumber !== undefined && invData.trackingNumber !== tracking) {
-        invUpdate.trackingNumber = tracking;
-      }
-      console.log(`→ Invoice ${invoiceId}: set tracking_number="${tracking}"`);
-      await addUpdateToBatch(batchCtl, invoiceDoc.ref, invUpdate);
-    }
-
-    // 2) Update all matched work orders to have same tracking_number
-    if (!woSnap.empty) {
-      totals.workOrdersMatched += woSnap.size;
-
-      for (const woDoc of woSnap.docs) {
-        const woData = woDoc.data() || {};
-        if (needsSet(woData.tracking_number, tracking) || (woData.trackingNumber && woData.tracking_number === undefined)) {
-          totals.workOrdersUpdated++;
-          const woUpdate = { tracking_number: tracking };
-          if (woData.trackingNumber !== undefined && woData.trackingNumber !== tracking) {
-            woUpdate.trackingNumber = tracking; // back-compat mirror if you used camelCase before
-          }
-          console.log(`   • WorkOrder ${woDoc.id}: set tracking_number="${tracking}"`);
-          await addUpdateToBatch(batchCtl, woDoc.ref, woUpdate);
-        }
-
-        // 3) Also propagate tracking_number to any work_order_tracking docs with this workOrderNo
-        const workOrderNo = woData.workOrderNo || woData.work_order_no;
-        if (workOrderNo) {
-          // There may be multiple tracking docs per WO; update all that match workOrderNo
-          const trSnap = await db
-            .collection(WORK_ORDER_TRACKING_COLL)
-            .where('workOrderNo', '==', workOrderNo)
-            .get();
-
-          if (!trSnap.empty) {
-            for (const trDoc of trSnap.docs) {
-              const trData = trDoc.data() || {};
-              if (needsSet(trData.tracking_number, tracking)) {
-                totals.trackingDocsUpdated++;
-                console.log(`      · Tracking ${trDoc.id}: set tracking_number="${tracking}" (workOrderNo=${workOrderNo})`);
-                await addUpdateToBatch(batchCtl, trDoc.ref, { tracking_number: tracking });
-              }
-            }
-          }
+        // phone
+        if (!cand.phone) {
+          const phone = trim(c.phone || c.mobile || c.whatsapp);
+          const phoneCode = trim(c.phoneCode || c.countryDialCode || c.dialCode);
+          const p = normalizePhone(phone, phoneCode);
+          if (p) cand.phone = p;
         }
       }
     }
+
+    // If still missing basics, skip
+    if (!nonEmpty(cand.address1) && !nonEmpty(cand.city) && !cand.country && !nonEmpty(cand.postalCode)) {
+      // Not enough to create; leave untouched
+      return;
+    }
+
+    // Final normalized object
+    const shippingOut = {
+      ...(nonEmpty(cand.address1) ? { address1: cand.address1 } : {}),
+      ...(nonEmpty(cand.address2) ? { address2: cand.address2 } : {}),
+      ...(nonEmpty(cand.city)     ? { city: cand.city } : {}),
+      ...(nonEmpty(cand.state)    ? { state: cand.state } : {}),
+      ...(nonEmpty(cand.postalCode) ? { postalCode: cand.postalCode } : {}),
+      ...(cand.country ? { country: cand.country } : {}),
+      ...(cand.phone   ? { phone: cand.phone } : {}),
+    };
+
+    // Merge write (preserve existing shipping fields)
+    const update = { shipping: shippingOut, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+
+    println(`→ Invoice ${invId}: write shipping =`, JSON.stringify(shippingOut));
+    await addUpdateToBatch(batchCtl, invDoc.ref, update);
+    totals.invoicesUpdated++;
   });
 
-  // Final commit
   await safeCommit(batchCtl);
 
-  console.log('\n=== Summary ===');
-  console.log(`Invoices scanned:       ${totals.invoicesSeen}`);
-  console.log(`Invoices updated:       ${totals.invoicesUpdated}`);
-  console.log(`Work orders matched:    ${totals.workOrdersMatched}`);
-  console.log(`Work orders updated:    ${totals.workOrdersUpdated}`);
-  console.log(`Tracking docs updated:  ${totals.trackingDocsUpdated}`);
-  console.log(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'WRITE'} complete.\n`);
+  println('\n=== Summary ===');
+  println(`Invoices scanned:        ${totals.invoicesSeen}`);
+  println(`Invoices updated:        ${totals.invoicesUpdated}`);
+  println(`Invoices with custId:    ${totals.hadCustomerLookup}`);
+  println(`Customer lookups hit:    ${totals.customerHits}`);
+  println(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'WRITE'} complete.\n`);
 
   if (DRY_RUN) {
-    console.log('No changes were written. Re-run with:');
-    console.log('  CONFIRM=WRITE node fix_db.js\n');
+    println('No changes were written. Re-run with:');
+    println('  CONFIRM=WRITE node fix_db.js\n');
   }
-
   process.exit(0);
 })().catch((err) => {
   console.error('❌ Backfill failed:', err);

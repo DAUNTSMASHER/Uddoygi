@@ -36,13 +36,16 @@ class _SalesScreenState extends State<SalesScreen> {
   static const double _fontLarge   = 16;
 
   double salesTarget   = 100000;
-  int    orderCount    = 0;
-  double totalSales    = 0;
+  int    orderCount    = 0;     // paid orders (selected month)
+  double totalSales    = 0;     // paid amount only (selected month)
   String? userEmail;
   bool   targetReached = false;
   DateTime selectedMonth = DateTime.now();
 
   int _activeTabIndex = 0;
+
+  // bottom nav
+  int _bottomIndex = 0;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _SalesScreenState extends State<SalesScreen> {
     }
   }
 
+  /// Update: count/sum **only PAID** invoices for the selected month
   Future<void> _calculateUserSales() async {
     if (userEmail == null) return;
     final start = DateTime(selectedMonth.year, selectedMonth.month, 1);
@@ -71,15 +75,27 @@ class _SalesScreenState extends State<SalesScreen> {
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end))
         .get();
 
-    double total = 0;
+    double paidTotal = 0;
+    int paidCount = 0;
+
+    bool _isPaid(Map<String, dynamic> m) {
+      final paidByFlag = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
+      final s = (m['status'] ?? '').toString().toLowerCase();
+      return paidByFlag || s.contains('payment taken') || s.contains('paid');
+    }
+
     for (var doc in snap.docs) {
-      total += (doc.data()['grandTotal'] as num? ?? 0).toDouble();
+      final m = doc.data();
+      if (_isPaid(m)) {
+        paidTotal += (m['grandTotal'] as num? ?? 0).toDouble();
+        paidCount += 1;
+      }
     }
 
     if (mounted) {
       setState(() {
-        totalSales    = total;
-        orderCount    = snap.docs.length;
+        totalSales    = paidTotal;
+        orderCount    = paidCount;
         targetReached = totalSales >= salesTarget;
       });
     }
@@ -113,7 +129,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
     if (userEmail == null) {
       return const Scaffold(
-        backgroundColor: _surface,
+        backgroundColor: Colors.white,
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -127,10 +143,11 @@ class _SalesScreenState extends State<SalesScreen> {
         .orderBy('timestamp', descending: true);
 
     return Scaffold(
-      backgroundColor: _surface,
+      backgroundColor: Colors.white, // rest of the page is white
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
+          color: Colors.white,
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -138,10 +155,13 @@ class _SalesScreenState extends State<SalesScreen> {
           style: TextStyle(
             fontSize: isSmall ? _fontRegular : _fontLarge,
             fontWeight: FontWeight.w800,
+            color: Colors.white, // label foreground white
           ),
         ),
         centerTitle: true,
-        elevation: 0,
+        elevation: 4,
+        shadowColor: Colors.black26,
+        backgroundColor: _darkBlue,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -151,19 +171,14 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_today),
-            onPressed: () => _selectMonth(context),
-          )
-        ],
       ),
+
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: invQuery.snapshots(),
         builder: (ctx, snap) {
           final docs = snap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
 
-          // Header counters for list tabs
+          // Header counters (counts for last 30d)
           final totalInvoices = docs.length;
           final paid = docs.where((d) {
             final m = d.data();
@@ -184,7 +199,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
               ),
 
-              // Five quick actions
+              // Five quick actions (kept; page background is white, labels dark blue)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 sliver: SliverToBoxAdapter(child: _featuresGrid(context)),
@@ -222,6 +237,55 @@ class _SalesScreenState extends State<SalesScreen> {
             ],
           );
         },
+      ),
+
+      // Bottom Navigation Bar (blue background, white labels/icons)
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: _darkBlue,
+          boxShadow: [
+            BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, -3)),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _bottomIndex,
+            onTap: (i) {
+              setState(() => _bottomIndex = i);
+              switch (i) {
+                case 0:
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()));
+                  break;
+                case 1:
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()));
+                  break;
+                case 2:
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()));
+                  break;
+                case 3:
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()));
+                  break;
+                case 4:
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()));
+                  break;
+              }
+            },
+            backgroundColor: _darkBlue,               // blue background
+            selectedItemColor: Colors.white,          // label/icon white
+            unselectedItemColor: Colors.white70,      // slightly dimmed white
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.description_rounded), label: 'New'),
+              BottomNavigationBarItem(icon: Icon(Icons.list_alt_rounded), label: 'Invoices'),
+              BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded), label: 'Work'),
+              BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Reports'),
+              BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded), label: 'Progress'),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -279,7 +343,7 @@ class _SalesScreenState extends State<SalesScreen> {
 
           const SizedBox(height: 14),
 
-          // 4 KPIs (Target, Achieved, Orders, Progress)
+          // 4 KPIs (Target, Achieved [PAID ONLY], Orders [PAID ONLY], Progress)
           LayoutBuilder(
             builder: (context, c) {
               final wide = c.maxWidth >= 720;
@@ -302,13 +366,13 @@ class _SalesScreenState extends State<SalesScreen> {
                     accent: _darkBlue,
                   ),
                   _kpiTiny(
-                    label: 'Achieved',
+                    label: 'Achieved (Paid)',
                     value: '৳${totalSales.toStringAsFixed(0)}',
                     icon: Icons.payments_rounded,
                     accent: _okGreen,
                   ),
                   _kpiTiny(
-                    label: 'Orders',
+                    label: 'Orders (Paid)',
                     value: '$orderCount',
                     icon: Icons.receipt_long_rounded,
                     accent: const Color(0xFF20B2AA),
@@ -353,6 +417,7 @@ class _SalesScreenState extends State<SalesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.black12.withOpacity(.06)),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 4))],
       ),
       child: Row(
         children: [
@@ -524,6 +589,7 @@ class _SalesScreenState extends State<SalesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: Colors.black12.withOpacity(.06)),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 3))],
       ),
       child: Row(
         children: List.generate(tabs.length, (i) {
@@ -599,6 +665,7 @@ class _SalesScreenState extends State<SalesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black12.withOpacity(.06)),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 3))],
       ),
       child: Row(
         children: [
@@ -647,6 +714,7 @@ class _SalesScreenState extends State<SalesScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.black12.withOpacity(.06)),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 3))],
       ),
       child: Row(
         children: [

@@ -39,6 +39,8 @@ dependencies:
   flutter_email_sender: ^6.0.3
   mailer: ^6.1.0
   font_awesome_flutter: ^10.7.0
+  csc_picker: ^0.2.7          # Country → State → City dropdowns
+  intl_phone_field: ^3.2.0
 
 
   # Utilities
