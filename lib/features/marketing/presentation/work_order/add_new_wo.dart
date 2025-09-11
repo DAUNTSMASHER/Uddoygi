@@ -211,7 +211,7 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFE8F0FE),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _indigo.withValues(alpha: .2)),
+        border: Border.all(color: _indigo.withOpacity(.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,94 +416,170 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
                 ),
               ),
 
-              // Items
-              _section(
-                title: 'Items',
-                trailing: OutlinedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Item'),
-                  onPressed: () => _openItemSheet(),
-                ),
-                child: Column(
-                  children: [
-                    if (_items.isEmpty)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: _panelDeco(),
-                        child: const Text('No items yet. Select an invoice or tap "Add Item".'),
-                      ),
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final it = _items[i];
-                        final model = (it['model'] ?? '').toString();
-                        final colour = (it['colour'] ?? '-').toString();
-                        final size = (it['size'] ?? '-').toString();
-                        final base = (it['base'] ?? '').toString();
-                        final curl = (it['curl'] ?? '').toString();
-                        final density = (it['density'] ?? '').toString();
-                        final qty = (it['qty'] as int?) ?? 1;
+              // Items — self-refreshing inside the create sheet
+              StatefulBuilder(
+                builder: (ctx, setLocal) => _section(
+                  title: 'Items (Qty & Unit Price)',
+                  trailing: OutlinedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Item'),
+                    onPressed: () async {
+                      await _openItemSheet();   // wait for add/edit
+                      setLocal(() {});          // refresh the sheet immediately
+                    },
+                  ),
+                  child: Column(
+                    children: [
+                      if (_items.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: _panelDeco(),
+                          child: const Text('No items yet. Select an invoice or tap "Add Item".'),
+                        ),
 
-                        final extraChips = <Widget>[];
-                        if (base.isNotEmpty) extraChips.add(_pill('Base: $base'));
-                        if (curl.isNotEmpty) extraChips.add(_pill('Curl: $curl'));
-                        if (density.isNotEmpty) extraChips.add(_pill('Density: $density'));
+                      ...List.generate(_items.length, (i) {
+                        final it = _items[i];
+
+                        final model   = (it['model'] ?? '').toString();
+                        final colour  = (it['colour'] ?? '-').toString();
+                        final size    = (it['size'] ?? '-').toString();
+                        final base    = (it['base'] ?? '').toString();
+                        final curl    = (it['curl'] ?? '').toString();
+                        final density = (it['density'] ?? '').toString();
+
+                        final qty  = (it['qty'] as int?) ?? 1;
+                        final unit = ((it['unitPrice'] as num?) ?? 0).toDouble();
 
                         return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.all(10),
                           decoration: _panelDeco(),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
+                              // Header: product name + actions
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
                                       model.isEmpty ? '(Unnamed model)' : model,
                                       style: const TextStyle(fontWeight: FontWeight.w800),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    const SizedBox(height: 4),
-                                    Wrap(spacing: 6, runSpacing: 6, children: [
-                                      _pill('Colour: $colour'),
-                                      _pill('Size: $size'),
-                                      ...extraChips,
-                                    ]),
-                                  ],
-                                ),
-                              ),
-                              _qtyMiniStepper(
-                                qty: qty,
-                                onChanged: (newQty) {
-                                  setState(() => _items[i]['qty'] = newQty);
-                                },
-                              ),
-                              const SizedBox(width: 6),
-                              PopupMenuButton<String>(
-                                onSelected: (v) {
-                                  if (v == 'edit') _openItemSheet(index: i);
-                                  if (v == 'del') _removeItem(i);
-                                },
-                                itemBuilder: (_) => const [
-                                  PopupMenuItem(
-                                    value: 'edit',
-                                    child: ListTile(leading: Icon(Icons.edit), title: Text('Edit')),
                                   ),
-                                  PopupMenuItem(
-                                    value: 'del',
-                                    child: ListTile(leading: Icon(Icons.delete), title: Text('Remove')),
+                                  const SizedBox(width: 6),
+                                  PopupMenuButton<String>(
+                                    onSelected: (v) async {
+                                      if (v == 'edit') {
+                                        await _openItemSheet(index: i);
+                                        setLocal(() {}); // refresh after edit
+                                      }
+                                      if (v == 'del') {
+                                        _removeItem(i);
+                                        setLocal(() {}); // refresh after delete
+                                      }
+                                    },
+                                    itemBuilder: (_) => const [
+                                      PopupMenuItem(
+                                        value: 'edit',
+                                        child: ListTile(leading: Icon(Icons.edit), title: Text('Edit')),
+                                      ),
+                                      PopupMenuItem(
+                                        value: 'del',
+                                        child: ListTile(leading: Icon(Icons.delete), title: Text('Remove')),
+                                      ),
+                                    ],
                                   ),
                                 ],
+                              ),
+
+                              const SizedBox(height: 6),
+
+                              // Visible product attributes
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  _pill('Colour: $colour'),
+                                  _pill('Size: $size'),
+                                  if (base.isNotEmpty) _pill('Base: $base'),
+                                  if (curl.isNotEmpty) _pill('Curl: $curl'),
+                                  if (density.isNotEmpty) _pill('Density: $density'),
+                                ],
+                              ),
+
+                              const SizedBox(height: 10),
+
+                              // Editable Qty + Unit Price
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      initialValue: '$qty',
+                                      decoration: _fieldDeco('Qty'),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (v) {
+                                        final q = int.tryParse(v) ?? 1;
+                                        _items[i]['qty'] = q <= 0 ? 1 : q;
+                                        setLocal(() {}); // live recompute
+                                      },
+                                      validator: (v) => (v == null || v.isEmpty) ? 'Req' : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextFormField(
+                                      initialValue: unit.toStringAsFixed(2),
+                                      decoration: _fieldDeco('Unit Price'),
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      onChanged: (v) {
+                                        final p = double.tryParse(v) ?? 0.0;
+                                        _items[i]['unitPrice'] = p < 0 ? 0.0 : p;
+                                        setLocal(() {}); // live recompute
+                                      },
+                                      validator: (v) => (double.tryParse(v ?? '') ?? 0) < 0 ? 'Invalid' : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 8),
+
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'Line Total: ৳${(((_items[i]['unitPrice'] as num?) ?? 0).toDouble() * ((_items[i]['qty'] as int?) ?? 0)).toStringAsFixed(2)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w800),
+                                ),
                               ),
                             ],
                           ),
                         );
-                      },
-                    ),
-                  ],
+                      }),
+
+                      if (_items.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Builder(
+                            builder: (_) {
+                              final subtotal = _items.fold<double>(0, (s, it) {
+                                final q = (it['qty'] as int?) ?? 0;
+                                final p = ((it['unitPrice'] as num?) ?? 0).toDouble();
+                                return s + (q * p);
+                              });
+                              return Text(
+                                'Subtotal: ৳${subtotal.toStringAsFixed(2)}',
+                                style: const TextStyle(fontWeight: FontWeight.w900),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
 
