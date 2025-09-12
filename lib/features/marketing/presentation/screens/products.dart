@@ -16,6 +16,33 @@ String _fmtDate(Timestamp? ts) =>
     ts == null ? '—' : DateFormat('dd MMM, yyyy').format(ts.toDate());
 String _money(num n) => '৳${NumberFormat.decimalPattern().format(n)}';
 
+// Soft color dots shown in the “active” card state
+List<Color> _paletteFromColourField(String? colourText) {
+  final t = (colourText ?? '').toLowerCase();
+  Color base;
+  if (t.contains('black')) base = Colors.black87;
+  else if (t.contains('brown')) base = Colors.brown;
+  else if (t.contains('blonde') || t.contains('gold')) {
+    base = const Color(0xFFD4AF37);
+  } else if (t.contains('dark')) {
+    base = const Color(0xFF222222);
+  } else if (t.contains('red')) {
+    base = Colors.redAccent;
+  } else if (t.contains('blue')) {
+    base = Colors.blueAccent;
+  } else if (t.contains('ash')) {
+    base = const Color(0xFFF3F3F3);
+  } else {
+    base = _darkBlue;
+  }
+  return [
+    base.withOpacity(.9),
+    Colors.tealAccent.shade700,
+    Colors.cyan.shade400,
+    Colors.pinkAccent.shade100,
+  ];
+}
+
 class ProductsPage extends StatefulWidget {
   final String userEmail;
   const ProductsPage({Key? key, required this.userEmail}) : super(key: key);
@@ -43,11 +70,10 @@ class _ProductsPageState extends State<ProductsPage> {
   final _cost = TextEditingController();
 
   // ------- ui state -------
-  int _currentTab = 0;
+  int _currentTab = 0; // 0 = Add Product, 1 = All Products
   String _search = '';
   String _genderFilter = 'All'; // All / Male / Female
   _Sort _sort = _Sort.newest;
-  bool _gridMode = true;
   bool _hideArchived = true;
 
   @override
@@ -209,8 +235,7 @@ class _ProductsPageState extends State<ProductsPage> {
                     controller: _model,
                     decoration:
                     _decoration.copyWith(labelText: 'Model Name'),
-                    validator: (v) =>
-                    v!.trim().isEmpty ? 'Required' : null,
+                    validator: (v) => v!.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -218,8 +243,7 @@ class _ProductsPageState extends State<ProductsPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _size,
-                          decoration:
-                          _decoration.copyWith(labelText: 'Size'),
+                          decoration: _decoration.copyWith(labelText: 'Size'),
                           validator: (v) =>
                           v!.trim().isEmpty ? 'Required' : null,
                         ),
@@ -242,8 +266,7 @@ class _ProductsPageState extends State<ProductsPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _curl,
-                          decoration:
-                          _decoration.copyWith(labelText: 'Curl'),
+                          decoration: _decoration.copyWith(labelText: 'Curl'),
                           validator: (v) =>
                           v!.trim().isEmpty ? 'Required' : null,
                         ),
@@ -269,8 +292,8 @@ class _ProductsPageState extends State<ProductsPage> {
                           keyboardType:
                           const TextInputType.numberWithOptions(
                               decimal: true),
-                          decoration: _decoration.copyWith(
-                              labelText: 'Unit Price'),
+                          decoration:
+                          _decoration.copyWith(labelText: 'Unit Price'),
                           validator: (v) =>
                           v!.trim().isEmpty ? 'Required' : null,
                         ),
@@ -335,8 +358,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Cancel')),
             ElevatedButton(
-              style:
-              ElevatedButton.styleFrom(backgroundColor: _darkBlue),
+              style: ElevatedButton.styleFrom(backgroundColor: _darkBlue),
               onPressed: () async {
                 if (!_editFormKey.currentState!.validate()) return;
                 String? imageUrl;
@@ -353,8 +375,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   'unit_price': double.tryParse(_price.text) ?? 0,
                   'notes': _notes.text.trim(),
                   'production_time': _time.text.trim(),
-                  'production_cost':
-                  double.tryParse(_cost.text) ?? 0,
+                  'production_cost': double.tryParse(_cost.text) ?? 0,
                   if (imageUrl != null) 'imageUrl': imageUrl,
                 };
                 await FirebaseFirestore.instance
@@ -364,8 +385,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 if (!mounted) return;
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('✅ Product updated')));
+                    const SnackBar(content: Text('✅ Product updated')));
               },
               child: const Text('Save'),
             ),
@@ -379,57 +399,61 @@ class _ProductsPageState extends State<ProductsPage> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= 600;
+    final isMobile = width < 480;
 
-    return DefaultTabController(
-      length: 2,
-      initialIndex: _currentTab,
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: _darkBlue,
-          title:
-          const Text('Products', style: TextStyle(color: Colors.white)),
-          bottom: TabBar(
-            onTap: (i) => setState(() => _currentTab = i),
-            indicatorColor: Colors.white,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            tabs: const [Tab(text: 'Add Product'), Tab(text: 'All Products')],
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: _darkBlue,
+        title: const Text('Products', style: TextStyle(color: Colors.white)),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (i) => setState(() => _currentTab = i),
+        selectedItemColor: _darkBlue,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add_box_outlined),
+            activeIcon: Icon(Icons.add_box),
+            label: 'Add Product',
           ),
-        ),
-        body: Column(
-          children: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view_outlined),
+            activeIcon: Icon(Icons.grid_view_rounded),
+            label: 'All Products',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: _HeaderStats(hideArchived: _hideArchived),
+          ),
+          if (_currentTab == 1)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: _HeaderStats(hideArchived: _hideArchived),
+              child: _toolbar(), // search + filters visible only on All
             ),
-            if (_currentTab == 1)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                child: _toolbar(),
-              ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: _currentTab == 0
-                    ? _addForm(isWide)
-                    : _productsList(grid: _gridMode),
-              ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: _currentTab == 0
+                  ? (isMobile ? _addFormMobile() : _addFormDesktop())
+                  : _productsGrid(),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // ——— Add form (responsive with Wrap) ———
-  Widget _addForm(bool wide) {
-    final colW = wide ? (MediaQuery.of(context).size.width - 48) / 2
-        : MediaQuery.of(context).size.width - 32;
+  // ——— Add form: Desktop/Tablet (two-column wrap) ———
+  Widget _addFormDesktop() {
+    final colW = (MediaQuery.of(context).size.width - 48) / 2;
 
     return SingleChildScrollView(
-      key: const ValueKey('form'),
+      key: const ValueKey('form-desktop'),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
       child: Form(
         key: _formKey,
@@ -437,139 +461,268 @@ class _ProductsPageState extends State<ProductsPage> {
           runSpacing: 12,
           spacing: 12,
           children: [
-            SizedBox(
-              width: colW,
-              child: DropdownButtonFormField<String>(
-                value: _gender,
-                decoration: _decoration.copyWith(labelText: 'Gender'),
-                items: const [
-                  DropdownMenuItem(value: 'Male', child: Text('Male')),
-                  DropdownMenuItem(value: 'Female', child: Text('Female')),
-                ],
-                onChanged: (v) => setState(() => _gender = v),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _model,
-                decoration: _decoration.copyWith(labelText: 'Model Name'),
-                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _size,
-                decoration: _decoration.copyWith(labelText: 'Size'),
-                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _density,
-                decoration: _decoration.copyWith(labelText: 'Density'),
-                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _curl,
-                decoration: _decoration.copyWith(labelText: 'Curl'),
-                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _colour,
-                decoration: _decoration.copyWith(labelText: 'Colour'),
-                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _price,
-                keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-                decoration: _decoration.copyWith(labelText: 'Unit Price'),
-                validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _cost,
-                keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
-                decoration: _decoration.copyWith(
-                    labelText: 'Production Cost (optional)'),
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _time,
-                decoration:
-                _decoration.copyWith(labelText: 'Production Time'),
-              ),
-            ),
-            SizedBox(
-              width: colW,
-              child: TextFormField(
-                controller: _notes,
-                maxLines: 2,
-                decoration: _decoration.copyWith(labelText: 'Notes'),
-              ),
-            ),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.photo_library),
-                  label: const Text('Gallery'),
-                  onPressed: () => _pickImage(source: ImageSource.gallery),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.photo_camera),
-                  label: const Text('Camera'),
-                  onPressed: () => _pickImage(source: ImageSource.camera),
-                ),
-              ],
-            ),
-            if (_pickedImage != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child:
-                Image.file(_pickedImage!, height: 120, fit: BoxFit.cover),
-              ),
-            SizedBox(
-              width: double.infinity,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _darkBlue,
-                        padding:
-                        const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: _addProduct,
-                      child: const Text('Submit'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(onPressed: _resetForm, child: const Text('Reset')),
-                ],
-              ),
-            ),
+            SizedBox(width: colW, child: _imagesCard()),
+            SizedBox(width: colW, child: _productInfoCard()),
+            SizedBox(width: colW, child: _pricingCard()),
+            SizedBox(width: colW, child: _variantsCard()),
+            SizedBox(width: double.infinity, child: _submitRow()),
           ],
         ),
       ),
+    );
+  }
+
+  // ——— Add form: Mobile (sectioned cards; 1 per row) ———
+  Widget _addFormMobile() {
+    return SingleChildScrollView(
+      key: const ValueKey('form-mobile'),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            _imagesCard(),
+            const SizedBox(height: 12),
+            _productInfoCard(),
+            const SizedBox(height: 12),
+            _variantsCard(),
+            const SizedBox(height: 12),
+            _pricingCard(),
+            const SizedBox(height: 12),
+            _notesCard(),
+            const SizedBox(height: 12),
+            _submitRow(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ——— section cards used by both layouts ———
+  Widget _card({required String title, required Widget child, IconData? icon}) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              if (icon != null)
+                Icon(icon, size: 16, color: Colors.grey.shade600),
+              if (icon != null) const SizedBox(width: 6),
+              Text(title,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade700)),
+            ]),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _imagesCard() {
+    return _card(
+      title: 'Product Images',
+      icon: Icons.photo_camera_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => _pickImage(source: ImageSource.gallery),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 120,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: Colors.grey.shade400.withOpacity(.6),
+                    width: 2,
+                    style: BorderStyle.solid),
+              ),
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.add, size: 20, color: _darkBlue),
+                    SizedBox(width: 6),
+                    Text('Add image',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700, color: _darkBlue)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (_pickedImage != null) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.file(_pickedImage!, height: 120, fit: BoxFit.cover),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Text('Add up to 5 images. First image will be the main photo.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _productInfoCard() {
+    return _card(
+      title: 'Product Information',
+      icon: Icons.inventory_2_outlined,
+      child: Column(
+        children: [
+          DropdownButtonFormField<String>(
+            value: _gender,
+            decoration: _decoration.copyWith(labelText: 'Gender'),
+            items: const [
+              DropdownMenuItem(value: 'Male', child: Text('Male')),
+              DropdownMenuItem(value: 'Female', child: Text('Female')),
+            ],
+            onChanged: (v) => setState(() => _gender = v),
+            validator: (v) => v == null ? 'Required' : null,
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _model,
+            decoration: _decoration.copyWith(labelText: 'Model Name *'),
+            validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _variantsCard() {
+    return _card(
+      title: 'Variants',
+      icon: Icons.tune_rounded,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _size,
+                  decoration: _decoration.copyWith(labelText: 'Size'),
+                  validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: _density,
+                  decoration: _decoration.copyWith(labelText: 'Density'),
+                  validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _curl,
+                  decoration: _decoration.copyWith(labelText: 'Curl'),
+                  validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: _colour,
+                  decoration: _decoration.copyWith(labelText: 'Colour'),
+                  validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pricingCard() {
+    return _card(
+      title: 'Pricing',
+      icon: Icons.payments_outlined,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _price,
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+                  decoration: _decoration.copyWith(labelText: 'Unit Price *'),
+                  validator: (v) => v!.trim().isEmpty ? 'Required' : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: _cost,
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+                  decoration:
+                  _decoration.copyWith(labelText: 'Production Cost'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _time,
+            decoration: _decoration.copyWith(labelText: 'Production Time'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _notesCard() {
+    return _card(
+      title: 'Notes',
+      icon: Icons.notes_rounded,
+      child: TextFormField(
+        controller: _notes,
+        maxLines: 3,
+        decoration: _decoration.copyWith(labelText: 'Notes'),
+      ),
+    );
+  }
+
+  Widget _submitRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _darkBlue,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: _addProduct,
+            child: const Text('Submit'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton(
+          onPressed: _resetForm,
+          child: const Text('Reset'),
+        ),
+      ],
     );
   }
 
@@ -591,20 +744,8 @@ class _ProductsPageState extends State<ProductsPage> {
                     borderSide: BorderSide.none,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: _gridMode ? 'List view' : 'Grid view',
-              onPressed: () => setState(() => _gridMode = !_gridMode),
-              icon: Icon(
-                _gridMode
-                    ? Icons.view_list_rounded
-                    : Icons.grid_view_rounded,
-                color: _darkBlue,
               ),
             ),
           ],
@@ -637,8 +778,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 underline: const SizedBox.shrink(),
                 onChanged: (v) => setState(() => _sort = v ?? _Sort.newest),
                 items: const [
-                  DropdownMenuItem(
-                      value: _Sort.newest, child: Text('Newest')),
+                  DropdownMenuItem(value: _Sort.newest, child: Text('Newest')),
                   DropdownMenuItem(
                       value: _Sort.priceLowHigh, child: Text('Price ↑')),
                   DropdownMenuItem(
@@ -684,10 +824,10 @@ class _ProductsPageState extends State<ProductsPage> {
     return q;
   }
 
-  // ——— Products list/grid (adaptive, no overflow) ———
-  Widget _productsList({required bool grid}) {
+  // ——— All Products: GRID ONLY (adaptive; 1-per-row when needed; no overflow) ———
+  Widget _productsGrid() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      key: const ValueKey('list'),
+      key: const ValueKey('grid'),
       stream: _query().snapshots(),
       builder: (ctx, snap) {
         if (!snap.hasData) {
@@ -700,8 +840,7 @@ class _ProductsPageState extends State<ProductsPage> {
           final s = _search.toLowerCase();
           docs = docs.where((d) {
             final m = d.data();
-            final a =
-            (m['model_name'] ?? '').toString().toLowerCase();
+            final a = (m['model_name'] ?? '').toString().toLowerCase();
             final b = (m['colour'] ?? '').toString().toLowerCase();
             return a.contains(s) || b.contains(s);
           }).toList();
@@ -711,39 +850,27 @@ class _ProductsPageState extends State<ProductsPage> {
           return const Center(child: Text('No products found'));
         }
 
-        if (grid) {
-          // Adaptive grid: tiles resize up to this width → no overflow
-          return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-            gridDelegate:
-            const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 360, // ~2 cols on phones, 3–4 on tablets
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 0.82, // tile height breathing room
-            ),
-            itemCount: docs.length,
-            itemBuilder: (_, i) => _ProductCard(
-              doc: docs[i],
-              onEdit: _showEditDialog,
-              onDuplicate: (p) => _prefillForm(p),
-              onArchiveToggle: _toggleArchive,
-              onDelete: _confirmDelete,
-            ),
-          );
-        } else {
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-            itemCount: docs.length,
-            itemBuilder: (_, i) => _ProductRow(
-              doc: docs[i],
-              onEdit: _showEditDialog,
-              onDuplicate: (p) => _prefillForm(p),
-              onArchiveToggle: _toggleArchive,
-              onDelete: _confirmDelete,
-            ),
-          );
-        }
+        final w = MediaQuery.of(ctx).size.width;
+        // 1 col for very small screens, then 2/3/4 as width grows
+        final crossAxisCount = w < 420 ? 1 : w < 720 ? 2 : w < 1024 ? 3 : 4;
+
+        return GridView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.82,
+          ),
+          itemCount: docs.length,
+          itemBuilder: (_, i) => _ProductCard(
+            doc: docs[i],
+            onEdit: _showEditDialog,
+            onDuplicate: (p) => _prefillForm(p),
+            onArchiveToggle: _toggleArchive,
+            onDelete: _confirmDelete,
+          ),
+        );
       },
     );
   }
@@ -764,8 +891,8 @@ class _ProductsPageState extends State<ProductsPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Product'),
-        content: const Text(
-            'Are you sure you want to delete this product?'),
+        content:
+        const Text('Are you sure you want to delete this product?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -786,8 +913,7 @@ class _ProductsPageState extends State<ProductsPage> {
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () async {
-              // No snapshot of doc content to restore in this view.
-              // (To fully undo, keep a temp copy before delete.)
+              // To fully support undo, keep a temp snapshot before delete.
             },
           ),
         ),
@@ -796,7 +922,7 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 }
 
-/* ========================= Header stats (wraps; never overflows) ========================= */
+/* ========================= Header stats (responsive GRID — min 2 cols) ========================= */
 
 class _HeaderStats extends StatelessWidget {
   final bool hideArchived;
@@ -812,99 +938,121 @@ class _HeaderStats extends StatelessWidget {
       stream: q.snapshots(),
       builder: (_, s) {
         final docs = s.data?.docs ?? [];
+
         final total = docs.length;
-        final males = docs
-            .where((d) => (d.data()['gender'] ?? '') == 'Male')
-            .length;
-        final females = docs
-            .where((d) => (d.data()['gender'] ?? '') == 'Female')
-            .length;
+        final males =
+            docs.where((d) => (d.data()['gender'] ?? '') == 'Male').length;
+        final females =
+            docs.where((d) => (d.data()['gender'] ?? '') == 'Female').length;
         final prices = docs
-            .map((d) =>
-        (d.data()['unit_price'] as num?)?.toDouble() ?? 0)
+            .map((d) => (d.data()['unit_price'] as num?)?.toDouble() ?? 0)
             .toList();
         final avg =
         prices.isEmpty ? 0 : prices.reduce((a, b) => a + b) / prices.length;
 
-        Widget chip(String label, String value, IconData icon, Color color) {
-          return ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 150),
-            child: Container(
-              height: 60,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.black12.withOpacity(.06)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                        color: color.withOpacity(.12),
-                        shape: BoxShape.circle),
-                    child: Icon(icon, color: color),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(value,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                color: _darkBlue)),
-                        Text(label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade700,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
+        final items = <_StatItem>[
+          _StatItem('Total', '$total', Icons.inventory_2_rounded, _darkBlue),
+          _StatItem('Male', '$males', Icons.male_rounded, Colors.teal),
+          _StatItem('Female', '$females', Icons.female_rounded, Colors.pink),
+          _StatItem(
+              'Avg price', _money(avg.round()), Icons.payments_rounded, _ink),
+        ];
 
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            chip('Total', '$total', Icons.inventory_2_rounded, _darkBlue),
-            chip('Male', '$males', Icons.male_rounded, Colors.teal),
-            chip('Female', '$females', Icons.female_rounded, Colors.pink),
-            chip('Avg price', _money(avg.round()),
-                Icons.payments_rounded, _ink),
-          ],
+        // Always ≥2 columns for a true grid look
+        final w = MediaQuery.of(context).size.width;
+        final cols = (w / 220).floor().clamp(2, 4);
+
+        return GridView.builder(
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 3.6,
+          ),
+          itemBuilder: (_, i) => _StatCard(item: items[i]),
         );
       },
     );
   }
 }
 
+class _StatItem {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _StatItem(this.label, this.value, this.icon, this.color);
+}
+
+class _StatCard extends StatelessWidget {
+  final _StatItem item;
+  const _StatCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black12.withOpacity(.06)),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: item.color.withOpacity(.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(item.icon, color: item.color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w900, color: _darkBlue)),
+                Text(item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /* ========================= Card / Row ========================= */
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends StatefulWidget {
   final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  final Future<void> Function(
-      DocumentSnapshot<Map<String, dynamic>>)
-  onEdit;
+  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>) onEdit;
   final void Function(Map<String, dynamic>) onDuplicate;
-  final Future<void> Function(
-      DocumentSnapshot<Map<String, dynamic>>)
+  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>)
   onArchiveToggle;
-  final Future<void> Function(
-      DocumentSnapshot<Map<String, dynamic>>)
-  onDelete;
+  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>) onDelete;
 
   const _ProductCard({
     required this.doc,
@@ -915,126 +1063,240 @@ class _ProductCard extends StatelessWidget {
   });
 
   @override
+  State<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<_ProductCard> {
+  bool _active = false;
+
+  void _toggleActive() => setState(() => _active = !_active);
+
+  @override
   Widget build(BuildContext context) {
-    final p = doc.data();
+    final p = widget.doc.data();
     final price = (p['unit_price'] as num?)?.toDouble() ?? 0;
     final cost = (p['production_cost'] as num?)?.toDouble() ?? 0;
     final profit = price - cost;
     final profitPct = price > 0 ? (profit / price * 100) : 0;
     final archived = (p['archived'] as bool?) ?? false;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-        boxShadow: const [
-          BoxShadow(
-              color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 4))
-        ],
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _viewDetails(context, p),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // image
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: ClipRRect(
-                borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(14)),
-                child: p['imageUrl'] == null
-                    ? Container(
-                  color: Colors.grey.shade100,
-                  child: const Center(
-                      child: Icon(Icons.image, color: _darkBlue)),
-                )
-                    : Image.network(p['imageUrl'], fit: BoxFit.cover),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            p['model_name'] ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                color: _darkBlue),
-                          ),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: -4,
-                            children: [
-                              _chip(p['gender'] ?? '—'),
-                              _chip('Color: ${p['colour'] ?? '—'}'),
-                              if ((p['size'] ?? '').toString().isNotEmpty)
-                                _chip('Size: ${p['size']}'),
-                            ],
-                          ),
-                        ]),
-                  ),
-                  _MenuButton(
-                    archived: archived,
-                    onEdit: () => onEdit(doc),
-                    onDuplicate: () => onDuplicate(p),
-                    onArchiveToggle: () => onArchiveToggle(doc),
-                    onDelete: () => onDelete(doc),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Row(
-                children: [
-                  Text(_money(price),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w900, color: _darkBlue)),
-                  const SizedBox(width: 10),
-                  if (price > 0 && cost > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (profit >= 0 ? Colors.green : Colors.red)
-                            .withOpacity(.1),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${profit >= 0 ? '+' : ''}${profitPct.toStringAsFixed(0)}%',
-                        style: TextStyle(
-                            color: profit >= 0 ? Colors.green : Colors.red,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11),
-                      ),
-                    ),
-                  const Spacer(),
-                  Text(_fmtDate(p['createdAt'] as Timestamp?),
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.grey.shade600)),
-                ],
-              ),
+    final dots = _paletteFromColourField(p['colour']);
+
+    return AnimatedScale(
+      scale: _active ? 1.02 : 1.0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: _active
+                  ? _darkBlue.withOpacity(.18)
+                  : Colors.black12.withOpacity(.06)),
+          boxShadow: [
+            BoxShadow(
+              color: _active ? const Color(0x22000000) : const Color(0x0F000000),
+              blurRadius: _active ? 16 : 10,
+              offset: const Offset(0, 6),
             ),
           ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: _toggleActive, // first tap: show active state
+            onLongPress: () {
+              _showProductDetails(context, p);
+            },
+            child: Stack(
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 16 / 10,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(18)),
+                        child: p['imageUrl'] == null
+                            ? Container(
+                          color: Colors.grey.shade100,
+                          child: const Center(
+                              child: Icon(Icons.image,
+                                  color: _darkBlue)),
+                        )
+                            : Image.network(p['imageUrl'], fit: BoxFit.cover),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 12, 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p['model_name'] ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        color: _darkBlue),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: -4,
+                                    children: [
+                                      _chip(p['gender'] ?? '—'),
+                                      _chip('Color: ${p['colour'] ?? '—'}'),
+                                      if ((p['size'] ?? '')
+                                          .toString()
+                                          .isNotEmpty)
+                                        _chip('Size: ${p['size']}'),
+                                    ],
+                                  ),
+                                ]),
+                          ),
+                          _MenuButton(
+                            archived: archived,
+                            onEdit: () => widget.onEdit(widget.doc),
+                            onDuplicate: () => widget.onDuplicate(p),
+                            onArchiveToggle: () =>
+                                widget.onArchiveToggle(widget.doc),
+                            onDelete: () => widget.onDelete(widget.doc),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                      child: Row(
+                        children: [
+                          Text(_money(price),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: _darkBlue)),
+                          const SizedBox(width: 10),
+                          if (price > 0 && cost > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: (profit >= 0
+                                    ? Colors.green
+                                    : Colors.red)
+                                    .withOpacity(.1),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '${profit >= 0 ? '+' : ''}${profitPct.toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                    color: profit >= 0
+                                        ? Colors.green
+                                        : Colors.red,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11),
+                              ),
+                            ),
+                          const Spacer(),
+                          Text(_fmtDate(p['createdAt'] as Timestamp?),
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.grey.shade600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Plus circle — bottom-right
+                Positioned(
+                  right: 14,
+                  bottom: 18,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: Color(0x1A000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 4))
+                      ],
+                      border: Border.all(
+                          color: Colors.black12.withOpacity(.06)),
+                    ),
+                    child: const Icon(Icons.add, color: Colors.black87),
+                  ),
+                ),
+
+                // Active overlay: color dots + add-to-cart pill
+                Positioned(
+                  left: 16,
+                  bottom: 18,
+                  child: AnimatedOpacity(
+                    opacity: _active ? 1 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: Row(
+                      children: [
+                        Row(
+                          children: dots
+                              .map((c) => Container(
+                            width: 16,
+                            height: 16,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: c,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                  color: Colors.white, width: 2),
+                            ),
+                          ))
+                              .toList(),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black87,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            shape: const StadiumBorder(),
+                          ),
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      'Added "${p['model_name'] ?? 'Item'}"')),
+                            );
+                          },
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Add to Cart'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _chip(String t) => Container(
-    padding:
-    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
       color: _darkBlue.withOpacity(.06),
       borderRadius: BorderRadius.circular(999),
@@ -1047,90 +1309,86 @@ class _ProductCard extends StatelessWidget {
           fontSize: 11, fontWeight: FontWeight.w700, color: _darkBlue),
     ),
   );
+}
 
-  void _viewDetails(BuildContext context, Map<String, dynamic> p) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(p['model_name'] ?? '',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: _darkBlue)),
-                const SizedBox(height: 10),
-                if (p['imageUrl'] != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(p['imageUrl'],
-                        height: 160, fit: BoxFit.cover),
-                  ),
-                const SizedBox(height: 12),
-                _kv('Gender', p['gender'] ?? '—'),
-                _kv('Colour', p['colour'] ?? '—'),
-                _kv('Size', p['size'] ?? '—'),
-                _kv('Density', p['density'] ?? '—'),
-                _kv('Curl', p['curl'] ?? '—'),
-                _kv('Unit price', _money((p['unit_price'] ?? 0) as num)),
-                _kv('Prod. cost', _money((p['production_cost'] ?? 0) as num)),
-                _kv('Prod. time', p['production_time'] ?? '—'),
-                _kv('Notes', p['notes'] ?? '—'),
-                const SizedBox(height: 6),
-              ],
-            ),
+// Quick details sheet
+void _showProductDetails(BuildContext context, Map<String, dynamic> p) {
+  showModalBottomSheet(
+    context: context,
+    showDragHandle: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+    builder: (_) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(p['model_name'] ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: _darkBlue)),
+              const SizedBox(height: 10),
+              if (p['imageUrl'] != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(p['imageUrl'],
+                      height: 160, fit: BoxFit.cover),
+                ),
+              const SizedBox(height: 12),
+              _kv('Gender', p['gender'] ?? '—'),
+              _kv('Colour', p['colour'] ?? '—'),
+              _kv('Size', p['size'] ?? '—'),
+              _kv('Density', p['density'] ?? '—'),
+              _kv('Curl', p['curl'] ?? '—'),
+              _kv('Unit price', _money((p['unit_price'] ?? 0) as num)),
+              _kv('Prod. cost', _money((p['production_cost'] ?? 0) as num)),
+              _kv('Prod. time', p['production_time'] ?? '—'),
+              _kv('Notes', p['notes'] ?? '—'),
+              const SizedBox(height: 6),
+            ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _kv(String k, String v) => Padding(
-    padding: const EdgeInsets.only(bottom: 6),
-    child: Row(
-      children: [
-        SizedBox(
-            width: 110,
-            child: Text(k,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w600))),
-        const SizedBox(width: 8),
-        Expanded(
-            child: Text(v,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _darkBlue))),
-      ],
-    ),
+        ),
+      );
+    },
   );
 }
 
+Widget _kv(String k, String v) => Padding(
+  padding: const EdgeInsets.only(bottom: 6),
+  child: Row(
+    children: [
+      SizedBox(
+          width: 110,
+          child: Text(k,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600))),
+      const SizedBox(width: 8),
+      Expanded(
+          child: Text(v,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _darkBlue))),
+    ],
+  ),
+);
+
 class _ProductRow extends StatelessWidget {
   final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  final Future<void> Function(
-      DocumentSnapshot<Map<String, dynamic>>)
-  onEdit;
+  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>) onEdit;
   final void Function(Map<String, dynamic>) onDuplicate;
-  final Future<void> Function(
-      DocumentSnapshot<Map<String, dynamic>>)
+  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>)
   onArchiveToggle;
-  final Future<void> Function(
-      DocumentSnapshot<Map<String, dynamic>>)
-  onDelete;
+  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>) onDelete;
 
   const _ProductRow({
     required this.doc,
@@ -1142,6 +1400,7 @@ class _ProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Kept for completeness; not used since dashboard is grid-only
     final p = doc.data();
     final price = (p['unit_price'] as num?)?.toDouble() ?? 0;
     final archived = (p['archived'] as bool?) ?? false;
@@ -1150,13 +1409,7 @@ class _ProductRow extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: ListTile(
-        onTap: () => _ProductCard(
-          doc: doc,
-          onEdit: onEdit,
-          onDuplicate: onDuplicate,
-          onArchiveToggle: onArchiveToggle,
-          onDelete: onDelete,
-        )._viewDetails(context, p),
+        onTap: () => _showProductDetails(context, p),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: p['imageUrl'] == null
@@ -1172,8 +1425,8 @@ class _ProductRow extends StatelessWidget {
         title: Text(p['model_name'] ?? '',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style:
-            const TextStyle(fontWeight: FontWeight.w800, color: _darkBlue)),
+            style: const TextStyle(
+                fontWeight: FontWeight.w800, color: _darkBlue)),
         subtitle: Wrap(
           spacing: 6,
           runSpacing: -4,
@@ -1209,8 +1462,7 @@ class _ProductRow extends StatelessWidget {
   }
 
   Widget _miniChip(String t) => Container(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
           color: _darkBlue.withOpacity(.06),
           borderRadius: BorderRadius.circular(999)),
@@ -1261,7 +1513,8 @@ class _MenuButton extends StatelessWidget {
       itemBuilder: (_) => [
         const PopupMenuItem(
             value: 'edit',
-            child: ListTile(leading: Icon(Icons.edit), title: Text('Edit'))),
+            child:
+            ListTile(leading: Icon(Icons.edit), title: Text('Edit'))),
         const PopupMenuItem(
             value: 'duplicate',
             child: ListTile(

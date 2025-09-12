@@ -1,201 +1,238 @@
-// fix_db.js
-// Normalize & backfill `shipping` object on invoices.
-// Usage:
-//   node fix_db.js                         # DRY RUN (no writes)
-//   CONFIRM=WRITE node fix_db.js           # actually writes changes
-//
-// Requires: serviceAccountKey.json with Firestore access in the same folder.
+#!/usr/bin/env node
+'use strict';
+
+/*
+  fix_db.js — audit & debug your push setup from terminal
+
+  Usage:
+    node fix_db.js --project your-project-id --region us-central1 \
+      --key "/absolute/path/serviceAccountKey.json" --testTrigger --verbose
+*/
+
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
+const argv = yargs(hideBin(process.argv))
+  .option('project', { type: 'string', demandOption: true, describe: 'GCP/Firebase project id' })
+  .option('region', { type: 'string', default: 'us-central1', describe: 'Functions region' })
+  .option('key', { type: 'string', describe: 'Path to serviceAccountKey.json (optional; uses ADC if omitted)' })
+  .option('testTrigger', { type: 'boolean', default: false, describe: 'Create alert_dispatch test doc and poll for processing' })
+  .option('verbose', { type: 'boolean', default: false })
+  .help().argv;
 
 const admin = require('firebase-admin');
+const { google } = require('googleapis');
 
-const serviceAccount = require('./serviceAccountKey.json');
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-const db = admin.firestore();
+function log(...a)  { console.log(...a); }
+function warn(...a) { console.warn(...a); }
 
-// ───────────────────────── Config ─────────────────────────
-const DRY_RUN = process.env.CONFIRM !== 'WRITE';
-const PAGE_SIZE = 300;
-const BATCH_MAX = 400;
-const INVOICES_COLL = 'invoices';
-const CUSTOMERS_COLL = 'customers';
+async function initAdmin() {
+  if (argv.key) {
+    const sa = require(argv.key);
+    admin.initializeApp({
+      credential: admin.credential.cert(sa),
+      projectId: argv.project || sa.project_id,
+    });
+  } else {
+    admin.initializeApp({ projectId: argv.project });
+  }
+  return admin.firestore();
+}
 
-// ───────────────────────── Utils ─────────────────────────
-function println(...a) { console.log(...a); }
-function trim(v) { return (v == null) ? '' : String(v).trim(); }
-function nonEmpty(v) { return trim(v).length > 0; }
-
-function newBatch() { return { batch: db.batch(), count: 0 }; }
-async function safeCommit(b) { if (b.count > 0 && !DRY_RUN) await b.batch.commit(); }
-async function addUpdateToBatch(bctl, ref, data) {
-  bctl.batch.set(ref, data, { merge: true });
-  bctl.count++;
-  if (bctl.count >= BATCH_MAX) {
-    await safeCommit(bctl);
-    bctl.batch = db.batch();
-    bctl.count = 0;
+async function initGoogleAuth() {
+  const scopes = ['https://www.googleapis.com/auth/cloud-platform'];
+  if (argv.key) {
+    const creds = require(argv.key);
+    const auth = new google.auth.GoogleAuth({ credentials: creds, scopes });
+    google.options({ auth });
+  } else {
+    const auth = await google.auth.getClient({ scopes });
+    google.options({ auth });
   }
 }
 
-function normalizeCountry(country, code) {
-  const name = trim(country);
-  const cObj = {};
-  if (nonEmpty(name)) cObj.name = name;
-  if (nonEmpty(code)) cObj.code = code.toUpperCase();
-  return Object.keys(cObj).length ? cObj : null;
-}
+// --------- Firestore: inspect users/*/fcmTokens/* ----------
+async function inspectFcmTokens(db) {
+  const usersSnap = await db.collection('users').get();
+  let usersWithTokens = 0;
+  let tokenCount = 0;
+  const sample = [];
 
-function normalizePhone(phone, phoneCode) {
-  let national = trim(phone);
-  let dial = trim(phoneCode);
-  if (!nonEmpty(dial) && national.startsWith('+')) {
-    // If the number is already in +E.164 style, split a guess:
-    // crude parse: +<code><rest>
-    const m = national.match(/^\+(\d{1,4})(.*)$/);
-    if (m) {
-      dial = `+${m[1]}`;
-      national = trim(m[2]);
+  for (const doc of usersSnap.docs) {
+    const tokensColRef = doc.ref.collection('fcmTokens');
+    const tokenDocs = await tokensColRef.listDocuments();
+    if (tokenDocs.length > 0) {
+      usersWithTokens++;
+      tokenCount += tokenDocs.length;
+      if (sample.length < 5) sample.push({ uid: doc.id, count: tokenDocs.length });
     }
   }
-  const e164 = (nonEmpty(dial) && nonEmpty(national)) ? `${dial}${national}`.replace(/\s+/g, '') : '';
-  const obj = {};
-  if (nonEmpty(dial)) obj.countryDialCode = dial;  // e.g. +880
-  if (nonEmpty(national)) obj.national = national; // e.g. 1736...
-  if (nonEmpty(e164)) obj.e164 = e164;
-  // isoCode is hard to infer without a lib; leave blank (Flutter writes it later)
-  return Object.keys(obj).length ? obj : null;
+
+  log('— FCM token audit —');
+  log(`Users: ${usersSnap.size}`);
+  log(`Users with tokens: ${usersWithTokens}`);
+  log(`Total tokens: ${tokenCount}`);
+  if (sample.length) log('Sample:', sample);
+  log('');
+  return { users: usersSnap.size, usersWithTokens, tokenCount };
 }
 
-function isShippingComplete(s) {
-  if (!s) return false;
-  const a1 = trim(s.address1);
-  const city = trim(s.city);
-  const zip = trim(s.postalCode || s.zip);
-  const country = s.country && (trim(s.country.name) || trim(s.country) || trim(s.country.code));
-  return !!(a1 && city && zip && country);
-}
+// --------- Cloud Functions: list Gen1 + Gen2 ----------
+async function listFunctionsAll(project, region) {
+  const parent = `projects/${project}/locations/${region}`;
+  const cfv1 = google.cloudfunctions('v1');
+  const cfv2 = google.cloudfunctions('v2');
 
-async function forEachPaged(collRef, pageSize, handler) {
-  let last = null;
-  let processed = 0;
-  while (true) {
-    let q = collRef.orderBy(admin.firestore.FieldPath.documentId()).limit(pageSize);
-    if (last) q = q.startAfter(last);
-    const snap = await q.get();
-    if (snap.empty) break;
+  let gen1 = [];
+  let gen2 = [];
 
-    for (const doc of snap.docs) {
-      await handler(doc);
-      processed++;
-      last = doc.id;
-    }
+  try {
+    const res1 = await cfv1.projects.locations.functions.list({ parent });
+    gen1 = res1.data.functions || [];
+  } catch (e) {
+    warn('Gen1 list error:', e?.message || e);
   }
-  return processed;
+
+  try {
+    const res2 = await cfv2.projects.locations.functions.list({ parent });
+    gen2 = res2.data.functions || [];
+  } catch (e) {
+    warn('Gen2 list error:', e?.message || e);
+  }
+
+  if (argv.verbose) {
+    log(`Gen1 functions found: ${gen1.length}`);
+    log(`Gen2 functions found: ${gen2.length}`);
+  }
+
+  return { gen1, gen2 };
 }
 
-// ───────────────────────── Main ─────────────────────────
-(async () => {
-  println(`\n=== Backfill normalized 'shipping' on invoices ===`);
-  println(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'WRITE'}`);
-  println(`Scanning: "${INVOICES_COLL}" ...`);
+function funcShortName(f) {
+  const parts = (f.name || '').split('/');
+  return parts[parts.length - 1] || '';
+}
 
-  const totals = {
-    invoicesSeen: 0,
-    invoicesUpdated: 0,
-    hadCustomerLookup: 0,
-    customerHits: 0,
-  };
+function hasName(fn, wanted) {
+  return funcShortName(fn) === wanted;
+}
 
-  let batchCtl = newBatch();
+function isFirestoreTriggerV1(fn) {
+  const et = fn.eventTrigger;
+  if (!et) return false;
+  const type = et.eventType || '';
+  const res = et.resource || '';
+  return type.includes('firestore') && res.includes('alert_dispatch');
+}
 
-  await forEachPaged(db.collection(INVOICES_COLL), PAGE_SIZE, async (invDoc) => {
-    totals.invoicesSeen++;
-    const invId = invDoc.id;
-    const inv   = invDoc.data() || {};
+function isFirestoreTriggerV2(fn) {
+  const et = fn.eventTrigger;
+  if (!et) return false;
+  const type = et.eventType || '';
+  if (!type.includes('firestore')) return false;
+  const filters = et.eventFilters || [];
+  return filters.some((f) => (f?.value || '').includes('alert_dispatch'));
+}
 
-    // Skip if shipping already looks complete
-    let shipping = (inv.shipping || null);
-    if (isShippingComplete(shipping)) return;
+function summarizeFunctions({ gen1, gen2 }) {
+  const targets = ['sendAlert', 'sendDeptAlert'];
 
-    // Build candidate from invoice itself
-    const cand = {
-      address1  : trim(inv.address1 || (shipping && shipping.address1)),
-      address2  : trim(inv.address2 || (shipping && shipping.address2)),
-      city      : trim(inv.city     || (shipping && shipping.city)),
-      state     : trim(inv.state    || (shipping && shipping.state || shipping && shipping.region)),
-      postalCode: trim(inv.postalCode || inv.zip || (shipping && (shipping.postalCode || shipping.zip))),
-      country   : normalizeCountry(inv.country || (shipping && (shipping.country?.name || shipping.country)), (shipping && shipping.country && shipping.country.code)),
-      phone     : (shipping && shipping.phone) || null,
+  const found = {};
+  for (const t of targets) {
+    found[t] = {
+      gen1: gen1.find((f) => hasName(f, t)) || null,
+      gen2: gen2.find((f) => hasName(f, t)) || null,
     };
+  }
 
-    // If not enough info, try to pull from customers/{customerId}
-    const customerId = trim(inv.customerId);
-    if (customerId) {
-      totals.hadCustomerLookup++;
-      const custRef = db.collection(CUSTOMERS_COLL).doc(customerId);
-      const custSnap = await custRef.get();
-      if (custSnap.exists) {
-        totals.customerHits++;
-        const c = custSnap.data() || {};
-        // map common customer fields
-        cand.address1   = cand.address1   || trim(c.address1 || c.address || c.addr1);
-        cand.address2   = cand.address2   || trim(c.address2 || c.addr2);
-        cand.city       = cand.city       || trim(c.city);
-        cand.state      = cand.state      || trim(c.state || c.region || c.province);
-        cand.postalCode = cand.postalCode || trim(c.postalCode || c.zip);
-        const ctryName  = (cand.country && cand.country.name) || trim(c.country);
-        const ctryCode  = (cand.country && cand.country.code) || trim(c.countryCode || c.countryISO || c.isoCode);
-        cand.country = normalizeCountry(ctryName, ctryCode) || cand.country;
+  const triggers = [
+    ...gen1.filter(isFirestoreTriggerV1),
+    ...gen2.filter(isFirestoreTriggerV2),
+  ];
 
-        // phone
-        if (!cand.phone) {
-          const phone = trim(c.phone || c.mobile || c.whatsapp);
-          const phoneCode = trim(c.phoneCode || c.countryDialCode || c.dialCode);
-          const p = normalizePhone(phone, phoneCode);
-          if (p) cand.phone = p;
-        }
-      }
-    }
+  log('— Cloud Functions audit —');
+  for (const t of targets) {
+    const g1 = found[t].gen1 ? 'YES' : 'no';
+    const g2 = found[t].gen2 ? 'YES' : 'no';
+    log(`${t}: Gen1=${g1}, Gen2=${g2}`);
+  }
+  log(`alert_dispatch triggers: ${triggers.length > 0 ? 'YES' : 'no'}`);
+  if (argv.verbose && triggers.length) {
+    log('Trigger(s):', triggers.map((f) => funcShortName(f)));
+  }
+  log('');
 
-    // If still missing basics, skip
-    if (!nonEmpty(cand.address1) && !nonEmpty(cand.city) && !cand.country && !nonEmpty(cand.postalCode)) {
-      // Not enough to create; leave untouched
-      return;
-    }
+  return { found, triggers };
+}
 
-    // Final normalized object
-    const shippingOut = {
-      ...(nonEmpty(cand.address1) ? { address1: cand.address1 } : {}),
-      ...(nonEmpty(cand.address2) ? { address2: cand.address2 } : {}),
-      ...(nonEmpty(cand.city)     ? { city: cand.city } : {}),
-      ...(nonEmpty(cand.state)    ? { state: cand.state } : {}),
-      ...(nonEmpty(cand.postalCode) ? { postalCode: cand.postalCode } : {}),
-      ...(cand.country ? { country: cand.country } : {}),
-      ...(cand.phone   ? { phone: cand.phone } : {}),
-    };
-
-    // Merge write (preserve existing shipping fields)
-    const update = { shipping: shippingOut, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
-
-    println(`→ Invoice ${invId}: write shipping =`, JSON.stringify(shippingOut));
-    await addUpdateToBatch(batchCtl, invDoc.ref, update);
-    totals.invoicesUpdated++;
+// --------- Optional trigger test: create doc & poll ----------
+async function testAlertDispatch(db) {
+  log('— Trigger test —');
+  const ref = await db.collection('alert_dispatch').add({
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    status: 'pending',
+    title: 'fix_db.js test',
+    message: `Ping @ ${new Date().toISOString()}`,
   });
+  log('Created', ref.path);
 
-  await safeCommit(batchCtl);
+  const deadline = Date.now() + 30_000; // 30s
+  let updated = null;
 
-  println('\n=== Summary ===');
-  println(`Invoices scanned:        ${totals.invoicesSeen}`);
-  println(`Invoices updated:        ${totals.invoicesUpdated}`);
-  println(`Invoices with custId:    ${totals.hadCustomerLookup}`);
-  println(`Customer lookups hit:    ${totals.customerHits}`);
-  println(`Mode: ${DRY_RUN ? 'DRY RUN (no writes)' : 'WRITE'} complete.\n`);
-
-  if (DRY_RUN) {
-    println('No changes were written. Re-run with:');
-    println('  CONFIRM=WRITE node fix_db.js\n');
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const snap = await ref.get();
+    const d = snap.data() || {};
+    if ((d.status && d.status !== 'pending') || d.sentAt || d.error) {
+      updated = d;
+      break;
+    }
+    if (argv.verbose) log('…waiting for trigger to process');
   }
-  process.exit(0);
-})().catch((err) => {
-  console.error('❌ Backfill failed:', err);
-  process.exit(1);
-});
+
+  if (updated) {
+    log('Trigger processed doc:', {
+      status: updated.status,
+      sentAt: updated.sentAt,
+      error: updated.error,
+    });
+  } else {
+    warn('No update observed within 30s. Check function logs.');
+  }
+  log('');
+}
+
+(async () => {
+  try {
+    const db = await initAdmin();
+    await initGoogleAuth();
+
+    await inspectFcmTokens(db);
+
+    const fx = await listFunctionsAll(argv.project, argv.region);
+    const summary = summarizeFunctions(fx);
+
+    const hasCallable =
+      summary.found.sendAlert.gen1 || summary.found.sendAlert.gen2 ||
+      summary.found.sendDeptAlert.gen1 || summary.found.sendDeptAlert.gen2;
+
+    const hasTrigger = summary.triggers.length > 0;
+
+    if (!hasCallable && !hasTrigger) {
+      warn('No sendAlert/sendDeptAlert callable functions AND no alert_dispatch trigger found.');
+      warn('You need EITHER the callable(s) OR the Firestore trigger.');
+    }
+
+    if (argv.testTrigger) {
+      if (!hasTrigger) {
+        warn('No alert_dispatch Firestore trigger detected; --testTrigger will still insert a doc, but nothing may process it.');
+      }
+      await testAlertDispatch(db);
+    }
+
+    log('Done.');
+    process.exit(0);
+  } catch (e) {
+    console.error(e);
+    process.exit(1);
+  }
+})();

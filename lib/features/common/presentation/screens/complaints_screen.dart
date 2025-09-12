@@ -7,6 +7,9 @@ import 'package:uddoygi/features/common/complaints/punishment_reward.dart';
 import 'package:uddoygi/features/common/complaints/pending_complaint.dart';
 import 'package:uddoygi/features/common/complaints/complaint_actions.dart';
 
+/// ===== Palette / Sizes =====
+const _brandBlue = Colors.indigo;
+
 class ComplaintScreen extends StatefulWidget {
   const ComplaintScreen({super.key});
 
@@ -14,12 +17,13 @@ class ComplaintScreen extends StatefulWidget {
   State<ComplaintScreen> createState() => _ComplaintScreenState();
 }
 
-class _ComplaintScreenState extends State<ComplaintScreen> with TickerProviderStateMixin {
-  late TabController _tabController;
+class _ComplaintScreenState extends State<ComplaintScreen> {
   String _role = "user";
   String _userEmail = "";
   String _userName = "";
   bool _loading = true;
+
+  int _index = 0; // bottom nav index
 
   @override
   void initState() {
@@ -30,8 +34,8 @@ class _ComplaintScreenState extends State<ComplaintScreen> with TickerProviderSt
   Future<void> _initSession() async {
     final session = await LocalStorageService.getSession();
     String role = (session?['role'] ?? "unknown").toLowerCase();
-    final email = session?['email'] ?? "";
-    final name = session?['name'] ?? email;
+    final email = (session?['email'] ?? "").toString();
+    final name = (session?['name'] ?? email).toString();
 
     if (role == "unknown" && email.isNotEmpty) {
       final userDoc = await FirebaseFirestore.instance
@@ -45,17 +49,10 @@ class _ComplaintScreenState extends State<ComplaintScreen> with TickerProviderSt
       }
     }
 
-    debugPrint("[DEBUG] Role: $role");
-    debugPrint("[DEBUG] Email: $email");
-    debugPrint("[DEBUG] Name: $name");
-
-    final tabCount = (role == "admin" || role == "hr") ? 2 : 1;
-
     setState(() {
       _role = role;
       _userEmail = email;
       _userName = name;
-      _tabController = TabController(length: tabCount, vsync: this);
       _loading = false;
     });
   }
@@ -64,108 +61,87 @@ class _ComplaintScreenState extends State<ComplaintScreen> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("[BUILD] isHrOrAdmin: $isHrOrAdmin");
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // NOTE: NewComplaintScreen / AllComplaintScreen / PunishmentRewardScreen
+    // already have their own AppBars, so we do NOT add one here.
+    final pages = <Widget>[
+      NewComplaintScreen(userEmail: _userEmail),
+      AllComplaintScreen(userEmail: _userEmail, userName: _userName),
+      PunishmentRewardScreen(userEmail: _userEmail),
+      _AgainstMeScaffold(
+        userEmail: _userEmail,
+        userName: _userName,
+        role: _role,
+      ),
+      if (isHrOrAdmin)
+        _ResolutionScaffold(
+          userEmail: _userEmail,
+          userName: _userName,
+          role: _role,
+        ),
+    ];
+
+    final items = <BottomNavigationBarItem>[
+      const BottomNavigationBarItem(icon: Icon(Icons.add), label: 'New'),
+      const BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Previous'),
+      const BottomNavigationBarItem(icon: Icon(Icons.workspace_premium), label: 'Reward'),
+      const BottomNavigationBarItem(icon: Icon(Icons.warning_amber_rounded), label: 'Against Me'),
+      if (isHrOrAdmin)
+        const BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'Resolution'),
+    ];
+
+    // Guard if role flips while open
+    final maxIndex = pages.length - 1;
+    if (_index > maxIndex) _index = maxIndex;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Complaints & Resolutions"),
-        backgroundColor: Colors.indigo,
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.indigo,
-          unselectedLabelColor: Colors.indigo[200],
-          indicatorColor: Colors.indigo,
-          tabs: [
-            const Tab(icon: Icon(Icons.report), text: "My Complaints"),
-            if (isHrOrAdmin) const Tab(icon: Icon(Icons.assignment), text: "Complaint Resolution"),
-          ],
+      backgroundColor: Colors.white,
+      // ⬇️ NO TOP APP BAR HERE (prevents the duplicate header)
+      body: pages[_index],
+      bottomNavigationBar: SafeArea(
+        child: BottomNavigationBar(
+          currentIndex: _index,
+          onTap: (i) => setState(() => _index = i),
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: _brandBlue,
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.white70,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          items: items,
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _MyComplaintsTab(
-            userEmail: _userEmail,
-            userName: _userName,
-            role: _role,
-          ),
-          if (isHrOrAdmin)
-            _ComplaintResolutionTab(
-              userEmail: _userEmail,
-              userName: _userName,
-              role: _role,
-            ),
-        ],
       ),
     );
   }
 }
 
-class _MyComplaintsTab extends StatefulWidget {
-  final String role;
+/* ======================= Against Me (with its own AppBar) ======================= */
+
+class _AgainstMeScaffold extends StatelessWidget {
   final String userEmail;
   final String userName;
-  const _MyComplaintsTab({
-    required this.role,
+  final String role;
+  const _AgainstMeScaffold({
     required this.userEmail,
     required this.userName,
+    required this.role,
   });
 
   @override
-  State<_MyComplaintsTab> createState() => _MyComplaintsTabState();
-}
-
-class _MyComplaintsTabState extends State<_MyComplaintsTab> with TickerProviderStateMixin {
-  late TabController _subTabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _subTabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.grey[100],
-          child: TabBar(
-            controller: _subTabController,
-            labelColor: Colors.indigo,
-            unselectedLabelColor: Colors.indigo[200],
-            indicatorColor: Colors.indigo,
-            tabs: const [
-              Tab(icon: Icon(Icons.add), text: "New Complaint"),
-              Tab(icon: Icon(Icons.history), text: "Previous Complaints"),
-              Tab(icon: Icon(Icons.workspace_premium), text: "Punishment/Reward"),
-              Tab(icon: Icon(Icons.warning_amber_rounded), text: "Against Me"),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _subTabController,
-            children: [
-              NewComplaintScreen(userEmail: widget.userEmail),
-              AllComplaintScreen(
-                userEmail: widget.userEmail,
-                userName: widget.userName,
-              ),
-              PunishmentRewardScreen(
-                userEmail: widget.userEmail,
-
-              ),
-              _ComplaintsAgainstMeTab(
-                userEmail: widget.userEmail,
-                userName: widget.userName,
-                role: widget.role,
-              ),
-            ],
-          ),
-        ),
-      ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Complaints Against Me', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: _brandBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: _ComplaintsAgainstMeTab(userEmail: userEmail, userName: userName, role: role),
     );
   }
 }
@@ -183,32 +159,36 @@ class _ComplaintsAgainstMeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('complaints')
           .where('againstEmail', isEqualTo: userEmail)
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final docs = snapshot.data?.docs ?? [];
+        final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
           return const Center(child: Text("No complaints filed against you."));
         }
 
         return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: docs.length,
           itemBuilder: (context, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            final subject = data['subject'] ?? '(No Subject)';
-            final message = data['message'] ?? '';
-            final submittedBy = data['submittedByName'] ?? 'Someone';
+            final data = docs[i].data();
+            final subject = (data['subject'] ?? '(No Subject)').toString();
+            final message = (data['message'] ?? '').toString();
+            final submittedBy = (data['submittedByName'] ?? 'Someone').toString();
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: ListTile(
-                title: Text(subject),
+                title: Text(
+                  subject,
+                  style: const TextStyle(color: _brandBlue, fontWeight: FontWeight.w700),
+                ),
                 subtitle: Text("Filed by: $submittedBy\n$message"),
                 isThreeLine: true,
               ),
@@ -220,22 +200,25 @@ class _ComplaintsAgainstMeTab extends StatelessWidget {
   }
 }
 
-class _ComplaintResolutionTab extends StatefulWidget {
+/* ======================= Resolution (own Scaffold + inner tabs) ======================= */
+
+class _ResolutionScaffold extends StatefulWidget {
   final String role;
   final String userEmail;
   final String userName;
 
-  const _ComplaintResolutionTab({
+  const _ResolutionScaffold({
     required this.role,
     required this.userEmail,
     required this.userName,
   });
 
   @override
-  State<_ComplaintResolutionTab> createState() => _ComplaintResolutionTabState();
+  State<_ResolutionScaffold> createState() => _ResolutionScaffoldState();
 }
 
-class _ComplaintResolutionTabState extends State<_ComplaintResolutionTab> with TickerProviderStateMixin {
+class _ResolutionScaffoldState extends State<_ResolutionScaffold>
+    with TickerProviderStateMixin {
   late TabController _resTabController;
 
   bool get isHrOrAdmin => widget.role == "admin" || widget.role == "hr";
@@ -247,48 +230,57 @@ class _ComplaintResolutionTabState extends State<_ComplaintResolutionTab> with T
   }
 
   @override
+  void dispose() {
+    _resTabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    debugPrint("[BUILD_RES_TAB] isHrOrAdmin: $isHrOrAdmin");
     if (!isHrOrAdmin) {
-      return const Center(
-        child: Text(
-          "Unauthorized.\nOnly Admin and HR can access complaint resolution.",
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            "Unauthorized.\nOnly Admin and HR can access complaint resolution.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
       );
     }
-    return Column(
-      children: [
-        Material(
-          color: Colors.grey[100],
-          child: TabBar(
-            controller: _resTabController,
-            labelColor: Colors.indigo,
-            unselectedLabelColor: Colors.indigo[200],
-            indicatorColor: Colors.indigo,
-            tabs: const [
-              Tab(icon: Icon(Icons.assignment_late), text: "Pending Complaints"),
-              Tab(icon: Icon(Icons.build), text: "All Actions"),
-            ],
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Complaint Resolution', style: TextStyle(fontWeight: FontWeight.w800)),
+        backgroundColor: _brandBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        bottom: TabBar(
+          controller: _resTabController,
+          isScrollable: true,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 12.0),
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          indicatorWeight: 2,
+          tabs: const [
+            Tab(icon: Icon(Icons.assignment_late), text: "Pending Complaints"),
+            Tab(icon: Icon(Icons.build), text: "All Actions"),
+          ],
         ),
-        Expanded(
-          child: TabBarView(
-            controller: _resTabController,
-            children: [
-              PendingComplaintScreen(
-                userEmail: widget.userEmail,
-                isCEO: widget.role == "ceo",
-              ),
-              _AllComplaintActionsList(
-                userName: widget.userName,
-                userRole: widget.role,
-              ),
-            ],
+      ),
+      body: TabBarView(
+        controller: _resTabController,
+        children: [
+          PendingComplaintScreen(
+            userEmail: widget.userEmail,
+            isCEO: widget.role == "ceo",
           ),
-        ),
-      ],
+          _AllComplaintActionsList(
+            userName: widget.userName,
+            userRole: widget.role,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -305,7 +297,6 @@ class _AllComplaintActionsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("[ACTIONS_LIST] role: $userRole");
     if (!isHrOrAdmin) {
       return const Center(
         child: Text(
@@ -315,31 +306,35 @@ class _AllComplaintActionsList extends StatelessWidget {
         ),
       );
     }
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('complaints')
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final docs = snapshot.data?.docs ?? [];
+        final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
           return const Center(child: Text("No complaints found."));
         }
         return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: docs.length,
           itemBuilder: (context, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            final subject = data['subject'] ?? '(No subject)';
+            final data = docs[i].data();
+            final subject = (data['subject'] ?? '(No subject)').toString();
             final id = docs[i].id;
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
               child: ListTile(
-                title: Text(subject),
-                subtitle: Text("Status: ${data['status'] ?? ''}"),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                title: Text(
+                  subject,
+                  style: const TextStyle(color: _brandBlue, fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text("Status: ${(data['status'] ?? '').toString()}"),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: _brandBlue),
                 onTap: () {
                   if (isHrOrAdmin) {
                     Navigator.push(

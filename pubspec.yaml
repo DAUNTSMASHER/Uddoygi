@@ -41,8 +41,11 @@ dependencies:
   font_awesome_flutter: ^10.7.0
   csc_picker: ^0.2.7          # Country → State → City dropdowns
   intl_phone_field: ^3.2.0
-
-
+  google_fonts: ^6.2.1
+  auto_size_text: ^3.0.0
+  mime: ^1.0.5
+  cloud_functions: ^5.0.4
+  flutter_local_notifications: ^17.2.4
   # Utilities
   http: ^1.2.1
   shared_preferences: ^2.2.2
