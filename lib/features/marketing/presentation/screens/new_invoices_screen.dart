@@ -38,6 +38,17 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   // Buyer
   String? selectedCustomerId;
   String selectedCustomerName = '';
+  String? selectedCustomerEmail; // NEW
+
+  String _agentNameFromEmail(String? email) {
+    if (email == null || email.isEmpty) return '';
+    final namePart = email.split('@').first;
+    return namePart
+        .split('.')
+        .where((p) => p.isNotEmpty)
+        .map((p) => p[0].toUpperCase() + p.substring(1))
+        .join(' ');
+  }
 
   // Date
   DateTime selectedDate = DateTime.now();
@@ -67,15 +78,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     'Invoice Created', // 0
     'Payment Requested', // 1
     'Payment Taken', // 2 (max editable here)
-    'Submitted to Factory for Production', // 3
-    'Production In Progress', // 4
-    'Quality Check', // 5
-    'Product Received at Warehouse', // 6
-    'Address Validation of the Customer', // 7
-    'Packed & Ready', // 8
-    'Shipped to Shipping Company', // 9
-    'In Transit', // 10
-    'Delivered / Completed', // 11
+
   ];
   static const int kMaxEditableStepIndex = 2;
   int _statusIndex = 0;
@@ -101,6 +104,42 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     _loadProducts();
     _addItem();
   }
+// Add this helper inside _NewInvoicesScreenState
+
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _customersStream() {
+    final col = FirebaseFirestore.instance.collection('customers');
+
+    // use UID — this matches “customers added by this agent”
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? _uid;
+    if (uid == null) {
+      // no session yet — return an empty stream until _loadAgent() finishes
+      return const Stream.empty();
+    }
+
+    return col
+        .where('createdBy', isEqualTo: uid) // 👈 primary filter
+        .snapshots()
+        .map((snap) {
+      final docs = snap.docs.toList();
+
+      // stable, friendly ordering (name, then newest timestamp)
+      DateTime ts(Map<String, dynamic> m) {
+        final t = (m['updatedAt'] ?? m['createdAt'] ?? m['timestamp']) as Timestamp?;
+        return t?.toDate() ?? DateTime.fromMillisecondsSinceEpoch(0);
+      }
+
+      docs.sort((a, b) {
+        final an = (a.data()['name'] ?? '').toString().toLowerCase();
+        final bn = (b.data()['name'] ?? '').toString().toLowerCase();
+        final byName = an.compareTo(bn);
+        return byName != 0 ? byName : ts(b.data()).compareTo(ts(a.data()));
+      });
+
+      return docs;
+    });
+  }
+
+
 
   @override
   void dispose() {
@@ -508,6 +547,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
       'invoiceNo': invoiceNo,
       'tracking_number': tracking,
       'customerId': selectedCustomerId,
+      'customerEmail': selectedCustomerEmail ?? '',
       'customerName': selectedCustomerName,
       'buyerName': selectedCustomerName, // mirror for compatibility
       'ownerUid': uid,
@@ -875,16 +915,10 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                   title: 'Buyer & Date',
                   child: Column(
                     children: [
-                      StreamBuilder<QuerySnapshot>(
-                        stream: (_agentEmail == null)
-                            ? const Stream.empty()
-                            : FirebaseFirestore.instance
-                            .collection('customers')
-                            .where('ownerEmail', isEqualTo: _agentEmail)
-                            .orderBy('createdAt', descending: true)
-                            .snapshots(),
-                        builder: (ctx, snap) {
-                          if (!snap.hasData) {
+                      StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+                        stream: _customersStream(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
                             return const SizedBox(
                               height: 36,
                               child: Align(
@@ -893,20 +927,55 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                               ),
                             );
                           }
-                          final docs = snap.data!.docs;
+
+                          if (snapshot.hasError) {
+                            return const Text('Error fetching customers.');
+                          }
+
+                          final docs = snapshot.data ?? const [];
+                          if (docs.isEmpty) {
+                            return const Text('No customers found.');
+                          }
+
                           return DropdownButtonFormField<String>(
                             value: selectedCustomerId,
                             decoration: _decor('Select Buyer'),
                             items: docs.map((d) {
-                              final name = (d['name'] ?? 'Unnamed').toString();
+                              final m = d.data();
+                              final name = (m['name'] ?? 'Unnamed').toString();
+                              final email = (m['email'] ?? '').toString();
                               return DropdownMenuItem(
-                                  value: d.id, child: Text(name, style: const TextStyle(fontSize: 13)));
+                                value: d.id,
+                                child: Text(
+                                  email.isEmpty ? name : '$name  •  $email',
+                                  style: const TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
                             }).toList(),
                             onChanged: (v) {
-                              final name = docs.firstWhere((d) => d.id == v)['name'];
+                              final doc = docs.firstWhere((d) => d.id == v);
+                              final m = doc.data();
+
                               setState(() {
                                 selectedCustomerId = v;
-                                selectedCustomerName = (name ?? '').toString();
+                                selectedCustomerName = (m['name'] ?? '').toString();
+                                selectedCustomerEmail = (m['email'] ?? '').toString();
+
+                                // Optional prefill shipping
+                                _shipCountryName ??= (m['country'] ?? '').toString().trim().isEmpty ? null : (m['country'] as String);
+                                _shipCountryCode ??= (m['countryCode'] ?? '').toString().trim().isEmpty ? null : (m['countryCode'] as String);
+                                if (_addr1Ctl.text.trim().isEmpty) _addr1Ctl.text = (m['addressLine'] ?? m['address'] ?? '').toString();
+                                _shipCity ??= (m['city'] ?? '').toString();
+                                _shipState ??= (m['state'] ?? '').toString();
+                                if (_zipCtl.text.trim().isEmpty) _zipCtl.text = (m['zip'] ?? '').toString();
+
+                                final dial = (m['phoneCountryCode'] ?? '').toString();
+                                if (dial.isNotEmpty && _phoneDial.isEmpty) _phoneDial = '+$dial';
+                                if (_phoneIso.isEmpty && (m['countryCode'] ?? '').toString().isNotEmpty) {
+                                  _phoneIso = (m['countryCode'] as String);
+                                }
+                                if (_phoneNational.isEmpty) _phoneNational = (m['phone'] ?? '').toString();
                               });
                             },
                             validator: (v) => v == null ? 'Required' : null,

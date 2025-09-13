@@ -65,7 +65,8 @@ dependencies:
   csv:             ^5.0.0
   cross_file:      any
   flutter_animate: ^4.5.2
-
+  circle_flags: ^3.0.1        # country flags (ISO-2 codes)
+  country_picker: ^2.0.20
 
 
 dev_dependencies:

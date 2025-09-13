@@ -25,9 +25,8 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
   DateTime _timeLimit = DateTime.now().add(const Duration(days: 1));
   String? _selectedNextStage;
 
+  // Factory pipeline stages (forward-only)
   static const List<String> _stages = [
-    'Invoice created',
-    'Payment taken',
     'Submitted to factory',
     'Factory update 1 (base is done)',
     'Hair is ready',
@@ -35,9 +34,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     'Putting',
     'Molding',
     'Submit to the Head office',
-    'Address validation',
-    'Shipped to FedEx',
-    'Final tracking code',
+    'Done',
   ];
 
   int _stageIndex(String? name) {
@@ -66,7 +63,8 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     if (_selectedNextStage == null || _selectedOrderNo == null || _selectedOrderDocId == null) return;
 
     // Validate forward-only move
-    final orderRef = FirebaseFirestore.instance.collection('work_orders').doc(_selectedOrderDocId);
+    final orderRef =
+    FirebaseFirestore.instance.collection('work_orders').doc(_selectedOrderDocId);
     final orderSnap = await orderRef.get();
     final orderData = orderSnap.data() ?? {};
     final currentStage = (orderData['currentStage'] as String?) ?? 'Submitted to factory';
@@ -87,7 +85,9 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     final now = Timestamp.now();
     final batch = FirebaseFirestore.instance.batch();
 
-    final trackingRef = FirebaseFirestore.instance.collection('work_order_tracking').doc();
+    // Log to tracking collection
+    final trackingRef =
+    FirebaseFirestore.instance.collection('work_order_tracking').doc();
     batch.set(trackingRef, {
       'workOrderNo': _selectedOrderNo,
       'stage': _selectedNextStage,
@@ -99,10 +99,20 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
       'lastUpdated': now,
     });
 
+    final isDone = _selectedNextStage == 'Done';
+
+    // Update the work_order doc
     batch.update(orderRef, {
       'currentStage': _selectedNextStage,
       'currentStageIndex': nextIdx,
       'lastUpdated': now,
+      if (isDone) ...{
+        // ✅ mark final completion
+        'completed': true,
+        'completedAt': now,
+        // ✅ write the handoff/global next stage you requested
+        'nextStage': 'Address Validation of the Customer',
+      }
     });
 
     await batch.commit();
@@ -113,11 +123,19 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
       _notesCtl.clear();
       _assignedCtl.clear();
       _timeLimit = DateTime.now().add(const Duration(days: 1));
-      _orderDocFuture = FirebaseFirestore.instance.collection('work_orders').doc(_selectedOrderDocId!).get();
+      _orderDocFuture = FirebaseFirestore.instance
+          .collection('work_orders')
+          .doc(_selectedOrderDocId!)
+          .get();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Stage updated to "${_stages[nextIdx]}".'), backgroundColor: Colors.green.shade700),
+      SnackBar(
+        content: Text(isDone
+            ? '✅ Work order completed. Next step in system: Address Validation of the Customer.'
+            : 'Stage updated to "${_stages[nextIdx]}".'),
+        backgroundColor: isDone ? Colors.green.shade700 : null,
+      ),
     );
   }
 
@@ -151,7 +169,8 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
 
   PreferredSizeWidget _appBar() {
     return AppBar(
-      title: Text(_selectedOrderNo == null ? 'Factory Progress' : 'Order $_selectedOrderNo'),
+      title:
+      Text(_selectedOrderNo == null ? 'Factory Progress' : 'Order $_selectedOrderNo'),
       centerTitle: true,
       leading: _selectedOrderNo != null
           ? IconButton(
@@ -188,7 +207,10 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
               const SizedBox(height: 10),
               Text(text,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 15, fontWeight: FontWeight.w500)),
+                  style: TextStyle(
+                      color: Colors.grey.shade700,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
@@ -205,19 +227,24 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
           final s = _stages[i];
           final isDone = i < currIdx;
           final isCurr = i == currIdx;
-          final Color bg = isCurr
-              ? _darkBlue
-              : (isDone ? Colors.green.shade600 : Colors.grey.shade300);
+          final Color bg =
+          isCurr ? _darkBlue : (isDone ? Colors.green.shade600 : Colors.grey.shade300);
           final Color fg = isCurr || isDone ? Colors.white : Colors.black87;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Chip(
               label: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 220),
-                child: Text(s, overflow: TextOverflow.ellipsis, style: TextStyle(color: fg, fontSize: 12)),
+                child: Text(s,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: fg, fontSize: 12)),
               ),
-              avatar: Icon(isDone ? Icons.check_circle : (isCurr ? Icons.timelapse : Icons.circle_outlined),
-                  color: fg, size: 16),
+              avatar: Icon(
+                  isDone
+                      ? Icons.check_circle
+                      : (isCurr ? Icons.timelapse : Icons.circle_outlined),
+                  color: fg,
+                  size: 16),
               backgroundColor: bg,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -230,7 +257,9 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
 
   Widget _progressBar(String currentStage) {
     final idx = _stageIndex(currentStage);
-    final progress = idx < 0 ? 0.0 : ((idx + 1) / _stages.length).clamp(0.0, 1.0);
+    final isDone = currentStage == 'Done';
+    final progress =
+    isDone ? 1.0 : (idx < 0 ? 0.0 : ((idx + 1) / _stages.length).clamp(0.0, 1.0));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -271,9 +300,11 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
               final doc = docs[i];
               final data = doc.data();
               final no = data['workOrderNo'] as String? ?? '—';
-              final stage = (data['currentStage'] as String?) ?? 'Submitted to factory';
+              final stage =
+                  (data['currentStage'] as String?) ?? 'Submitted to factory';
               final when = (data['lastUpdated'] as Timestamp?)?.toDate();
-              final subtitle = '${DateFormat.yMMMd().add_jm().format(when ?? DateTime.now())} • $stage';
+              final subtitle =
+                  '${DateFormat.yMMMd().add_jm().format(when ?? DateTime.now())} • $stage';
 
               return Material(
                 color: Colors.white,
@@ -283,29 +314,43 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                   onTap: () => setState(() {
                     _selectedOrderNo = no;
                     _selectedOrderDocId = doc.id;
-                    _orderDocFuture =
-                        FirebaseFirestore.instance.collection('work_orders').doc(doc.id).get();
+                    _orderDocFuture = FirebaseFirestore.instance
+                        .collection('work_orders')
+                        .doc(doc.id)
+                        .get();
                   }),
                   child: Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey.shade200, width: 1),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
                     child: Row(
                       children: [
-                        CircleAvatar(backgroundColor: _darkBlue.withOpacity(.1), child: const Icon(Icons.assignment, color: _darkBlue)),
+                        CircleAvatar(
+                            backgroundColor: _darkBlue.withOpacity(.1),
+                            child: const Icon(Icons.assignment, color: _darkBlue)),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text('Order $no',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _darkBlue)),
-                            const SizedBox(height: 2),
-                            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                          ]),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Order $no',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: _darkBlue)),
+                                const SizedBox(height: 2),
+                                Text(subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade700)),
+                              ]),
                         ),
                         const Icon(Icons.chevron_right, color: _darkBlue),
                       ],
@@ -331,12 +376,20 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
         }
 
         final orderData = orderSnap.data?.data() ?? {};
-        final currentStage = orderData['currentStage'] as String? ?? 'Submitted to factory';
+        final currentStage =
+            orderData['currentStage'] as String? ?? 'Submitted to factory';
         final currIdx = _stageIndex(currentStage);
 
+        final bool isCompleted =
+            currentStage == 'Done' || (orderData['completed'] == true);
+        final DateTime? completedAt = (orderData['completedAt'] is Timestamp)
+            ? (orderData['completedAt'] as Timestamp).toDate()
+            : null;
+
         // Forward-only options
-        final List<String> forwardStages =
-        (currIdx >= 0 && currIdx < _stages.length - 1) ? _stages.sublist(currIdx + 1) : const <String>[];
+        final List<String> forwardStages = (currIdx >= 0 && currIdx < _stages.length - 1)
+            ? _stages.sublist(currIdx + 1)
+            : const <String>[];
 
         return Container(
           color: _surface,
@@ -353,129 +406,209 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                       // Header (progress + chips)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                         decoration: const BoxDecoration(
                           color: Colors.white,
-                          boxShadow: [BoxShadow(color: Color(0x11000000), blurRadius: 8, offset: Offset(0, 2))],
+                          boxShadow: [
+                            BoxShadow(
+                                color: Color(0x11000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 2))
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _progressBar(currentStage),
+                            _progressBar(currentStage), // 100% if Done
                             const SizedBox(height: 10),
                             _stageChipsScrollable(currentStage),
                           ],
                         ),
                       ),
 
-                      // Form card
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Card(
-                          color: Colors.white,
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey.shade200, width: 1),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Update Stage',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.grey.shade900)),
-                                const SizedBox(height: 10),
-
-                                TextFormField(
-                                  initialValue: currentStage,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Current Stage',
-                                    prefixIcon: Icon(Icons.flag),
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  readOnly: true,
-                                ),
-                                const SizedBox(height: 12),
-
-                                DropdownButtonFormField<String>(
-                                  value: _selectedNextStage,
-                                  isExpanded: true,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Next Stage (forward only)',
-                                    prefixIcon: Icon(Icons.trending_up),
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  items: forwardStages
-                                      .map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis)))
-                                      .toList(),
-                                  onChanged: (v) => setState(() => _selectedNextStage = v),
-                                ),
-                                const SizedBox(height: 12),
-
-                                TextField(
-                                  controller: _assignedCtl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Assign To (email/ID)',
-                                    prefixIcon: Icon(Icons.person_add_alt_1),
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-
-                                TextField(
-                                  controller: _notesCtl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Notes',
-                                    prefixIcon: Icon(Icons.notes),
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  maxLines: 2,
-                                ),
-                                const SizedBox(height: 12),
-
-                                Row(
-                                  children: [
-                                    Row(
+                      // If completed — show completion card instead of the update form
+                      if (isCompleted)
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Card(
+                            color: Colors.white,
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                  color: Colors.green.shade200, width: 1),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.emoji_events,
+                                      color: Colors.green),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(Icons.event, color: _darkBlue, size: 18),
-                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'Work order is complete!',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 16),
+                                        ),
+                                        const SizedBox(height: 6),
                                         Text(
-                                          'Deadline: ${DateFormat.yMMMd().format(_timeLimit)}',
-                                          style: const TextStyle(fontWeight: FontWeight.w600),
+                                          completedAt == null
+                                              ? 'Finished: time not recorded.'
+                                              : 'Finished on ${DateFormat.yMMMd().add_jm().format(completedAt)}',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        const Text(
+                                          '🎉 Great job! The next system stage is '
+                                              '“Address Validation of the Customer”.',
+                                          style: TextStyle(fontSize: 12),
                                         ),
                                       ],
                                     ),
-                                    const Spacer(),
-                                    TextButton.icon(
-                                      onPressed: _pickTimeLimit,
-                                      icon: const Icon(Icons.edit_calendar),
-                                      label: const Text('Change'),
-                                      style: TextButton.styleFrom(foregroundColor: _darkBlue),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _darkBlue,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                    onPressed: (_selectedNextStage == null) ? null : _addUpdate,
-                                    icon: const Icon(Icons.save),
-                                    label: const Text('Save Update'),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                      // Form card (only when NOT completed)
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Card(
+                            color: Colors.white,
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                  color: Colors.grey.shade200, width: 1),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Update Stage',
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.grey.shade900)),
+                                  const SizedBox(height: 10),
+
+                                  TextFormField(
+                                    initialValue: currentStage,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Current Stage',
+                                      prefixIcon: Icon(Icons.flag),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    readOnly: true,
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  DropdownButtonFormField<String>(
+                                    value: _selectedNextStage,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Next Stage (forward only)',
+                                      prefixIcon: Icon(Icons.trending_up),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: forwardStages
+                                        .map((s) => DropdownMenuItem(
+                                      value: s,
+                                      child: Text(s,
+                                          overflow:
+                                          TextOverflow.ellipsis),
+                                    ))
+                                        .toList(),
+                                    onChanged: (v) =>
+                                        setState(() => _selectedNextStage = v),
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  TextField(
+                                    controller: _assignedCtl,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Assign To (email/ID)',
+                                      prefixIcon:
+                                      Icon(Icons.person_add_alt_1),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  TextField(
+                                    controller: _notesCtl,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Notes',
+                                      prefixIcon: Icon(Icons.notes),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    maxLines: 2,
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  Row(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.event,
+                                              color: _darkBlue, size: 18),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Deadline: ${DateFormat.yMMMd().format(_timeLimit)}',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w600),
+                                          ),
+                                        ],
+                                      ),
+                                      const Spacer(),
+                                      TextButton.icon(
+                                        onPressed: _pickTimeLimit,
+                                        icon: const Icon(
+                                            Icons.edit_calendar),
+                                        label: const Text('Change'),
+                                        style: TextButton.styleFrom(
+                                            foregroundColor: _darkBlue),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _darkBlue,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                            BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: (_selectedNextStage == null)
+                                          ? null
+                                          : _addUpdate,
+                                      icon: const Icon(Icons.save),
+                                      label: const Text('Save Update'),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
 
                       // History (renders into the same scroll)
                       Padding(
@@ -484,77 +617,119 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                           elevation: 1,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey.shade200, width: 1),
+                            side: BorderSide(
+                                color: Colors.grey.shade200, width: 1),
                           ),
-                          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          child: StreamBuilder<
+                              QuerySnapshot<Map<String, dynamic>>>(
                             stream: _trackingStream,
                             builder: (ctx, histSnap) {
-                              if (histSnap.connectionState == ConnectionState.waiting) {
+                              if (histSnap.connectionState ==
+                                  ConnectionState.waiting) {
                                 return const Padding(
                                   padding: EdgeInsets.all(16),
-                                  child: Center(child: CircularProgressIndicator()),
+                                  child: Center(
+                                      child: CircularProgressIndicator()),
                                 );
                               }
                               final docs = histSnap.data?.docs ?? [];
                               if (docs.isEmpty) {
                                 return Padding(
                                   padding: const EdgeInsets.all(24),
-                                  child: _emptyState('No updates yet.', icon: Icons.history),
+                                  child: _emptyState('No updates yet.',
+                                      icon: Icons.history),
                                 );
                               }
 
                               return ListView.separated(
                                 shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
+                                physics:
+                                const NeverScrollableScrollPhysics(),
                                 padding: const EdgeInsets.all(12),
                                 itemCount: docs.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 6),
+                                separatorBuilder: (_, __) =>
+                                const SizedBox(height: 6),
                                 itemBuilder: (ctx, i) {
                                   final d = docs[i].data();
-                                  final stage = d['stage'] as String? ?? '-';
-                                  final notes = d['notes'] as String? ?? '';
-                                  final assigned = d['assignedTo'] as String? ?? '';
-                                  final tlTs = d['timeLimit'] as Timestamp?;
-                                  final tl = tlTs != null ? DateFormat.yMMMd().format(tlTs.toDate()) : '-';
-                                  final updTs = d['lastUpdated'] as Timestamp?;
-                                  final updatedAt =
-                                  updTs != null ? DateFormat.yMMMd().add_jm().format(updTs.toDate()) : '-';
+                                  final stage =
+                                      d['stage'] as String? ?? '-';
+                                  final notes =
+                                      d['notes'] as String? ?? '';
+                                  final assigned =
+                                      d['assignedTo'] as String? ?? '';
+                                  final tlTs =
+                                  d['timeLimit'] as Timestamp?;
+                                  final tl = tlTs != null
+                                      ? DateFormat.yMMMd()
+                                      .format(tlTs.toDate())
+                                      : '-';
+                                  final updTs =
+                                  d['lastUpdated'] as Timestamp?;
+                                  final updatedAt = updTs != null
+                                      ? DateFormat.yMMMd()
+                                      .add_jm()
+                                      .format(updTs.toDate())
+                                      : '-';
 
                                   final idx = _stageIndex(stage);
-                                  final Color leftBar = idx <= _stageIndex(currentStage)
+                                  final Color leftBar =
+                                  idx <= _stageIndex(currentStage)
                                       ? _darkBlue
                                       : Colors.grey.shade400;
 
                                   return Container(
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border(left: BorderSide(color: leftBar, width: 4)),
+                                      borderRadius:
+                                      BorderRadius.circular(10),
+                                      border: Border(
+                                        left: BorderSide(
+                                            color: leftBar, width: 4),
+                                      ),
                                       color: Colors.white,
                                     ),
                                     child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      contentPadding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8),
                                       title: Text(
                                         stage,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.w800, color: _darkBlue),
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            color: _darkBlue),
                                       ),
                                       subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
                                           const SizedBox(height: 4),
                                           if (assigned.isNotEmpty)
-                                            Text('Assigned to: $assigned', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            Text('Assigned to: $assigned',
+                                                maxLines: 1,
+                                                overflow: TextOverflow
+                                                    .ellipsis),
                                           if (notes.isNotEmpty)
-                                            Text('Notes: $notes', maxLines: 3, overflow: TextOverflow.ellipsis),
+                                            Text('Notes: $notes',
+                                                maxLines: 3,
+                                                overflow: TextOverflow
+                                                    .ellipsis),
                                           Text('Deadline: $tl'),
                                           Text('Updated: $updatedAt',
-                                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey)),
                                         ],
                                       ),
                                       trailing: Icon(
-                                        idx <= _stageIndex(currentStage) ? Icons.verified : Icons.schedule,
-                                        color: idx <= _stageIndex(currentStage) ? Colors.green : Colors.grey,
+                                        idx <= _stageIndex(currentStage)
+                                            ? Icons.verified
+                                            : Icons.schedule,
+                                        color:
+                                        idx <= _stageIndex(currentStage)
+                                            ? Colors.green
+                                            : Colors.grey,
                                       ),
                                     ),
                                   );
