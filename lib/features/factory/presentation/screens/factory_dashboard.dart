@@ -1,12 +1,18 @@
 // lib/features/factory/presentation/screens/factory_dashboard.dart
+import 'dart:async';
 
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/factory/presentation/widgets/factory_drawer.dart';
-
+import 'package:uddoygi/features/common/notification.dart';
+import 'package:uddoygi/features/common/alert.dart';
+import 'package:uddoygi/features/common/stock/stockscreen.dart';
 // Direct imports for your factory sub-screens
 import 'package:uddoygi/features/factory/presentation/factory/work_order.dart';
 import 'package:uddoygi/features/factory/presentation/factory/purchase_order.dart';
@@ -14,31 +20,12 @@ import 'package:uddoygi/features/factory/presentation/factory/QC_report.dart';
 import 'package:uddoygi/features/factory/presentation/factory/daily_production.dart';
 import 'package:uddoygi/features/factory/presentation/screens/progress_update_screen.dart';
 
-/// ========================== RED THEME (Requested) ==========================
-// ===== Refined Red & White Palette (accessible + classy) =====
-const Color _navRed      = Color(0xFF9B1C1C); // Deep crimson (AppBar/BottomNav)
-const Color _navRedDark  = Color(0xFF7F1D1D); // Pressed/darker state
-const Color _labelOnRed  = Colors.white;      // Labels/icons on red
-
-// Page & tiles
-const Color _surface     = Color(0xFFFFF7F7); // Soft warm white (page background)
-const Color _cardGradA = Color(0xFFD51616); // start (deep red)
-const Color _cardGradB = Color(0xFFD32F2F);// Tile gradient end (subtle rose-50)
-const Color _boardDark   = Color(0xFFFDECEC); // Overview board (light rose panel)
-
-// Light tiles within overview
-const Color _tileA = Color(0xFFFFFFFF);       // Summary tile 1
-const Color _tileB = Color(0xFFFFFFFF);       // Summary tile 2
-const Color _tileC = Color(0xFFFFFFFF);       // Summary tile 3 (slight contrast)
-const Color _tileD = Color(0xFFFFFFFF);       // Summary tile 4
-
-/// Dashboard items (searchable grid)
-class _DashboardItem {
-  final String title;
-  final IconData icon;
-  final String route;
-  const _DashboardItem(this.title, this.icon, this.route);
-}
+/// ===== Red theme (HR structure, just red) =====
+const Color _brandRed   = Color(0xFFD51616); // deep red
+const Color _redMid     = Color(0xFFEF4444); // accent
+const Color _surface    = Color(0xFFFFF5F5); // near-white with warm tone
+const Color _cardBorder = Color(0x1A7F1D1D); // 10% red
+const Color _shadowLite = Color(0x14000000);
 
 class FactoryDashboard extends StatefulWidget {
   const FactoryDashboard({Key? key}) : super(key: key);
@@ -49,23 +36,12 @@ class FactoryDashboard extends StatefulWidget {
 
 class _FactoryDashboardState extends State<FactoryDashboard> {
   String? email;
+  String? uid;
+  String? name;
+  String? photoUrl;
+
   String _search = '';
   int _currentTab = 0;
-
-  /// All dashboard entries (same items you had, now searchable)
-  final List<_DashboardItem> _allItems = const [
-    _DashboardItem('Notices',          Icons.notifications_active, '/factory/notices'),
-    _DashboardItem('Welfare',          Icons.volunteer_activism,  '/common/welfare'),
-    _DashboardItem('Messages',         Icons.message,             '/common/messages'),
-    _DashboardItem('Work Orders',      Icons.work,                ''), // manual route
-    _DashboardItem('Purchase Orders',  Icons.shopping_cart,       ''), // manual route
-    _DashboardItem('QC Report',        Icons.check_circle,        ''), // manual route
-    _DashboardItem('Daily Production', Icons.factory,             ''), // manual route
-    _DashboardItem('Updates',          Icons.update,              ''), // manual route
-    _DashboardItem('Attendance',       Icons.event_available,     '/factory/attendance'),
-    _DashboardItem('Loan Requests',    Icons.request_page,        '/marketing/loan_request'),
-    _DashboardItem('Salary & OT',      Icons.attach_money,        '/factory/salary_overtime'),
-  ];
 
   @override
   void initState() {
@@ -75,7 +51,33 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
-    setState(() => email = session?['email'] as String?);
+    final current = FirebaseAuth.instance.currentUser;
+
+    setState(() {
+      email = session?['email'] as String? ?? current?.email;
+      uid = session?['uid'] as String? ?? current?.uid;
+      name = (session?['name'] as String?) ??
+          current?.displayName ??
+          current?.email ??
+          'Factory';
+      photoUrl = current?.photoURL;
+    });
+
+    // Enrich from users/{uid}
+    if (uid != null) {
+      try {
+        final s = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        if (s.exists) {
+          final d = s.data()!;
+          final n = (d['fullName'] as String?)?.trim();
+          final p = (d['profilePhotoUrl'] as String?)?.trim();
+          setState(() {
+            if (n != null && n.isNotEmpty) name = n;
+            if (p != null && p.isNotEmpty) photoUrl = p;
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   Future<void> _logout() async {
@@ -84,7 +86,65 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
     if (mounted) Navigator.pushReplacementNamed(context, '/login');
   }
 
+  String _niceName(String s) {
+    if (!s.contains('@')) return s;
+    final core = s.split('@').first;
+    return core.replaceAll('.', ' ').replaceAll('_', ' ');
+  }
+
+  String _initialsFor(String fullName) {
+    final parts = fullName.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return 'F';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
+  }
+
+  /// Unread messages badge stream
+  Stream<int> _unreadMessagesStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream<int>.value(0);
+    final mail = user.email ?? '';
+    return FirebaseFirestore.instance
+        .collection('messages')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
+  }
+
+  /// Unread notifications badge stream
+  Stream<int> _unreadNotificationsStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream<int>.value(0);
+    final mail = user.email ?? '';
+    return FirebaseFirestore.instance
+        .collection('notifications')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
+  }
+
+  // 3-column dashboard tiles (factory-relevant)
+  final List<_DashboardItem> _allItems = const [
+    _DashboardItem('Stock', Icons.notification_important, ''),
+    _DashboardItem('Work Orders', Icons.work, ''),           // manual push
+    _DashboardItem('Purchase Orders', Icons.shopping_cart, ''),
+    _DashboardItem('QC Report', Icons.check_circle, ''),
+    _DashboardItem('Daily Production', Icons.factory, ''),
+    _DashboardItem('Updates', Icons.update, ''),
+    _DashboardItem('Notices', Icons.notifications, '/factory/notices'),
+    _DashboardItem('Messages', Icons.message, '/common/messages'),
+    _DashboardItem('Attendance', Icons.event_available, '/factory/attendance'),
+    _DashboardItem('Loan Requests', Icons.request_page, '/marketing/loan_request'),
+    _DashboardItem('Salary & OT', Icons.attach_money, '/factory/salary_overtime'),
+  ];
+
   void _onItemTap(_DashboardItem item) {
+    if (item.title == 'Stock') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const StockScreen()));
+      return;
+    }
     switch (item.title) {
       case 'Work Orders':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrdersScreen()));
@@ -106,351 +166,312 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
     }
   }
 
-  // Unread notifications count (very simple)
-  Stream<int> _unreadCount() {
-    return FirebaseFirestore.instance
-        .collection('notifications')
-        .where('status', isEqualTo: 'unread')
-        .snapshots()
-        .map((s) => s.docs.length)
-        .handleError((_) => 0);
-  }
+  @override
+  Widget build(BuildContext context) {
+    final displayName = _niceName(name ?? 'Factory');
+    final initials = _initialsFor(displayName);
 
-  // ----------- Tabs -----------
-  Widget _buildAppBarTitle() {
-    final name = _niceName(email ?? 'Factory');
-    switch (_currentTab) {
-      case 0: return Text('Welcome back, $name', style: const TextStyle(fontWeight: FontWeight.w800));
-      case 1: return const Text('Work & QC', style: TextStyle(fontWeight: FontWeight.w800));
-      case 2: return const Text('Notifications', style: TextStyle(fontWeight: FontWeight.w800));
-      case 3: return const Text('Profile', style: TextStyle(fontWeight: FontWeight.w800));
-      default: return Text('Welcome back, $name');
-    }
-  }
+    final filtered = _allItems
+        .where((i) => i.title.toLowerCase().contains(_search.toLowerCase()))
+        .toList();
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      elevation: 0,
-      backgroundColor: _navRed,
-      foregroundColor: _labelOnRed,
-      title: _buildAppBarTitle(),
-      actions: [
-        // Bell with unread badge
-        StreamBuilder<int>(
-          stream: _unreadCount(),
-          builder: (context, snap) {
-            final count = snap.data ?? 0;
-            return Stack(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.notifications),
-                  tooltip: 'Notifications',
-                  onPressed: () => setState(() => _currentTab = 2),
+    const cols = 3; // match HR layout
+
+    return Scaffold(
+      backgroundColor: _surface,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: _brandRed,
+        foregroundColor: Colors.white,
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.white24,
+              backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty) ? NetworkImage(photoUrl!) : null,
+              child: (photoUrl == null || photoUrl!.isEmpty)
+                  ? Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Welcome, $displayName',
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(               // modern, readable font
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
-                if (count > 0)
-                  Positioned(
-                    right: 10, top: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text('$count',
-                          style: TextStyle(
-                            color: _navRed,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                          )),
-                    ),
-                  ),
-              ],
-            );
-          },
+              )
+              // Animate when displayName changes
+                  .animate(key: ValueKey(displayName))
+                  .fadeIn(duration: 400.ms, curve: Curves.easeOutCubic)
+                  .slideX(begin: 0.08, end: 0)              // subtle slide-in
+                  .then(delay: 120.ms)
+                  .blur(begin: const Offset(2, 2), end: Offset.zero, duration: 250.ms),
+            ),
+          ],
         ),
-        IconButton(
-          icon: const Icon(Icons.logout),
-          tooltip: 'Logout',
-          onPressed: _logout,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashColor: Colors.white24,
-        highlightColor: Colors.white10,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications),
+            tooltip: 'Notifications',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationPage()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: _logout,
+          ),
+        ],
       ),
-      child: BottomNavigationBar(
-        backgroundColor: _navRed,
-        selectedItemColor: _labelOnRed,
-        unselectedItemColor: _labelOnRed.withOpacity(.7),
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentTab,
-        onTap: (i) => setState(() => _currentTab = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.handyman_outlined), label: 'Work/QC'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications_none), label: 'Alerts'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
+
+      drawer: const FactoryDrawer(),
+
+      bottomNavigationBar: _buildBottomNav(),
+
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        children: [
+          // Overview/summary (red)
+          const _FactoryOverviewHeaderRed(),
+          const SizedBox(height: 16),
+
+          // Search
+          TextField(
+            onChanged: (v) => setState(() => _search = v),
+            decoration: InputDecoration(
+              hintText: 'Search…',
+              prefixIcon: const Icon(Icons.search, color: _brandRed),
+              hintStyle: const TextStyle(color: _brandRed),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _cardBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide(color: _cardBorder),
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            style: const TextStyle(color: _brandRed),
+          ),
+          const SizedBox(height: 16),
+
+          // 3-column grid of tiles — white cards, red icons/text; labels auto-fit
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filtered.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.02,
+            ),
+            itemBuilder: (_, i) {
+              final it = filtered[i];
+              final isMessages = it.title == 'Messages';
+              return StreamBuilder<int>(
+                stream: isMessages ? _unreadMessagesStream() : const Stream<int>.empty(),
+                builder: (_, snap) {
+                  final count = snap.data ?? 0;
+                  return _DashTile(
+                    title: it.title,
+                    icon: it.icon,
+                    badgeCount: count,
+                    onTap: () => _onItemTap(it),
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  // ----- Tab Pages -----
-  Widget _tabDashboard() {
-    final filtered = _allItems
-        .where((i) => i.title.toLowerCase().contains(_search.toLowerCase()))
-        .toList();
-
-    // Responsive columns
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1100 ? 6 : width >= 900 ? 5 : width >= 600 ? 4 : 3;
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      children: [
-        const _FactoryOverview(),
-        const SizedBox(height: 16),
-
-        // Search
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0,2))],
-          ),
-          child: TextField(
-            onChanged: (v) => setState(() => _search = v),
-            style: const TextStyle(color: Colors.black87),
-            decoration: InputDecoration(
-              hintText: 'Search…',
-              hintStyle: TextStyle(color: Colors.black54),
-              prefixIcon: const Icon(Icons.search, color: Colors.black87),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Grid
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: filtered.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.05,
-          ),
-          itemBuilder: (_, i) {
-            final it = filtered[i];
-            return _DashTileRed(
-              title: it.title,
-              icon: it.icon,
-              onTap: () => _onItemTap(it),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _tabWorkQc() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      children: [
-        _SectionHeader(label: 'Factory Actions'),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _ActionChipCard(
-              icon: Icons.work_outline,
-              label: 'Work Orders',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrdersScreen())),
-            ),
-            _ActionChipCard(
-              icon: Icons.shopping_cart_outlined,
-              label: 'Purchase Orders',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseOrdersScreen())),
-            ),
-            _ActionChipCard(
-              icon: Icons.fact_check_outlined,
-              label: 'QC Report',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QCReportScreen())),
-            ),
-            _ActionChipCard(
-              icon: Icons.factory_outlined,
-              label: 'Daily Production',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyProductionScreen())),
-            ),
-            _ActionChipCard(
-              icon: Icons.update,
-              label: 'Updates',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProgressUpdateScreen())),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        _SectionHeader(label: 'Quick Stats'),
-        const SizedBox(height: 12),
-        const _FactoryOverview(compact: true),
-      ],
-    );
-  }
-
-  Widget _tabNotifications() {
-    return const _NotificationsList();
-  }
-
-  Widget _tabProfile() {
-    final name = _niceName(email ?? 'Factory');
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      children: [
-        _ProfileCard(name: name, email: email ?? ''),
-        const SizedBox(height: 16),
-        _SectionHeader(label: 'Shortcuts'),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            _ActionChipCard(
-              icon: Icons.event_available,
-              label: 'Attendance',
-              onTap: () => Navigator.pushNamed(context, '/factory/attendance'),
-            ),
-            _ActionChipCard(
-              icon: Icons.request_page,
-              label: 'Loan Requests',
-              onTap: () => Navigator.pushNamed(context, '/marketing/loan_request'),
-            ),
-            _ActionChipCard(
-              icon: Icons.attach_money,
-              label: 'Salary & OT',
-              onTap: () => Navigator.pushNamed(context, '/factory/salary_overtime'),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      _tabDashboard(),
-      _tabWorkQc(),
-      _tabNotifications(),
-      _tabProfile(),
+  Widget _buildBottomNav() {
+    final items = <_NavItem>[
+      _NavItem('Home', Icons.home_rounded, onTap: () => setState(() => _currentTab = 0)),
+      _NavItem('Work', Icons.work_outline_rounded,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrdersScreen()))),
+      _NavItem('QC', Icons.fact_check_outlined,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QCReportScreen()))),
+      _NavItem('Production', Icons.factory_outlined,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyProductionScreen()))),
+      _NavItem(
+        'Notifications',
+        Icons.notifications,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
+        badgeStream: _unreadNotificationsStream(),
+      ),
+      _NavItem('Messages', Icons.message_rounded,
+          onTap: () => Navigator.pushNamed(context, '/common/messages'),
+          badgeStream: _unreadMessagesStream()),
     ];
 
-    return Scaffold(
-      backgroundColor: _surface,
-      appBar: _buildAppBar(),
-      drawer: const FactoryDrawer(),
-      body: pages[_currentTab],
-      bottomNavigationBar: _buildBottomNav(),
-    );
-  }
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(color: _brandRed),
+        child: Row(
+          children: items.map((it) {
+            final isSelected = items.indexOf(it) == _currentTab;
+            final color = isSelected ? Colors.white : Colors.white70;
 
-  String _niceName(String s) {
-    if (!s.contains('@')) return s;
-    final core = s.split('@').first;
-    return core.replaceAll('.', ' ').replaceAll('_', ' ');
+            final iconWidget = it.badgeStream == null
+                ? Icon(it.icon, color: color)
+                : StreamBuilder<int>(
+              stream: it.badgeStream,
+              builder: (_, s) => _BadgeIcon(
+                icon: it.icon,
+                color: color,
+                count: s.data ?? 0,
+              ),
+            );
+
+            return Expanded(
+              child: InkWell(
+                onTap: () {
+                  setState(() => _currentTab = items.indexOf(it));
+                  it.onTap();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      iconWidget,
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        height: 14,
+                        child: AutoSizeText(
+                          it.label,
+                          maxLines: 1,
+                          minFontSize: 8,
+                          stepGranularity: 0.5,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
   }
 }
 
-/* ========================= Overview (Factory live board) ========================= */
+/* ========================= Overview (red header + 3-col stat cards) ========================= */
 
-class _FactoryOverview extends StatelessWidget {
-  final bool compact;
-  const _FactoryOverview({this.compact = false});
+enum _Range { thisMonth, prevMonth, last3, last12 }
 
-  // --- Date windows ---
-  ({DateTime a, DateTime b}) _today() {
-    final n = DateTime.now();
-    final a = DateTime(n.year, n.month, n.day);
-    final b = DateTime(n.year, n.month, n.day, 23, 59, 59, 999);
-    return (a: a, b: b);
+class _FactoryOverviewHeaderRed extends StatefulWidget {
+  const _FactoryOverviewHeaderRed({Key? key}) : super(key: key);
+
+  @override
+  State<_FactoryOverviewHeaderRed> createState() => _FactoryOverviewHeaderRedState();
+}
+
+class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
+  _Range _range = _Range.thisMonth;
+
+  ({DateTime a, DateTime b}) _rangeDates(_Range r) {
+    final now = DateTime.now();
+    switch (r) {
+      case _Range.thisMonth:
+        final a = DateTime(now.year, now.month, 1);
+        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+        return (a: a, b: b);
+      case _Range.prevMonth:
+        final a = DateTime(now.year, now.month - 1, 1);
+        final b = DateTime(now.year, now.month, 0, 23, 59, 59);
+        return (a: a, b: b);
+      case _Range.last3:
+        final a = DateTime(now.year, now.month - 2, 1);
+        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+        return (a: a, b: b);
+      case _Range.last12:
+        final a = DateTime(now.year, now.month - 11, 1);
+        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+        return (a: a, b: b);
+    }
   }
 
-  ({DateTime a, DateTime b}) _thisMonth() {
-    final n = DateTime.now();
-    final a = DateTime(n.year, n.month, 1);
-    final b = DateTime(n.year, n.month + 1, 0, 23, 59, 59, 999);
-    return (a: a, b: b);
-  }
-
-  // --- Streams (defensive: work even if some fields are missing) ---
-
-  /// Open Work Orders = status in {open, in_progress}
-  Stream<int> _openWorkOrders() {
+  // ---- Factory stats (same queries you used, just placed in HR-style cards) ----
+  Stream<String> _openWorkOrders() {
     return FirebaseFirestore.instance
         .collection('work_orders')
         .where('status', whereIn: ['open', 'in_progress'])
         .snapshots()
-        .map((s) => s.docs.length)
-        .handleError((_) => 0);
+        .map((s) => '${s.docs.length}');
   }
 
-  /// Purchase Orders This Month (count)
-  Stream<int> _purchaseOrdersThisMonth() {
-    final r = _thisMonth();
+  Stream<String> _purchaseOrdersInRange() {
+    final r = _rangeDates(_range);
     return FirebaseFirestore.instance
         .collection('purchase_orders')
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
         .snapshots()
-        .map((s) => s.docs.length)
-        .handleError((_) => 0);
+        .map((s) => '${s.docs.length}');
   }
 
-  /// QC Pending (count)
-  Stream<int> _qcPending() {
+  Stream<String> _qcPending() {
     return FirebaseFirestore.instance
         .collection('qc_reports')
         .where('status', isEqualTo: 'pending')
         .snapshots()
-        .map((s) => s.docs.length)
-        .handleError((_) => 0);
+        .map((s) => '${s.docs.length}');
   }
 
-  /// Today's Output (sum of totalQty or qty) from daily_production
-  Stream<num> _todaysOutput() {
-    final r = _today();
+  Stream<String> _outputToday() {
+    final now = DateTime.now();
+    final a = DateTime(now.year, now.month, now.day);
+    final b = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
     return FirebaseFirestore.instance
         .collection('daily_production')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(a))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(b))
         .snapshots()
         .map((s) {
       num sum = 0;
       for (final d in s.docs) {
-        final data = d.data();
-        final a = data['totalQty'];
-        final b = data['qty'];
-        if (a is num) {
-          sum += a;
-        } else if (b is num) {
-          sum += b;
-        }
+        final m = d.data();
+        final x = m['totalQty'];
+        final y = m['qty'];
+        if (x is num) sum += x;
+        else if (y is num) sum += y;
       }
-      return sum;
-    }).handleError((_) => 0);
+      return _comma(sum);
+    });
+  }
+
+  Stream<String> _updatesOpen() {
+    return FirebaseFirestore.instance
+        .collection('progress_updates')
+        .where('status', isEqualTo: 'open')
+        .snapshots()
+        .map((s) => '${s.docs.length}');
+  }
+
+  Stream<String> _noticesThisMonth() {
+    final r = _rangeDates(_range);
+    return FirebaseFirestore.instance
+        .collection('notices')
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .snapshots()
+        .map((s) => '${s.docs.length}');
   }
 
   String _comma(num n) {
@@ -470,106 +491,135 @@ class _FactoryOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       decoration: BoxDecoration(
-        color: _boardDark,
+        gradient: const LinearGradient(
+          colors: [_brandRed, _redMid],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0,2))],
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 14, offset: Offset(0, 6))],
       ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final w = c.maxWidth;
-          final cardW = compact ? (w - 12) / 2 : (w - 12) / 2; // 2 columns regardless (looks neat on mobile too)
-          return Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title + Range filter
+          Row(
             children: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  SizedBox(
-                    width: cardW,
-                    child: _SquareSummaryCard(
-                      color: _tileA,
-                      icon: Icons.assignment_turned_in_outlined,
-                      label: 'Open Work Orders',
-                      streamText: _openWorkOrders().map((n) => '$n'),
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardW,
-                    child: _SquareSummaryCard(
-                      color: _tileB,
-                      icon: Icons.shopping_basket_outlined,
-                      label: 'POs This Month',
-                      streamText: _purchaseOrdersThisMonth().map((n) => '$n'),
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardW,
-                    child: _SquareSummaryCard(
-                      color: _tileC,
-                      icon: Icons.fact_check_outlined,
-                      label: 'QC Pending',
-                      streamText: _qcPending().map((n) => '$n'),
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardW,
-                    child: _SquareSummaryCard(
-                      color: _tileD,
-                      icon: Icons.speed_outlined,
-                      label: "Today's Output (pcs)",
-                      streamText: _todaysOutput().map(_comma),
-                    ),
-                  ),
-                ],
+              const Icon(Icons.insights, color: Colors.white),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Overview',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+              ),
+              _RangeFilter(
+                value: _range,
+                onChanged: (r) => setState(() => _range = r),
               ),
             ],
-          );
-        },
+          ),
+          const SizedBox(height: 14),
+
+          // 3×N grid of stat cards
+          LayoutBuilder(builder: (ctx, c) {
+            const spacing = 8.0;
+            final w = c.maxWidth;
+            final cardW = (w - (spacing * 2)) / 3; // three columns
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                _StatCardRed(width: cardW, label: 'Open Work Orders',  streamText: _openWorkOrders()),
+                _StatCardRed(width: cardW, label: 'POs (range)',       streamText: _purchaseOrdersInRange()),
+                _StatCardRed(width: cardW, label: 'QC Pending',        streamText: _qcPending()),
+                _StatCardRed(width: cardW, label: "Today's Output",    streamText: _outputToday()),
+                _StatCardRed(width: cardW, label: 'Updates open',      streamText: _updatesOpen()),
+                _StatCardRed(width: cardW, label: 'Notices (range)',   streamText: _noticesThisMonth()),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
 }
 
-/* ========================= Reusable summary card ========================= */
+/* ---------- Filter dropdown (red) ---------- */
 
-class _SquareSummaryCard extends StatelessWidget {
-  final Color color;
-  final IconData icon;
-  final String label;
-  final Stream<String> streamText;
-
-  const _SquareSummaryCard({
-    required this.color,
-    required this.icon,
-    required this.label,
-    required this.streamText,
-    super.key,
-  });
+class _RangeFilter extends StatelessWidget {
+  final _Range value;
+  final ValueChanged<_Range> onChanged;
+  const _RangeFilter({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 110,
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white70),
       ),
-      padding: const EdgeInsets.all(14),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<_Range>(
+          value: value,
+          isDense: true,
+          icon: const Icon(Icons.keyboard_arrow_down, color: _brandRed),
+          dropdownColor: Colors.white,
+          style: const TextStyle(
+            color: _brandRed,
+            fontWeight: FontWeight.w700,
+            fontSize: 10,
+          ),
+          items: const [
+            DropdownMenuItem(value: _Range.thisMonth, child: Text('This month')),
+            DropdownMenuItem(value: _Range.prevMonth, child: Text('Previous month')),
+            DropdownMenuItem(value: _Range.last3,     child: Text('Last 3 months')),
+            DropdownMenuItem(value: _Range.last12,    child: Text('One year')),
+          ],
+          onChanged: (r) {
+            if (r != null) onChanged(r);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/* ========================= Stat card (red) ========================= */
+
+class _StatCardRed extends StatelessWidget {
+  final double width;
+  final String label;
+  final Stream<String> streamText;
+  const _StatCardRed({required this.width, required this.label, required this.streamText, Key? key})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 96,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _cardBorder),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Container(
             width: 36,
             height: 36,
-            decoration: const BoxDecoration(
-              color: Colors.black87,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.data_usage, color: Colors.white, size: 18),
+            decoration: BoxDecoration(color: _brandRed.withOpacity(.08), shape: BoxShape.circle),
+            child: const Icon(Icons.assessment, color: _brandRed, size: 18),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: StreamBuilder<String>(
               stream: streamText,
@@ -577,27 +627,31 @@ class _SquareSummaryCard extends StatelessWidget {
                 final v = snap.hasData ? snap.data! : '—';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
+                    AutoSizeText(
                       v,
                       maxLines: 1,
+                      minFontSize: 14,
+                      stepGranularity: 0.5,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.black,
+                        color: _brandRed,
                         fontWeight: FontWeight.w900,
-                        fontSize: 22,
+                        fontSize: 26,
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
+                    AutoSizeText(
                       label,
                       maxLines: 2,
+                      minFontSize: 6,
+                      stepGranularity: 0.5,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
+                        color: _brandRed,
+                        fontWeight: FontWeight.w400,
+                        fontSize: 8,
                       ),
                     ),
                   ],
@@ -611,68 +665,78 @@ class _SquareSummaryCard extends StatelessWidget {
   }
 }
 
-/* ========================= Grid tile (Red) ========================= */
+/* ========================= Tiles & bottom nav helpers (red) ========================= */
 
-class _DashTileRed extends StatelessWidget {
+class _DashboardItem {
+  final String title;
+  final IconData icon;
+  final String route;
+  const _DashboardItem(this.title, this.icon, this.route);
+}
+
+class _DashTile extends StatelessWidget {
   final String title;
   final IconData icon;
   final VoidCallback onTap;
-  const _DashTileRed({required this.title, required this.icon, required this.onTap});
+  final int badgeCount;
+  const _DashTile({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+    this.badgeCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: Colors.white,
+      elevation: 0,
       borderRadius: BorderRadius.circular(14),
-      elevation: 2,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            gradient: const LinearGradient(
-              colors: [_cardGradA, _cardGradB],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0,2))],
+            border: Border.all(color: _cardBorder),
+            boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 8, offset: Offset(0, 3))],
           ),
           child: Stack(
             children: [
-              Positioned(
-                right: -18,
-                bottom: -18,
-                child: Container(
-                  width: 70, height: 70,
-                  decoration: const BoxDecoration(color: Colors.white10, shape: BoxShape.circle),
-                ),
-              ),
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: const BoxDecoration(color: Colors.white12, shape: BoxShape.circle),
-                        child: Icon(icon, color: Colors.white, size: 22),
-                      ),
+                      Icon(icon, color: _brandRed, size: 28),
                       const SizedBox(height: 8),
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      SizedBox(
+                        height: 28,
+                        child: AutoSizeText(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          minFontSize: 9,
+                          stepGranularity: 0.5,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _brandRed,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: _Badge(count: badgeCount),
+                ),
             ],
           ),
         ),
@@ -681,209 +745,60 @@ class _DashTileRed extends StatelessWidget {
   }
 }
 
-/* ========================= Notifications List ========================= */
-
-class _NotificationsList extends StatelessWidget {
-  const _NotificationsList();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: _surface,
-      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('notifications')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snap.hasData || snap.data!.docs.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Text('No notifications yet.',
-                    style: TextStyle(fontSize: 16, color: Colors.black54)),
-              ),
-            );
-          }
-          final docs = snap.data!.docs;
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const Divider(height: 0),
-            itemBuilder: (context, i) {
-              final d = docs[i].data();
-              final title = (d['title'] ?? 'Notification') as String;
-              final body  = (d['body'] ?? '') as String;
-              final status = (d['status'] ?? 'unread') as String;
-              final ts = d['createdAt'];
-              DateTime? dt;
-              if (ts is Timestamp) dt = ts.toDate();
-
-              final isUnread = status == 'unread';
-              return ListTile(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                tileColor: Colors.white,
-                leading: CircleAvatar(
-                  backgroundColor: isUnread ? _navRed : Colors.black26,
-                  child: const Icon(Icons.notifications, color: Colors.white, size: 18),
-                ),
-                title: Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: isUnread ? FontWeight.w800 : FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                subtitle: Text(
-                  body,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (dt != null)
-                      Text(_niceTime(dt),
-                          style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                    const SizedBox(height: 6),
-                    if (isUnread)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _navRed,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text('NEW',
-                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ),
-                  ],
-                ),
-                onTap: () async {
-                  // Mark as read (optional, safe)
-                  try {
-                    await FirebaseFirestore.instance
-                        .collection('notifications')
-                        .doc(docs[i].id)
-                        .update({'status': 'read'});
-                  } catch (_) {}
-                },
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  String _niceTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${dt.year}-${_two(dt.month)}-${_two(dt.day)}';
-  }
-
-  String _two(int v) => v < 10 ? '0$v' : '$v';
+class _NavItem {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Stream<int>? badgeStream;
+  _NavItem(this.label, this.icon, {required this.onTap, this.badgeStream});
 }
 
-/* ========================= Tiny UI helpers ========================= */
-
-class _SectionHeader extends StatelessWidget {
-  final String label;
-  const _SectionHeader({required this.label});
+class _BadgeIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+  const _BadgeIcon({required this.icon, required this.color, required this.count});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        const Icon(Icons.dashboard_customize, color: _navRed, size: 18),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(
-          color: Colors.black87, fontWeight: FontWeight.w800, fontSize: 14,
-        )),
+        Icon(icon, color: color),
+        if (count > 0)
+          Positioned(
+            right: -6,
+            top: -6,
+            child: _Badge(count: count, small: true),
+          ),
       ],
     );
   }
 }
 
-class _ActionChipCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _ActionChipCard({required this.icon, required this.label, required this.onTap});
+class _Badge extends StatelessWidget {
+  final int count;
+  final bool small;
+  const _Badge({required this.count, this.small = false});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0x1A8B0000)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: _navRed),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(
-                color: Colors.black87, fontWeight: FontWeight.w700,
-              )),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileCard extends StatelessWidget {
-  final String name;
-  final String email;
-  const _ProfileCard({required this.name, required this.email});
-
-  @override
-  Widget build(BuildContext context) {
+    final text = count > 99 ? '99+' : '$count';
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.symmetric(horizontal: small ? 5 : 6, vertical: small ? 2 : 3),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0,2))],
+        color: _brandRed,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: _navRed,
-            child: const Icon(Icons.person, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(
-                  fontWeight: FontWeight.w900, fontSize: 16,
-                )),
-                const SizedBox(height: 2),
-                Text(email, style: const TextStyle(
-                  color: Colors.black54, fontSize: 12,
-                )),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: small ? 9 : 10,
+          fontWeight: FontWeight.w800,
+          height: 1.0,
+        ),
       ),
     );
   }

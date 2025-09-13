@@ -3,11 +3,14 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 const Color _ink = Color(0xFF1D5DF1);
+const Color _okGreen = Color(0xFF10B981);
+const Color _lowRed = Color(0xFFE11D48);
 
 enum _Sort { newest, priceLowHigh, priceHighLow }
 
@@ -104,9 +107,8 @@ class _ProductsPageState extends State<ProductsPage> {
       borderSide: BorderSide(color: Colors.grey.shade300),
       borderRadius: BorderRadius.circular(10),
     ),
-    focusedBorder: OutlineInputBorder(
-      borderSide: const BorderSide(color: _darkBlue, width: 1.2),
-      borderRadius: BorderRadius.circular(10),
+    focusedBorder: const OutlineInputBorder(
+      borderSide: BorderSide(color: _darkBlue, width: 1.2),
     ),
   );
 
@@ -395,6 +397,116 @@ class _ProductsPageState extends State<ProductsPage> {
     );
   }
 
+  // ======= Stock movement helpers (for the bottom sheet) =======
+
+  Future<void> _openMovement(BuildContext context, {required bool isIn}) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: _StockMovementSheet(
+          isIn: isIn,
+          onSubmit: (docId, data, amount, note) async {
+            final delta = isIn ? amount : -amount;
+            await _applyStockMovement(docId, data, delta, note);
+          },
+          onAddNew: _createProductAndStock, // returns new stock docId
+        ),
+      ),
+    );
+  }
+
+  /// Update stock qty and write a daily log: stocks/{id}/logs/{yyyy-MM-dd}
+  Future<void> _applyStockMovement(
+      String docId,
+      Map<String, dynamic> existing,
+      int delta,
+      String note,
+      ) async {
+    final prevQty = (existing['qty'] as int?) ?? 0;
+    final newQty = prevQty + delta;
+
+    final ref = FirebaseFirestore.instance.collection('stocks').doc(docId);
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      tx.update(ref, {
+        'qty': newQty,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+      final today = DateTime.now();
+      final yyyyMmDd =
+          '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      tx.set(ref.collection('logs').doc(yyyyMmDd), {
+        'date': yyyyMmDd,
+        'delta': delta,
+        'newQty': newQty,
+        'note': note,
+        'ts': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Stock ${delta >= 0 ? 'in' : 'out'} saved')),
+    );
+  }
+
+  /// Creates BOTH: a product in `products` and a stock doc in `stocks`.
+  /// Returns the created stock document ID.
+  Future<String?> _createProductAndStock({
+    required String name,
+    required String sku,
+    required String unit,
+    double? unitPrice,
+  }) async {
+    try {
+      // 1) create product (minimal fields)
+      final products = FirebaseFirestore.instance.collection('products');
+      await products.add({
+        'model_name': name,
+        'unit_price': unitPrice ?? 0.0,
+        'gender': null,
+        'size': '',
+        'density': '',
+        'curl': '',
+        'colour': '',
+        'notes': '',
+        'production_time': '',
+        'production_cost': 0.0,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': widget.userEmail,
+        'archived': false,
+      });
+
+      // 2) create stock
+      final stocks = FirebaseFirestore.instance.collection('stocks');
+      final ref = await stocks.add({
+        'name': name,
+        'sku': sku,
+        'unit': unit,
+        'qty': 0,
+        'minThreshold': 100,
+        'maxThreshold': 500,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      return ref.id;
+    } catch (e) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add product: $e')),
+      );
+      return null;
+    }
+  }
+
   // ——— Build ———
   @override
   Widget build(BuildContext context) {
@@ -405,6 +517,18 @@ class _ProductsPageState extends State<ProductsPage> {
       appBar: AppBar(
         backgroundColor: _darkBlue,
         title: const Text('Products', style: TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            tooltip: 'Stock In',
+            onPressed: () => _openMovement(context, isIn: true),
+            icon: const Icon(Icons.call_received_rounded),
+          ),
+          IconButton(
+            tooltip: 'Stock Out',
+            onPressed: () => _openMovement(context, isIn: false),
+            icon: const Icon(Icons.call_made_rounded),
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentTab,
@@ -1543,5 +1667,334 @@ class _MenuButton extends StatelessWidget {
         child: Icon(Icons.more_horiz_rounded, color: _darkBlue),
       ),
     );
+  }
+}
+
+/* ========================= Stock Movement Bottom Sheet ========================= */
+
+class _StockMovementSheet extends StatefulWidget {
+  final bool isIn;
+  final Future<void> Function(
+      String docId, Map<String, dynamic> data, int amount, String note)
+  onSubmit;
+  final Future<String?> Function(
+      {required String name,
+      required String sku,
+      required String unit,
+      double? unitPrice})
+  onAddNew;
+
+  const _StockMovementSheet({
+    Key? key,
+    required this.isIn,
+    required this.onSubmit,
+    required this.onAddNew,
+  }) : super(key: key);
+
+  @override
+  State<_StockMovementSheet> createState() => _StockMovementSheetState();
+}
+
+class _StockMovementSheetState extends State<_StockMovementSheet> {
+  final _formKey = GlobalKey<FormState>();
+  String? _selectedStockId;
+  Map<String, dynamic>? _selectedData;
+  final _amountCtl = TextEditingController(text: '1');
+  final _noteCtl = TextEditingController();
+
+  static const _kAddNewSentinel = '__ADD_NEW__';
+
+  @override
+  void dispose() {
+    _amountCtl.dispose();
+    _noteCtl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.isIn ? 'Stock In' : 'Stock Out';
+    final accent = widget.isIn ? _okGreen : _lowRed;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // grab handle
+          Container(
+            width: 42,
+            height: 5,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          Row(
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w900)),
+              const Spacer(),
+              Icon(widget.isIn ? Icons.call_received_rounded : Icons.call_made_rounded,
+                  color: accent),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                // Products dropdown (from stocks) + "Add new…"
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('stocks')
+                      .orderBy('name')
+                      .snapshots(),
+                  builder: (ctx, snap) {
+                    final docs = snap.data?.docs ?? [];
+                    final items = <DropdownMenuItem<String>>[
+                      const DropdownMenuItem(
+                        value: _kAddNewSentinel,
+                        child: Text('➕ Add new product…',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                      ...docs.map((d) {
+                        final m = d.data();
+                        final name = (m['name'] as String?) ?? 'Unnamed';
+                        final sku = (m['sku'] as String?) ?? '';
+                        return DropdownMenuItem<String>(
+                          value: d.id,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                  child: Text(name,
+                                      overflow: TextOverflow.ellipsis)),
+                              if (sku.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Text('($sku)',
+                                      style: const TextStyle(
+                                          color: Colors.black54)),
+                                ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ];
+
+                    return DropdownButtonFormField<String>(
+                      value: _selectedStockId,
+                      items: items,
+                      decoration: const InputDecoration(
+                        labelText: 'Select product',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? 'Select or add a product'
+                          : null,
+                      onChanged: (v) async {
+                        if (v == _kAddNewSentinel) {
+                          final createdId =
+                          await _showAddNewProductDialog(context);
+                          if (createdId != null) {
+                            setState(() => _selectedStockId = createdId);
+                            final doc = await FirebaseFirestore.instance
+                                .collection('stocks')
+                                .doc(createdId)
+                                .get();
+                            _selectedData = doc.data();
+                          }
+                        } else if (v != null) {
+                          setState(() => _selectedStockId = v);
+                          final doc = await FirebaseFirestore.instance
+                              .collection('stocks')
+                              .doc(v)
+                              .get();
+                          _selectedData = doc.data();
+                        }
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // Amount + unit chip
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _amountCtl,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: InputDecoration(
+                          labelText: 'Amount',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: Icon(
+                              widget.isIn ? Icons.add : Icons.remove,
+                              color: accent),
+                        ),
+                        validator: (v) {
+                          final n = int.tryParse((v ?? '').trim());
+                          if (n == null || n <= 0) {
+                            return 'Enter a positive number';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    if (_selectedData != null)
+                      _unitPill((_selectedData!['unit'] as String?) ?? 'pcs'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                TextFormField(
+                  controller: _noteCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.save_rounded),
+                    label: Text(widget.isIn ? 'Save Stock In' : 'Save Stock Out'),
+                    onPressed: () async {
+                      if (!_formKey.currentState!.validate()) return;
+                      if (_selectedStockId == null || _selectedData == null) {
+                        return;
+                      }
+                      final amount = int.parse(_amountCtl.text.trim());
+                      final note = _noteCtl.text.trim().isEmpty
+                          ? (widget.isIn
+                          ? 'Quick Stock In'
+                          : 'Quick Stock Out')
+                          : _noteCtl.text.trim();
+
+                      await widget.onSubmit(
+                          _selectedStockId!, _selectedData!, amount, note);
+
+                      if (!mounted) return;
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _unitPill(String unit) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.black.withOpacity(.05),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(unit, style: const TextStyle(fontWeight: FontWeight.w700)),
+  );
+
+  /// Small dialog used when "➕ Add new product…" is picked
+  Future<String?> _showAddNewProductDialog(BuildContext context) async {
+    final nameCtl = TextEditingController();
+    final skuCtl = TextEditingController();
+    String unit = 'pcs';
+    final priceCtl = TextEditingController();
+
+    String? createdId;
+
+    await showDialog(
+      context: context,
+      builder: (_) {
+        final localKey = GlobalKey<FormState>();
+        return AlertDialog(
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Add New Product'),
+          content: Form(
+            key: localKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameCtl,
+                  decoration: const InputDecoration(
+                      labelText: 'Name *', border: OutlineInputBorder()),
+                  validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: skuCtl,
+                  decoration: const InputDecoration(
+                      labelText: 'SKU / Code', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: unit,
+                  items: const [
+                    DropdownMenuItem(value: 'pcs', child: Text('pcs')),
+                    DropdownMenuItem(value: 'kg', child: Text('kg')),
+                    DropdownMenuItem(value: 'm', child: Text('m')),
+                    DropdownMenuItem(value: 'box', child: Text('box')),
+                  ],
+                  onChanged: (v) => unit = v ?? 'pcs',
+                  decoration: const InputDecoration(
+                      labelText: 'Unit', border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: priceCtl,
+                  keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                      labelText: 'Unit Price (optional)',
+                      border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                if (!(localKey.currentState?.validate() ?? false)) return;
+                final price = double.tryParse(priceCtl.text.trim());
+                createdId = await widget.onAddNew(
+                  name: nameCtl.text.trim(),
+                  sku: skuCtl.text.trim(),
+                  unit: unit,
+                  unitPrice: price,
+                );
+                if (createdId != null && context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return createdId;
   }
 }

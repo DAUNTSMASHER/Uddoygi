@@ -10,6 +10,9 @@ import '../widgets/marketing_drawer.dart';
 import 'package:uddoygi/features/common/notification.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/campaign_screen.dart';
 
+// ✅ NEW: import the Stock History screen/class
+import 'package:uddoygi/features/common/stock/stockhistory.dart';
+
 /// ===== Palette (blue + white only) =====
 const Color _brandBlue   = Color(0xFF0D47A1); // dark
 const Color _blueMid     = Color(0xFF1D5DF1); // accent
@@ -40,8 +43,10 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     _DashboardItem('Campaigns', Icons.campaign, '/marketing/campaign'),
     _DashboardItem('Orders', Icons.shopping_bag, '/marketing/orders'),
     _DashboardItem('Loans', Icons.request_page, '/marketing/loan_request'),
-    _DashboardItem('Products', Icons.inventory, ''),      // manual route
-    _DashboardItem('Renumeration', Icons.paid, ''),       // manual route
+    _DashboardItem('Products', Icons.inventory, ''),           // manual route
+    _DashboardItem('Renumeration', Icons.paid, ''),            // manual route
+    // ✅ NEW dashboard section
+    _DashboardItem('Stock Update', Icons.sync, ''),            // manual route
   ];
 
   @override
@@ -81,6 +86,15 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
           MaterialPageRoute(builder: (_) => const AdsManagerMobile()));
       return;
     }
+    // ✅ NEW: route Stock Update tile to StockHistoryScreen
+    if (item.title == 'Stock Update') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const StockHistoryScreen()),
+      );
+      return;
+    }
+
     Navigator.pushNamed(context, item.route);
   }
 
@@ -109,7 +123,6 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
         .map((s) => s.docs.length);
   }
 
-
   @override
   Widget build(BuildContext context) {
     final filtered = _allItems
@@ -130,7 +143,6 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
-          // NEW: notifications button
           IconButton(
             icon: const Icon(Icons.notifications),
             tooltip: 'Notifications',
@@ -149,17 +161,14 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
 
       drawer: const MarketingDrawer(),
 
-      // NOTE: bottom nav kept as-is in your app
       bottomNavigationBar: _buildBottomNav(),
 
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // ——— Summary (now 2x3 with filter) ———
           _OverviewHeader(userEmail: email),
           const SizedBox(height: 16),
 
-          // Search
           TextField(
             onChanged: (v) => setState(() => _search = v),
             decoration: InputDecoration(
@@ -182,7 +191,6 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // Grid tiles — white cards, blue icons/text, labels auto-fit
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -226,7 +234,15 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
           Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: mail)));
         }
       }),
-      // NEW: Notifications item with unread badge
+      // ✅ NEW: Bottom-nav shortcut to Stock History
+      _NavItem(
+        'Stock Update',
+        Icons.sync,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const StockHistoryScreen()),
+        ),
+      ),
       _NavItem(
         'Notifications',
         Icons.notifications,
@@ -291,7 +307,6 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     );
   }
 
-
   String _niceName(String s) {
     if (!s.contains('@')) return s;
     final core = s.split('@').first;
@@ -299,9 +314,16 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
   }
 }
 
-/* ========================= Overview (blue header + white stat cards, 2x3 + filter) ========================= */
+/* ========================= Overview, stat cards & helpers remain unchanged ========================= */
 
 enum _Range { thisMonth, prevMonth, last3, last12 }
+
+// ... (rest of your file stays exactly the same below here) ...
+// I didn’t modify _OverviewHeader, _StatCard, _DashTile, _NavItem, _BadgeIcon, _Badge, etc.
+
+/* ========================= Overview (blue header + white stat cards, 2x3 + filter) ========================= */
+
+
 
 class _OverviewHeader extends StatefulWidget {
   final String? userEmail; // optional user scoping if needed

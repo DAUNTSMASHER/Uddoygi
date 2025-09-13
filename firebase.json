@@ -53,7 +53,15 @@
   "hosting": {
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "cleanUrls": true,
+    "headers": [
+      { "source": "**/*.html", "headers": [ { "key": "Cache-Control", "value": "no-store" } ] },
+      { "source": "**/*.{js,css,wasm}", "headers": [ { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" } ] },
+      { "source": "assets/**", "headers": [ { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" } ] }
+    ],
     "rewrites": [
+      { "source": "/tracking",    "destination": "/tracking/index.html" },
+      { "source": "/tracking/**", "destination": "/tracking/index.html" },
       { "source": "/address-confirm/**", "destination": "/index.html" },
       { "source": "**", "destination": "/index.html" }
     ]

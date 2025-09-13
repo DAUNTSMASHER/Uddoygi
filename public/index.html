@@ -1,89 +1,330 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Welcome to Firebase Hosting</title>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Factory Progress (Live)</title>
 
-    <!-- update the version number as needed -->
-    <script defer src="/__/firebase/12.2.1/firebase-app-compat.js"></script>
-    <!-- include only the Firebase features as you need -->
-    <script defer src="/__/firebase/12.2.1/firebase-auth-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-database-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-firestore-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-functions-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-messaging-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-storage-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-analytics-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-remote-config-compat.js"></script>
-    <script defer src="/__/firebase/12.2.1/firebase-performance-compat.js"></script>
-    <!-- 
-      initialize the SDK after all desired features are loaded, set useEmulator to false
-      to avoid connecting the SDK to running emulators.
-    -->
-    <script defer src="/__/firebase/init.js?useEmulator=true"></script>
+  <!-- Firebase (compat) -->
+  <script defer src="/__/firebase/12.2.1/firebase-app-compat.js"></script>
+  <script defer src="/__/firebase/12.2.1/firebase-firestore-compat.js"></script>
+  <script defer src="/__/firebase/12.2.1/firebase-analytics-compat.js"></script>
+  <!-- If you don’t use emulators in hosting, switch to useEmulator=false -->
+  <script defer src="/__/firebase/init.js?useEmulator=true"></script>
 
-    <style media="screen">
-      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-      #message { background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px; border-radius: 3px; }
-      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
-      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
-      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
-      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
-      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
-      @media (max-width: 600px) {
-        body, #message { margin-top: 0; background: white; box-shadow: none; }
-        body { border-top: 16px solid #ffa100; }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="message">
-      <h2>Welcome</h2>
-      <h1>Firebase Hosting Setup Complete</h1>
-      <p>You're seeing this because you've successfully setup Firebase Hosting. Now it's time to go build something extraordinary!</p>
-      <a target="_blank" href="https://firebase.google.com/docs/hosting/">Open Hosting Documentation</a>
+  <style>
+    :root {
+      --dark: #0d47a1;
+      --ink: #1d5df1;
+      --surface: #f6f8fb;
+      --ok: #2e7d32;
+      --muted: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background: var(--surface); color:#111827; }
+    header {
+      padding: 18px 16px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--dark), var(--ink));
+    }
+    header h1 { margin:0; font-size: 18px; font-weight: 800; }
+    .container { max-width: 860px; margin: 0 auto; padding: 12px; }
+    .card {
+      background:#fff; border:1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    .p-12 { padding:12px; } .p-14{padding:14px;} .p-16{padding:16px;}
+    .mt-8{margin-top:8px;} .mt-12{margin-top:12px;} .mt-16{margin-top:16px;}
+    .row { display:flex; gap:10px; align-items:center; }
+    input[type="text"] {
+      width:100%; padding:12px 14px; border:1px solid #d1d5db; border-radius:10px; font-size:14px;
+    }
+    button {
+      padding:12px 14px; border:0; border-radius:10px; background:var(--dark); color:#fff; font-weight:800; cursor:pointer;
+    }
+    button[disabled] { opacity:.5; cursor:not-allowed; }
+    .subtle { font-size:12px; color: var(--muted); }
+    .summary { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .summary .kv { padding:10px 12px; border-radius:10px; background:#f9fafb; border:1px solid #e5e7eb; }
+    .kv b { display:block; font-size:12px; color:#6b7280; }
+    .kv span { font-weight:800; }
+    .chips { display:flex; gap:8px; overflow:auto; padding-bottom:4px; }
+    .chip {
+      display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; font-size:12px; white-space:nowrap;
+    }
+    .chip.done { background:#e8f5e9; border-color:#c8e6c9; color:#1b5e20; }
+    .chip.curr { background:#e3f2fd; border-color:#bbdefb; color:#0d47a1; }
+    .chip .dot { width:8px; height:8px; border-radius:999px; background:#9ca3af; }
+    .chip.done .dot{ background:#2e7d32; } .chip.curr .dot{ background:#1d4ed8; }
+    .bar { width:100%; height:10px; border-radius:8px; background:#e5e7eb; overflow:hidden; }
+    .bar > div { height:100%; background: var(--dark); width:0%; transition: width 300ms ease; }
+    .list { list-style:none; margin:0; padding:0; }
+    .li { border-left:4px solid #e5e7eb; padding:10px 12px; border-radius:8px; background:#fff; border:1px solid #e5e7eb; }
+    .li.good { border-left-color: var(--dark); }
+    .li h4 { margin:0; font-size:14px; color: var(--dark); font-weight:800; }
+    .li p { margin:4px 0 0; font-size:12px; color:#374151; }
+    .empty { text-align:center; color:#6b7280; padding:24px; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:11px; font-weight:700; }
+    .footer { text-align:center; font-size:12px; color:#9ca3af; padding:16px; }
+    @media (max-width: 720px) { .summary{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Factory Progress (Live)</h1>
+  <div class="subtle">Enter an <b>Invoice No</b> or a <b>Tracking No</b> to see real-time updates.</div>
+</header>
+
+<div class="container">
+  <!-- Search -->
+  <div class="card p-14">
+    <div class="row">
+      <input id="q" type="text" placeholder="e.g. INV-2024-00123  or  TRK-WO-2024010110151234" />
+      <button id="go">Lookup</button>
     </div>
-    <p id="load">Firebase SDK Loading&hellip;</p>
+    <div class="subtle mt-8">We’ll try: tracking → invoice → work order.</div>
+  </div>
 
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        const loadEl = document.querySelector('#load');
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-        // // The Firebase SDK is initialized and available here!
-        //
-        // firebase.auth().onAuthStateChanged(user => { });
-        // firebase.database().ref('/path/to/ref').on('value', snapshot => { });
-        // firebase.firestore().doc('/foo/bar').get().then(() => { });
-        // firebase.functions().httpsCallable('yourFunction')().then(() => { });
-        // firebase.messaging().requestPermission().then(() => { });
-        // firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => { });
-        // firebase.analytics(); // call to activate
-        // firebase.analytics().logEvent('tutorial_completed');
-        // firebase.performance(); // call to activate
-        //
-        // // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+  <!-- Work order summary -->
+  <div id="summary" class="card p-16 mt-12" style="display:none;">
+    <div class="row" style="justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div class="badge" id="status">—</div>
+        <h2 id="title" style="margin:6px 0 0; font-size:18px; font-weight:900;"></h2>
+        <div class="subtle" id="subtitle"></div>
+      </div>
+      <div class="subtle" id="woId" title="Document ID"></div>
+    </div>
 
-        try {
-          let app = firebase.app();
-          let features = [
-            'auth', 
-            'database', 
-            'firestore',
-            'functions',
-            'messaging', 
-            'storage', 
-            'analytics', 
-            'remoteConfig',
-            'performance',
-          ].filter(feature => typeof app[feature] === 'function');
-          loadEl.textContent = `Firebase SDK loaded with ${features.join(', ')}`;
-        } catch (e) {
-          console.error(e);
-          loadEl.textContent = 'Error loading the Firebase SDK, check the console.';
-        }
-      });
-    </script>
-  </body>
+    <div class="summary mt-12">
+      <div class="kv"><b>Buyer</b><span id="buyer">—</span></div>
+      <div class="kv"><b>Delivery (days)</b><span id="delivery">—</span></div>
+      <div class="kv"><b>Final Date</b><span id="finalDate">—</span></div>
+      <div class="kv"><b>Tracking</b><span id="tracking">—</span></div>
+    </div>
+
+    <div class="mt-16">
+      <div class="bar"><div id="bar"></div></div>
+      <div class="subtle mt-8" id="progressTxt">Progress —</div>
+    </div>
+
+    <div class="chips mt-12" id="chips"></div>
+  </div>
+
+  <!-- History -->
+  <div id="historyCard" class="card p-16 mt-12" style="display:none;">
+    <h3 style="margin:0 0 10px; font-size:16px; font-weight:900;">History (live)</h3>
+    <ul class="list" id="history"></ul>
+    <div class="empty" id="noHistory" style="display:none;">No updates yet.</div>
+  </div>
+
+  <div id="empty" class="empty mt-12">Search to see progress.</div>
+  <div class="footer">Powered by Firebase Firestore (real-time).</div>
+</div>
+
+<script>
+  // Stage catalog (must match your app)
+  const STAGES = [
+    'Invoice created',
+    'Payment taken',
+    'Submitted to factory',
+    'Factory update 1 (base is done)',
+    'Hair is ready',
+    'Knotting is going on',
+    'Putting',
+    'Molding',
+    'Submit to the Head office',
+    'Address validation',
+    'Shipped to FedEx',
+    'Final tracking code',
+  ];
+  const stageIndex = (name) => {
+    const i = STAGES.indexOf(name || '');
+    return i < 0 ? -1 : i;
+  };
+
+  let unsubOrder = null;
+  let unsubHistory = null;
+
+  const $ = (sel) => document.querySelector(sel);
+  const dbReady = new Promise((resolve) => {
+    window.addEventListener('DOMContentLoaded', () => {
+      // Wait for firebase/init.js
+      const wait = () => {
+        if (window.firebase?.apps?.length) resolve();
+        else setTimeout(wait, 50);
+      };
+      wait();
+    });
+  });
+
+  function deriveTrackingFromInvoice(invData) {
+    const field = (invData?.tracking_number || '').toString().trim();
+    if (field) return field;
+    const invNo = (invData?.invoiceNo || '').toString();
+    if (invNo) return 'TRK-' + invNo.replace(/[^A-Za-z0-9]+/g, '').toUpperCase();
+    return '';
+  }
+
+  function fmtDate(ts) {
+    try { return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'2-digit'}).format(ts); }
+    catch { return '—'; }
+  }
+  function fmtDateTime(ts) {
+    try { return new Intl.DateTimeFormat(undefined, { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit'}).format(ts); }
+    catch { return '—'; }
+  }
+
+  function renderChips(currentStage) {
+    const curr = stageIndex(currentStage);
+    const chips = STAGES.map((s, i) => {
+      const cls = i < curr ? 'chip done' : (i === curr ? 'chip curr' : 'chip');
+      return `<div class="${cls}"><span class="dot"></span>${s}</div>`;
+    }).join('');
+    $('#chips').innerHTML = chips;
+  }
+
+  function renderOrderSummary(docId, data) {
+    const currentStage = data.currentStage || 'Submitted to factory';
+    const idx = stageIndex(currentStage);
+    const progress = (idx < 0 ? 0 : (idx + 1) / STAGES.length) * 100;
+
+    $('#summary').style.display = '';
+    $('#title').textContent = `Order ${data.workOrderNo || '—'}`;
+    $('#subtitle').textContent = `${data.status || '—'} • ${fmtDateTime((data.lastUpdated?.toDate?.() || new Date()))}`;
+    $('#status').textContent = data.status || '—';
+    $('#woId').textContent = docId;
+
+    $('#buyer').textContent = data.buyerName || data.makerName || '—';
+    $('#delivery').textContent = data.deliveryDays ?? '—';
+    $('#finalDate').textContent = data.finalDate?.toDate ? fmtDate(data.finalDate.toDate()) : '—';
+    $('#tracking').textContent = data.tracking_number || '—';
+
+    $('#bar').style.width = `${progress.toFixed(0)}%`;
+    $('#progressTxt').textContent = `Progress: ${progress.toFixed(0)}% • ${currentStage}`;
+
+    renderChips(currentStage);
+
+    // show history card container
+    $('#historyCard').style.display = '';
+  }
+
+  function renderHistory(snapshot, currentStage) {
+    const list = $('#history');
+    list.innerHTML = '';
+    if (snapshot.empty) {
+      $('#noHistory').style.display = '';
+      return;
+    }
+    $('#noHistory').style.display = 'none';
+
+    const currIdx = stageIndex(currentStage);
+    snapshot.forEach((doc) => {
+      const d = doc.data();
+      const idx = stageIndex(d.stage);
+      const good = idx <= currIdx;
+      const notes = (d.notes || '').toString();
+      const assigned = (d.assignedTo || '').toString();
+      const tl = d.timeLimit?.toDate ? fmtDate(d.timeLimit.toDate()) : '—';
+      const upd = d.lastUpdated?.toDate ? fmtDateTime(d.lastUpdated.toDate()) : '—';
+
+      const item = document.createElement('li');
+      item.className = `li mt-8 ${good ? 'good' : ''}`;
+      item.innerHTML = `
+        <h4>${d.stage || '-'}</h4>
+        <p>${assigned ? `<b>Assigned:</b> ${assigned} • ` : ''}<b>Deadline:</b> ${tl}</p>
+        ${notes ? `<p><b>Notes:</b> ${notes}</p>` : ''}
+        <p class="subtle">Updated: ${upd}</p>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  async function lookupOrder(q) {
+    const fs = firebase.firestore();
+
+    // 1) Try by tracking_number (exact)
+    let woSnap = await fs.collection('work_orders').where('tracking_number', '==', q).limit(1).get();
+    if (woSnap.empty) {
+      // 2) Try by workOrderNo (user might paste WO_xxx)
+      woSnap = await fs.collection('work_orders').where('workOrderNo', '==', q).limit(1).get();
+    }
+    if (woSnap.empty) {
+      // 3) Try by invoiceNo -> resolve to work order via invoiceId or derived tracking
+      const invSnap = await fs.collection('invoices').where('invoiceNo', '==', q).limit(1).get();
+      if (!invSnap.empty) {
+        const invDoc = invSnap.docs[0];
+        const invData = invDoc.data();
+        const derivedTrk = deriveTrackingFromInvoice(invData);
+        // Prefer direct link via invoiceId
+        let viaInvoice = await fs.collection('work_orders').where('invoiceId', '==', invDoc.id).limit(1).get();
+        woSnap = !viaInvoice.empty ? viaInvoice : await fs.collection('work_orders').where('tracking_number', '==', derivedTrk).limit(1).get();
+      }
+    }
+    return woSnap.empty ? null : woSnap.docs[0];
+  }
+
+  function clearSubscriptions() {
+    if (typeof unsubOrder === 'function') { unsubOrder(); unsubOrder = null; }
+    if (typeof unsubHistory === 'function') { unsubHistory(); unsubHistory = null; }
+  }
+
+  async function startLive(q) {
+    clearSubscriptions();
+    $('#empty').style.display = 'none';
+    $('#summary').style.display = 'none';
+    $('#historyCard').style.display = 'none';
+    $('#history').innerHTML = '';
+    $('#noHistory').style.display = 'none';
+
+    const doc = await lookupOrder(q);
+    if (!doc) {
+      $('#empty').style.display = '';
+      $('#empty').textContent = 'No matching order found.';
+      return;
+    }
+
+    const fs = firebase.firestore();
+    const docRef = fs.collection('work_orders').doc(doc.id);
+
+    // Live: work order doc
+    unsubOrder = docRef.onSnapshot((snap) => {
+      const data = snap.data() || {};
+      renderOrderSummary(snap.id, data);
+
+      // (Re)wire history listener with current workOrderNo
+      const workOrderNo = data.workOrderNo;
+      if (!workOrderNo) return;
+
+      if (unsubHistory) { unsubHistory(); unsubHistory = null; }
+      unsubHistory = fs.collection('work_order_tracking')
+        .where('workOrderNo', '==', workOrderNo)
+        .orderBy('createdAt', 'desc')
+        .onSnapshot((histSnap) => renderHistory(histSnap, data.currentStage || 'Submitted to factory'),
+                    (err) => console.error('History listener error:', err));
+    }, (err) => {
+      console.error('Order listener error:', err);
+    });
+  }
+
+  (async function main() {
+    await dbReady;
+    const go = $('#go');
+    const input = $('#q');
+
+    const run = () => {
+      const v = input.value.trim();
+      if (!v) return;
+      go.disabled = true;
+      startLive(v).finally(() => { go.disabled = false; });
+    };
+
+    go.addEventListener('click', run);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+
+    // Optional: support ?q= param
+    const urlQ = new URLSearchParams(location.search).get('q');
+    if (urlQ) { input.value = urlQ; run(); }
+  })();
+</script>
+</body>
 </html>

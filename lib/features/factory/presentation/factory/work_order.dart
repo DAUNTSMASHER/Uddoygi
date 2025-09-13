@@ -5,13 +5,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'work_order_details_screen.dart';
 
-/// Brand palette (aligned with your dashboards)
+/// ব্র্যান্ড প্যালেট (ড্যাশবোর্ডের সাথে সামঞ্জস্য)
 const Color _brandTeal  = Color(0xFF001863);
 const Color _indigoCard = Color(0xFF0B2D9F);
 const Color _surface    = Color(0xFFF4FBFB);
 const Color _boardDark  = Color(0xFF0330AE);
 
 enum _StatusFilter { all, pending, accepted, rejected }
+enum _SortMode { newest, oldest }
 
 class WorkOrdersScreen extends StatefulWidget {
   const WorkOrdersScreen({Key? key}) : super(key: key);
@@ -23,16 +24,18 @@ class WorkOrdersScreen extends StatefulWidget {
 class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
   final _firestore = FirebaseFirestore.instance;
 
-  // UI state
-  String _search = '';
-  _StatusFilter _filter = _StatusFilter.all;
-  bool _sortDesc = true;
+  // ---------- UI State ----------
+  String _search = '';                         // 🔎 সার্চ টেক্সট
+  _StatusFilter _filter = _StatusFilter.all;   // 🚦 স্ট্যাটাস ফিল্টার
+  _SortMode _sort = _SortMode.newest;          // ↕️ সোর্টিং মোড
 
+  // ---------- Actions ----------
+  /// ✅ অর্ডার গ্রহণ করা
   Future<void> _acceptOrder(String id) async {
     final ok = await _confirm(
-      title: 'Accept Work Order?',
-      message: 'This will mark the order as Accepted.',
-      confirmText: 'Accept',
+      title: 'ওয়ার্ক অর্ডার গ্রহণ করবেন?',
+      message: 'এটি অর্ডারটিকে “গ্রহণকৃত” হিসেবে চিহ্নিত করবে।',
+      confirmText: 'গ্রহণ করুন',
       confirmColor: Colors.green,
     );
     if (ok != true) return;
@@ -44,27 +47,28 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order accepted')),
+          const SnackBar(content: Text('অর্ডার গ্রহণ করা হয়েছে')),
         );
       }
     } catch (e) {
-      _toast('Error accepting: $e');
+      _toast('গ্রহণ করতে সমস্যা: $e');
     }
   }
 
+  /// ❌ অর্ডার বাতিল করা (সাথে সুপারিশ/কারণ নেওয়া)
   Future<void> _rejectOrder(String id) async {
     final recCtl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reject Work Order'),
+        title: const Text('ওয়ার্ক অর্ডার বাতিল'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Add a recommendation (required)',
+                'সংক্ষিপ্ত সুপারিশ/কারণ লিখুন (আবশ্যক)',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -72,7 +76,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
             TextField(
               controller: recCtl,
               decoration: const InputDecoration(
-                hintText: 'Write recommendation…',
+                hintText: 'সুপারিশ/কারণ লিখুন…',
                 border: OutlineInputBorder(),
               ),
               maxLines: 4,
@@ -82,7 +86,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('বাতিল করুন'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -90,7 +94,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
               if (recCtl.text.trim().isEmpty) return;
               Navigator.of(ctx).pop(true);
             },
-            child: const Text('Reject'),
+            child: const Text('নিশ্চিত'),
           ),
         ],
       ),
@@ -104,12 +108,13 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
         'recommendation': recCtl.text.trim(),
         'lastUpdated': FieldValue.serverTimestamp(),
       });
-      _toast('Recommendation saved');
+      _toast('সুপারিশ সংরক্ষণ করা হয়েছে');
     } catch (e) {
-      _toast('Error saving recommendation: $e');
+      _toast('সুপারিশ সংরক্ষণে সমস্যা: $e');
     }
   }
 
+  /// ✅/❌ কনফার্মেশন ডায়ালগ
   Future<bool?> _confirm({
     required String title,
     required String message,
@@ -122,7 +127,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
         title: Text(title),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('না')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: confirmColor ?? _brandTeal),
             onPressed: () => Navigator.pop(ctx, true),
@@ -133,18 +138,21 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     );
   }
 
+  /// 🧃 Snackbar টোস্ট
   void _toast(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
   }
 
-  // Helpers
+  // ---------- Helpers ----------
+  /// 🗓️ টাইমস্ট্যাম্প → সুন্দর ফরম্যাট
   String _formatTs(Timestamp? ts) {
     if (ts == null) return '—';
     final d = ts.toDate();
     return DateFormat('dd MMM, hh:mm a').format(d);
   }
 
+  /// 🎨 স্ট্যাটাস কালার
   Color _statusColor(String s) {
     switch (s.toLowerCase()) {
       case 'accepted':
@@ -159,8 +167,25 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     }
   }
 
+  /// 🔤 স্ট্যাটাসের বাংলা টেক্সট
+  String _bnStatusText(String s) {
+    switch (s.toLowerCase()) {
+      case 'accepted':
+        return 'গ্রহণকৃত';
+      case 'rejected':
+        return 'বাতিল';
+      case 'in_progress':
+      case 'open':
+      case 'pending':
+      default:
+        return 'অপেক্ষমাণ';
+    }
+  }
+
+  /// 🔖 স্ট্যাটাস চিপ (বাংলা)
   Widget _statusChip(String status) {
     final c = _statusColor(status);
+    final t = _bnStatusText(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -169,18 +194,21 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        t,
         style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12),
       ),
     );
   }
 
+  /// 🚦 ফিল্টার অনুযায়ী মিল আছে কি না
   bool _matchesFilter(String status) {
     switch (_filter) {
       case _StatusFilter.all:
         return true;
       case _StatusFilter.pending:
-        return (status.toLowerCase() == 'pending' || status.toLowerCase() == 'open' || status.toLowerCase() == 'in_progress');
+        return (status.toLowerCase() == 'pending' ||
+            status.toLowerCase() == 'open' ||
+            status.toLowerCase() == 'in_progress');
       case _StatusFilter.accepted:
         return status.toLowerCase() == 'accepted';
       case _StatusFilter.rejected:
@@ -188,6 +216,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     }
   }
 
+  /// 🔎 সার্চ মিল
   bool _matchesSearch(String woNo, Map<String, dynamic> data) {
     if (_search.trim().isEmpty) return true;
     final q = _search.toLowerCase();
@@ -198,7 +227,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
       buf.write(' ${v.toString().toLowerCase()}');
     }
 
-    // common fields we often have in WOs
+    // ✅ কমন ফিল্ড গুলো সার্চে ধরা হচ্ছে
     add(data['title']);
     add(data['buyer']);
     add(data['department']);
@@ -209,6 +238,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     return buf.toString().contains(q);
   }
 
+  // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -217,16 +247,10 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
         backgroundColor: _brandTeal,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Work Orders', style: TextStyle(fontWeight: FontWeight.w800)),
-        actions: [
-          IconButton(
-            tooltip: _sortDesc ? 'Newest first' : 'Oldest first',
-            onPressed: () => setState(() => _sortDesc = !_sortDesc),
-            icon: const Icon(Icons.sort),
-          ),
-        ],
+        title: const Text('ওয়ার্ক অর্ডার', style: TextStyle(fontWeight: FontWeight.w800)),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        // 🔁 লাইভ ডেটা স্ট্রীম (টাইমস্ট্যাম্প-অনুযায়ী)
         stream: _firestore.collection('work_orders').orderBy('timestamp', descending: true).snapshots(),
         builder: (ctx, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
@@ -235,7 +259,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
 
           final docs = snap.data?.docs ?? [];
 
-          // Compute summary counts
+          // 📊 সামারি কাউন্টস
           int total = docs.length;
           int pend = 0, acc = 0, rej = 0;
           for (final d in docs) {
@@ -245,7 +269,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
             else pend++;
           }
 
-          // Filters + search + sort
+          // 🔎 ফিল্টার + সার্চ + সোর্ট
           final items = docs.where((d) {
             final data = d.data();
             final status = data['status'] as String? ?? 'Pending';
@@ -256,13 +280,13 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
               final at = (a.data()['timestamp'] as Timestamp?);
               final bt = (b.data()['timestamp'] as Timestamp?);
               final cmp = (at?.toDate() ?? DateTime(1970)).compareTo(bt?.toDate() ?? DateTime(1970));
-              return _sortDesc ? -cmp : cmp;
+              return _sort == _SortMode.newest ? -cmp : cmp;
             });
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
-              // ===== Overview board =====
+              // ===== 🧭 ওভারভিউ বোর্ড =====
               Container(
                 padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
                 decoration: BoxDecoration(color: _boardDark, borderRadius: BorderRadius.circular(20)),
@@ -270,63 +294,109 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                   spacing: 12,
                   runSpacing: 12,
                   children: [
-                    _smallStat('Total Orders', '$total', Icons.list_alt),
-                    _smallStat('Pending', '$pend', Icons.timelapse),
-                    _smallStat('Accepted', '$acc', Icons.verified),
-                    _smallStat('Rejected', '$rej', Icons.block),
+                    _smallStat('মোট অর্ডার', '$total', Icons.list_alt),
+                    _smallStat('অপেক্ষমাণ', '$pend', Icons.timelapse),
+                    _smallStat('গ্রহণকৃত', '$acc', Icons.verified),
+                    _smallStat('বাতিল', '$rej', Icons.block),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // ===== Search + filters row =====
-              Row(
+              // ===== 🔎 টুলবার: সার্চ + ফিল্টার + সোর্ট =====
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Search
-                  Expanded(
-                    child: TextField(
-                      onChanged: (v) => setState(() => _search = v),
-                      decoration: InputDecoration(
-                        hintText: 'Search WO no, buyer, model…',
-                        prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                  Row(
+                    children: [
+                      // Search
+                      Expanded(
+                        child: TextField(
+                          onChanged: (v) => setState(() => _search = v),
+                          decoration: InputDecoration(
+                            hintText: 'সার্চ করুন: WO নম্বর, ক্রেতা, মডেল…',
+                            prefixIcon: const Icon(Icons.search),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  PopupMenuButton<_StatusFilter>(
-                    tooltip: 'Filter status',
-                    onSelected: (v) => setState(() => _filter = v),
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: _StatusFilter.all, child: Text('All')),
-                      PopupMenuItem(value: _StatusFilter.pending, child: Text('Pending')),
-                      PopupMenuItem(value: _StatusFilter.accepted, child: Text('Accepted')),
-                      PopupMenuItem(value: _StatusFilter.rejected, child: Text('Rejected')),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.filter_list),
-                          const SizedBox(width: 6),
-                          Text(
-                            _filter.name[0].toUpperCase() + _filter.name.substring(1),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const Icon(Icons.arrow_drop_down),
+                      const SizedBox(width: 10),
+                      // Filter
+                      PopupMenuButton<_StatusFilter>(
+                        tooltip: 'স্ট্যাটাস ফিল্টার',
+                        onSelected: (v) => setState(() => _filter = v),
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: _StatusFilter.all, child: Text('সব')),
+                          PopupMenuItem(value: _StatusFilter.pending, child: Text('অপেক্ষমাণ')),
+                          PopupMenuItem(value: _StatusFilter.accepted, child: Text('গ্রহণকৃত')),
+                          PopupMenuItem(value: _StatusFilter.rejected, child: Text('বাতিল')),
                         ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.filter_list),
+                              const SizedBox(width: 6),
+                              Text(
+                                _filter == _StatusFilter.all
+                                    ? 'ফিল্টার: সব'
+                                    : _filter == _StatusFilter.pending
+                                    ? 'ফিল্টার: অপেক্ষমাণ'
+                                    : _filter == _StatusFilter.accepted
+                                    ? 'ফিল্টার: গ্রহণকৃত'
+                                    : 'ফিল্টার: বাতিল',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      // Sort
+                      PopupMenuButton<_SortMode>(
+                        tooltip: 'সাজান',
+                        onSelected: (v) => setState(() => _sort = v),
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: _SortMode.newest, child: Text('নতুন আগে')),
+                          PopupMenuItem(value: _SortMode.oldest, child: Text('পুরোনো আগে')),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.sort),
+                              const SizedBox(width: 6),
+                              Text(
+                                _sort == _SortMode.newest ? 'সাজান: নতুন আগে' : 'সাজান: পুরোনো আগে',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Helper line (Bengali explanation)
+                  Text(
+                    'ইঙ্গিত: ওপরের সার্চ/ফিল্টার/সাজান বদলালেই নিচের অর্ডার তালিকা সাথে সাথে বদলাবে।',
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -341,11 +411,11 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                     border: Border.all(color: Colors.black12),
                   ),
                   child: const Center(
-                    child: Text('No matching work orders found.'),
+                    child: Text('কোনো মিল পাওয়া যায়নি।'),
                   ),
                 ),
 
-              // ===== Cards =====
+              // ===== 📄 কার্ডসমূহ =====
               ...items.map((doc) {
                 final data  = doc.data();
                 final woNo  = data['workOrderNo'] as String? ?? doc.id;
@@ -407,16 +477,16 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                         padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
                         child: Column(
                           children: [
-                            _kvRow('Title', title),
-                            _kvRow('Buyer', buyer),
-                            _kvRow('Department', dept),
-                            _kvRow('Model', model),
-                            _kvRow('Quantity', qty == null ? null : qty.toStringAsFixed(0)),
-                            _kvRow('Priority', prio),
-                            _kvRow('Assigned To', assg),
-                            _kvRow('Created', _formatTs(ts)),
-                            _kvRow('Last Updated', _formatTs(last)),
-                            if (rec != null && rec.isNotEmpty) _kvRow('Recommendation', rec, multi: true),
+                            _kvRow('শিরোনাম', title),
+                            _kvRow('ক্রেতা', buyer),
+                            _kvRow('বিভাগ', dept),
+                            _kvRow('মডেল', model),
+                            _kvRow('পরিমাণ', qty == null ? null : qty.toStringAsFixed(0)),
+                            _kvRow('অগ্রাধিকার', prio),
+                            _kvRow('দায়িত্বপ্রাপ্ত', assg),
+                            _kvRow('তৈরির সময়', _formatTs(ts)),
+                            _kvRow('সর্বশেষ হালনাগাদ', _formatTs(last)),
+                            if (rec != null && rec.isNotEmpty) _kvRow('সুপারিশ', rec, multi: true),
                           ],
                         ),
                       ),
@@ -424,76 +494,87 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                       const Divider(height: 1),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (status.toLowerCase() != 'accepted' && status.toLowerCase() != 'rejected') ...[
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green.shade600,
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: () => _acceptOrder(doc.id),
-                                icon: const Icon(Icons.check_circle),
-                                label: const Text('Accept'),
-                              ),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red.shade600,
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: () => _rejectOrder(doc.id),
-                                icon: const Icon(Icons.cancel),
-                                label: const Text('Reject'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
-                                  );
-                                },
-                                icon: const Icon(Icons.open_in_new),
-                                label: const Text('Details'),
-                              ),
-                            ] else if (status.toLowerCase() == 'accepted') ...[
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _brandTeal,
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
-                                  );
-                                },
-                                icon: const Icon(Icons.update),
-                                label: const Text('Go to Updates'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
-                                  );
-                                },
-                                icon: const Icon(Icons.description),
-                                label: const Text('Details'),
-                              ),
-                            ] else ...[
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
-                                  );
-                                },
-                                icon: const Icon(Icons.description),
-                                label: const Text('Details'),
-                              ),
-                            ],
+                            // Bengali helper line above actions
+                            Text(
+                              'অ্যাকশন: প্রয়োজন অনুযায়ী গ্রহণ/বাতিল করুন বা বিস্তারিত দেখুন।',
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (status.toLowerCase() != 'accepted' && status.toLowerCase() != 'rejected') ...[
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green.shade600,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () => _acceptOrder(doc.id),
+                                    icon: const Icon(Icons.check_circle),
+                                    label: const Text('গ্রহণ করুন'),
+                                  ),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red.shade600,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () => _rejectOrder(doc.id),
+                                    icon: const Icon(Icons.cancel),
+                                    label: const Text('বাতিল করুন'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.open_in_new),
+                                    label: const Text('বিস্তারিত'),
+                                  ),
+                                ] else if (status.toLowerCase() == 'accepted') ...[
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _brandTeal,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.update),
+                                    label: const Text('আপডেট দেখুন'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.description),
+                                    label: const Text('বিস্তারিত'),
+                                  ),
+                                ] else ...[
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
+                                      );
+                                    },
+                                    icon: const Icon(Icons.description),
+                                    label: const Text('বিস্তারিত'),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -508,7 +589,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     );
   }
 
-  // Small stat tile used in the overview board
+  // 🔢 ওভারভিউ বোর্ডের ছোট কার্ড
   Widget _smallStat(String title, String value, IconData icon) {
     return Container(
       width: 210,
@@ -546,7 +627,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     );
   }
 
-  // Key-value row with graceful fallbacks
+  // 🔑-🔸 কী-ভ্যালু সারি (বাংলা লেবেল)
   Widget _kvRow(String k, String? v, {bool multi = false}) {
     final value = (v == null || v.isEmpty) ? '—' : v;
     return Padding(

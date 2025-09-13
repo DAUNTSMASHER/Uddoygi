@@ -3,14 +3,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 const Color _peach = Color(0xFFFF8A65);
 const Color _surface = Color(0xFFF8F6F5);
 
-/// Shows factory updates for ALL work-orders
-/// and a detailed tracking path per order.
+/// Shows factory updates for the CURRENT user's work-orders only,
+/// provides copy buttons for Invoice / WO / Tracking,
+/// and renders a detailed tracking path per order.
 class FactoryTrackingPage extends StatelessWidget {
   const FactoryTrackingPage({Key? key}) : super(key: key);
 
@@ -30,15 +32,18 @@ class FactoryTrackingPage extends StatelessWidget {
     'Final tracking code',
   ];
 
-  int _stageIndex(String? s) =>
-      s == null ? -1 : _stages.indexOf(s);
+  int _stageIndex(String? s) => s == null ? -1 : _stages.indexOf(s);
 
   // ————— Streams —————
 
-  // All work orders (no agent filter)
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _allOrdersStream {
+  /// Only the logged-in user's work-orders.
+  /// We write `agentEmail` when creating orders, so we filter on that.
+  Stream<QuerySnapshot<Map<String, dynamic>>> _myOrdersStream() {
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    if (email.isEmpty) return const Stream.empty();
     return FirebaseFirestore.instance
         .collection('work_orders')
+        .where('agentEmail', isEqualTo: email)
         .orderBy('timestamp', descending: true)
         .snapshots();
   }
@@ -62,6 +67,19 @@ class FactoryTrackingPage extends StatelessWidget {
     return DateFormat.yMMMd().add_jm().format(t);
   }
 
+  void _copyToClipboard(BuildContext context, String label, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$label copied'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.green.shade700,
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
   Widget _chip(String text, {Color? color}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -79,6 +97,52 @@ class FactoryTrackingPage extends StatelessWidget {
           fontSize: 12,
         ),
       ),
+    );
+  }
+
+  Widget _copyPill({
+    required BuildContext context,
+    required IconData icon,
+    required String label,         // visible label (e.g., "WO")
+    required String value,         // visible value (e.g., "WO_2024...")
+    String? copyLabelOverride,     // shown in snackbar; defaults to label
+  }) {
+    final canCopy = value.trim().isNotEmpty && value.trim() != '—';
+    final pill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: _darkBlue),
+          const SizedBox(width: 6),
+          Text('$label: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade800,
+                fontSize: 12,
+              )),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(width: 6),
+          Icon(Icons.copy, size: 14, color: canCopy ? _darkBlue : Colors.grey),
+        ],
+      ),
+    );
+
+    if (!canCopy) return pill;
+
+    return InkWell(
+      onTap: () => _copyToClipboard(context, copyLabelOverride ?? label, value),
+      borderRadius: BorderRadius.circular(999),
+      child: pill,
     );
   }
 
@@ -164,9 +228,7 @@ class FactoryTrackingPage extends StatelessWidget {
   }
 
   // Detailed path visual (done/current/upcoming)
-  Widget _detailPath({
-    required String currentStage,
-  }) {
+  Widget _detailPath({required String currentStage}) {
     final curr = _stageIndex(currentStage);
     return _card(
       child: Column(
@@ -258,7 +320,7 @@ class FactoryTrackingPage extends StatelessWidget {
         ),
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _allOrdersStream, // ← all orders now
+        stream: _myOrdersStream(), // ← only current user's orders
         builder: (ctx, orderSnap) {
           if (orderSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -287,10 +349,49 @@ class FactoryTrackingPage extends StatelessWidget {
             itemBuilder: (ctx, i) {
               final doc = orders[i];
               final data = doc.data();
+
               final woNo = data['workOrderNo'] as String? ?? '—';
+              final tracking = (data['tracking_number'] as String?)?.trim() ?? '—';
               final currentStage = (data['currentStage'] as String?) ?? 'Submitted to factory';
               final lastTs = (data['lastUpdated'] as Timestamp?)?.toDate();
               final lastStr = lastTs == null ? '-' : _relativeTime(lastTs);
+              final invoiceId = (data['invoiceId'] as String?);
+
+              // We may need invoiceNo; load it lazily per card if invoiceId exists.
+              final invoiceFuture = (invoiceId == null || invoiceId.isEmpty)
+                  ? null
+                  : FirebaseFirestore.instance.collection('invoices').doc(invoiceId).get();
+
+              Widget copyRow({String? invoiceNo}) {
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if ((invoiceNo ?? '').isNotEmpty)
+                      _copyPill(
+                        context: ctx,
+                        icon: Icons.receipt_long,
+                        label: 'Invoice',
+                        value: invoiceNo!,
+                        copyLabelOverride: 'Invoice No',
+                      ),
+                    _copyPill(
+                      context: ctx,
+                      icon: Icons.assignment_turned_in,
+                      label: 'WO',
+                      value: woNo,
+                      copyLabelOverride: 'Work Order No',
+                    ),
+                    _copyPill(
+                      context: ctx,
+                      icon: Icons.qr_code_2,
+                      label: 'TRK',
+                      value: tracking,
+                      copyLabelOverride: 'Tracking No',
+                    ),
+                  ],
+                );
+              }
 
               return _card(
                 padding: const EdgeInsets.all(0),
@@ -306,6 +407,17 @@ class FactoryTrackingPage extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.black12.withOpacity(.06)),
+                            ),
+                            child: const Icon(Icons.factory, color: _darkBlue, size: 20),
+                          ),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,9 +443,26 @@ class FactoryTrackingPage extends StatelessWidget {
                       ),
                     ),
 
-                    // Title row
+                    // Copy pills row (Invoice / WO / TRK)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: invoiceFuture == null
+                          ? copyRow()
+                          : FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        future: invoiceFuture,
+                        builder: (ctx, invSnap) {
+                          String? invoiceNo;
+                          if (invSnap.connectionState == ConnectionState.done && invSnap.hasData) {
+                            invoiceNo = (invSnap.data!.data()?['invoiceNo'] as String?)?.trim();
+                          }
+                          return copyRow(invoiceNo: invoiceNo);
+                        },
+                      ),
+                    ),
+
+                    // Title row
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                       child: Row(
                         children: const [
                           Expanded(
@@ -349,7 +478,7 @@ class FactoryTrackingPage extends StatelessWidget {
                       ),
                     ),
 
-                    // Updates timeline (ALL updates now)
+                    // Updates timeline (live)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -397,7 +526,7 @@ class FactoryTrackingPage extends StatelessWidget {
                       ),
                     ),
 
-                    // Detailed tracking path (replaces previous footer buttons)
+                    // Detailed tracking path
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                       child: _detailPath(currentStage: currentStage),
