@@ -15,24 +15,17 @@ import 'features/auth/presentation/screens/splash_screen.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
 import 'features/auth/presentation/screens/confirmation_screen.dart';
 
-// Push helpers (these files are below)
+// Push + in-app banners + presence
 import 'push/fcm_register.dart';
 import 'push/notify_bootstrap.dart';
+import 'push/message_notification.dart';
+import 'push/device_presence.dart';
 
-/// Background FCM handler (Android).
-/// If your server sends a `notification` block, Android will usually post
-/// to the tray automatically. This handler is here in case you want to do
-/// extra work and to keep Firebase initialized in the background isolate.
 @pragma('vm:entry-point')
 Future<void> _fcmBackgroundHandler(RemoteMessage message) async {
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  } catch (_) {
-    // Already initialized – ignore.
-  }
-
-  // Optionally mirror as a local banner if needed:
-  // (Only useful for data-only messages; for notification+data the system tray shows already.)
+  } catch (_) {}
   await showRemoteNotificationFromBackground(message);
 }
 
@@ -40,20 +33,48 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Android background delivery
-  FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
+  // In-app Firestore → banner listener
+  MessageNotificationService.instance.initialize();
 
-  // Local notifications: channel, iOS foreground presentation, etc.
-  await initLocalNotifications();
+  // Presence needs to hook lifecycle once at app start
+  DevicePresence.instance.initialize();
 
-  // Foreground FCM -> local banner
-  setupOnMessageHandler();
+  // Push setup (not for Web)
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
+    await initLocalNotifications();   // channel + iOS foreground settings
+    setupOnMessageHandler();          // mirror FCM → local banner
 
-  // If already signed in, make sure this device can receive push
+    // handle taps (cold/warm)
+    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    if (initial != null) {
+      messageNavigatorKey.currentState?.pushNamed('/notifications');
+    }
+    FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      messageNavigatorKey.currentState?.pushNamed('/notifications');
+    });
+  }
+
+  // If already signed in, register push + start presence
   final current = FirebaseAuth.instance.currentUser;
   if (current != null) {
-    await registerForPushNotifications();
+    if (!kIsWeb) {
+      await registerForPushNotifications();
+    }
+    await DevicePresence.instance.start(); // show as live device
   }
+
+  // Watch future sign-ins / sign-outs
+  FirebaseAuth.instance.authStateChanges().listen((user) async {
+    if (user != null) {
+      if (!kIsWeb) {
+        await registerForPushNotifications();
+      }
+      await DevicePresence.instance.start();
+    } else {
+      await DevicePresence.instance.stop();
+    }
+  });
 
   runApp(const UddyogiApp());
 }
@@ -79,6 +100,7 @@ class UddyogiApp extends StatelessWidget {
     };
 
     return MaterialApp(
+      navigatorKey: messageNavigatorKey, // required for in-app banners/deeplinks
       title: 'Uddyogi - Smart Company Management',
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -98,7 +120,7 @@ class UddyogiApp extends StatelessWidget {
   }
 }
 
-/// Wraps LoginScreen to sign in, register push, and route by department.
+/// Wraps LoginScreen to sign in, register push, start presence, and route by department.
 class LoginScreenWrapper extends StatefulWidget {
   const LoginScreenWrapper({super.key});
   @override
@@ -115,8 +137,10 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
     try {
       final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
 
-      // Register this device & request permission
-      await registerForPushNotifications();
+      if (!kIsWeb) {
+        await registerForPushNotifications();
+      }
+      await DevicePresence.instance.start(); // defensive: ensure presence starts here too
 
       // Route by department
       final snap = await _db.collection('users').doc(cred.user!.uid).get();

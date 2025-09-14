@@ -1,65 +1,69 @@
 // lib/push/fcm_register.dart
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-/// Requests runtime permission, obtains an FCM token, and persists it under:
-/// users/{uid}/fcmTokens/{token}
+Future<void> _claimTokenForUser(String uid, String token) async {
+  final db = FirebaseFirestore.instance;
+
+  // 1) Remove from any other user's top-level array
+  final qArr = await db.collection('users')
+      .where('fcmTokens', arrayContains: token)
+      .get();
+  for (final d in qArr.docs) {
+    if (d.id == uid) continue;
+    try {
+      await d.reference.update({
+        'fcmTokens': FieldValue.arrayRemove([token]),
+      });
+    } catch (_) {}
+  }
+
+  // 2) Remove from any other user's subcollection
+  final qSub = await db.collectionGroup('fcmTokens')
+      .where('token', isEqualTo: token)
+      .get();
+  for (final d in qSub.docs) {
+    final parent = d.reference.parent.parent; // users/{otherUid}
+    if (parent == null || parent.id == uid) continue;
+    try {
+      await d.reference.delete();
+    } catch (_) {}
+  }
+
+  // 3) Ensure it is present for THIS user
+  final userRef = db.collection('users').doc(uid);
+  await userRef.set({
+    'fcmTokens': FieldValue.arrayUnion([token]),
+  }, SetOptions(merge: true));
+
+  await userRef.collection('fcmTokens').doc(token).set({
+    'token': token,
+    'platform': Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'other',
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
 Future<void> registerForPushNotifications() async {
-  final msg = FirebaseMessaging.instance;
-
-  // Android 13+ runtime permission; iOS explicit permission
-  await msg.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-    provisional: false,
-  );
-
-  // (iOS) request APNs token as well
-  try {
-    await msg.getAPNSToken();
-  } catch (_) {}
-
-  // Obtain the FCM token
-  final token = await msg.getToken();
   final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
 
-  if (token != null) {
-    // Helpful for debugging delivery
-    // ignore: avoid_print
-    print('FCM token: $token');
+  final fm = FirebaseMessaging.instance;
+  try { await fm.requestPermission(alert: true, badge: true, sound: true); } catch (_) {}
+
+  var token = await fm.getToken();
+  if (token == null || token.trim().isEmpty) {
+    await Future.delayed(const Duration(milliseconds: 500));
+    token = await fm.getToken();
   }
+  if (token == null || token.trim().isEmpty) return;
 
-  if (user != null && token != null) {
-    final ref = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('fcmTokens')
-        .doc(token);
+  await _claimTokenForUser(user.uid, token);
 
-    await ref.set({
-      'token': token,
-      'platform': Platform.operatingSystem,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  // Keep Firestore up to date when token rotates
-  msg.onTokenRefresh.listen((t) async {
-    final u = FirebaseAuth.instance.currentUser;
-    if (u == null) return;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(u.uid)
-        .collection('fcmTokens')
-        .doc(t)
-        .set({
-      'token': t,
-      'platform': Platform.operatingSystem,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+  // Keep token fresh
+  fm.onTokenRefresh.listen((newT) async {
+    if (newT.trim().isEmpty) return;
+    await _claimTokenForUser(user.uid, newT);
   });
 }

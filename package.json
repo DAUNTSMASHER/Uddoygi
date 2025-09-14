@@ -1,14 +1,16 @@
 {
   "name": "uddoygi",
   "version": "1.0.0",
-  "description": "A new Flutter project.",
-  "main": "debugMarketing.js",
+  "private": true,
+  "description": "Flutter app with a local Firestore→FCM worker",
+  "type": "commonjs",
   "directories": {
     "lib": "lib",
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "worker": "node tools/local_fcm_worker.js",
+    "dev": "concurrently -k -n worker,flutter \"npm:worker\" \"flutter run\""
   },
   "repository": {
     "type": "git",
@@ -17,13 +19,14 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/DAUNTSMASHER/Uddoygi/issues"
   },
   "homepage": "https://github.com/DAUNTSMASHER/Uddoygi#readme",
   "dependencies": {
     "axios": "^1.12.1",
+    "concurrently": "^9.0.0",
+    "dotenv": "^16.6.1",
     "firebase-admin": "^13.5.0",
     "googleapis": "^159.0.0",
     "yargs": "^18.0.0"

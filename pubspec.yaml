@@ -67,6 +67,7 @@ dependencies:
   flutter_animate: ^4.5.2
   circle_flags: ^3.0.1        # country flags (ISO-2 codes)
   country_picker: ^2.0.20
+  device_info_plus: ^10.1.0
 
 
 dev_dependencies:

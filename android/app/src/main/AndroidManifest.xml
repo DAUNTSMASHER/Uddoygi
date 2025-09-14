@@ -2,14 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- ===== Permissions ===== -->
-    <!-- Internet is required for Firebase and general networking -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Android 13+ runtime permission for notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Optional but recommended for reliable delivery/wakeups -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -20,7 +15,6 @@
         android:label="uddoygi"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- Main Flutter Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -31,7 +25,6 @@
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
 
-            <!-- Splash/launch window background until Flutter draws first frame -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
@@ -41,31 +34,27 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Optional: ensure taps on notifications reopen MainActivity -->
             <intent-filter>
                 <action android:name="FLUTTER_NOTIFICATION_CLICK" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
-        <!-- Flutter embedding flag -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- ===== Firebase Messaging defaults (used by foreground/background pushes) ===== -->
-        <!-- Must match the channel you create in code (e.g., notify_bootstrap.dart) -->
+        <!-- Match your notify_bootstrap.dart channel id -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="high_importance_channel" />
+            android:value="alert_channel" />
 
-        <!-- Optional default small icon for FCM notifications -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
     </application>
 
-    <!-- ===== Package visibility (kept from your original manifest) ===== -->
+    <!-- ===== Package visibility ===== -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />

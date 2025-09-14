@@ -104,9 +104,8 @@ class _AlertPageState extends State<AlertPage> {
         }
 
         final snaps = await Future.wait(
-          _selectedUserIds.map(
-                (id) => FirebaseFirestore.instance.collection('users').doc(id).get(),
-          ),
+          _selectedUserIds.map((id) =>
+              FirebaseFirestore.instance.collection('users').doc(id).get()),
         );
 
         recipients = snaps.where((d) => d.exists).map((d) {
@@ -154,11 +153,11 @@ class _AlertPageState extends State<AlertPage> {
         }
       }
 
-      // -------- Create master alert doc (optional, for audit/UI) --------
+      // -------- Create master alert doc --------
       final alertRef = await FirebaseFirestore.instance.collection('alerts').add({
         'message'        : message,
         'priority'       : _highPriority ? 'high' : 'normal',
-        'mode'           : _mode.name, // 'individuals' | 'department'
+        'mode'           : _mode.name,
         'department'     : department,
         'recipientIds'   : recipients.map((e) => e.id).toList(),
         'recipientEmails': recipients.map((e) => e.email).toList(),
@@ -171,7 +170,7 @@ class _AlertPageState extends State<AlertPage> {
         'updatedAt'      : Timestamp.fromDate(now),
       });
 
-      // -------- Fan-out in-app notifications (badges/center) --------
+      // -------- Fan-out in-app notifications --------
       if (recipients.isNotEmpty) {
         final batch = FirebaseFirestore.instance.batch();
         final col = FirebaseFirestore.instance.collection('notifications');
@@ -190,18 +189,56 @@ class _AlertPageState extends State<AlertPage> {
         await batch.commit();
       }
 
-      // -------- Push for local worker (NO Cloud Functions needed) --------
-      // Your local_fcm_worker.js expects: uids[], title, body, status=pending, createdAt
+      // -------- Queue push for worker --------
       final uidList = recipients.map((r) => r.id).toList();
-      await FirebaseFirestore.instance.collection('alert_dispatch').add({
-        'alertId'   : alertRef.id,
-        'uids'      : uidList,                                  // <— IMPORTANT
-        'title'     : _highPriority ? 'URGENT Alert' : 'Alert', // <— worker uses this
-        'body'      : message,                                  // <— and this
-        'priority'  : _highPriority ? 'high' : 'normal',
-        'status'    : 'pending',                                // <— worker scans for this
-        'createdAt' : FieldValue.serverTimestamp(),             // <— worker orders/polls by this
-      });
+
+      // Gather tokens (dedupe): prefer top-level array; fallback to /fcmTokens subcollection
+      final tokenSet = <String>{};
+      try {
+        for (final uid in uidList) {
+          final udoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final udata = udoc.data() as Map<String, dynamic>?;
+
+          // 1) top-level array
+          final arr = (udata?['fcmTokens'] as List?)?.whereType<String>() ?? const <String>[];
+          tokenSet.addAll(arr.map((t) => t.trim()).where((t) => t.isNotEmpty));
+
+          // 2) subcollection fallback
+          if (arr.isEmpty) {
+            final sub = await FirebaseFirestore.instance
+                .collection('users').doc(uid)
+                .collection('fcmTokens')
+                .get();
+            for (final d in sub.docs) {
+              final m = d.data();
+              final t = (m['token'] as String?)?.trim();
+              if (t != null && t.isNotEmpty) tokenSet.add(t);
+            }
+          }
+        }
+      } catch (_) {
+        // non-fatal; worker can still resolve tokens by uid
+      }
+
+      final dispatchDoc = {
+        'alertId'    : alertRef.id,
+        'uids'       : uidList,
+        'tokens'     : tokenSet.toList(),
+        'title'      : _highPriority ? 'URGENT Alert' : 'Alert',
+        'body'       : message,
+        'priority'   : _highPriority ? 'high' : 'normal',
+        'status'     : 'pending',
+        'createdAt'  : FieldValue.serverTimestamp(),
+        'createdAtMs': DateTime.now().millisecondsSinceEpoch,
+        'byUid'      : me.uid,
+        'byEmail'    : me.email,
+      };
+
+      final queued = await FirebaseFirestore.instance
+          .collection('alert_dispatch')
+          .add(dispatchDoc);
+
+      debugPrint('📣 queued alert_dispatch ${queued.id} → $dispatchDoc');
 
       // -------- Reset UI & confirm --------
       if (!mounted) return;
@@ -229,6 +266,7 @@ class _AlertPageState extends State<AlertPage> {
       _toast('Failed: $e');
     }
   }
+
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -266,7 +304,7 @@ class _AlertPageState extends State<AlertPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // Mode + priority (all single-line)
+          // Mode + priority (responsive; avoids overflow on small widths)
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -274,37 +312,85 @@ class _AlertPageState extends State<AlertPage> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: _border),
             ),
-            child: Row(
-              children: [
-                _ModeChip(
-                  text: 'Individuals',
-                  selected: _mode == _AlertMode.individuals,
-                  onTap: () => setState(() => _mode = _AlertMode.individuals),
-                ),
-                const SizedBox(width: 8),
-                _ModeChip(
-                  text: 'Department',
-                  selected: _mode == _AlertMode.department,
-                  onTap: () => setState(() => _mode = _AlertMode.department),
-                ),
-                const Spacer(),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 380;
+                if (isNarrow) {
+                  // Stack vertically
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _ModeChip(
+                            text: 'Individuals',
+                            selected: _mode == _AlertMode.individuals,
+                            onTap: () => setState(() => _mode = _AlertMode.individuals),
+                          ),
+                          const SizedBox(width: 8),
+                          _ModeChip(
+                            text: 'Department',
+                            selected: _mode == _AlertMode.department,
+                            onTap: () => setState(() => _mode = _AlertMode.department),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Flexible(
+                            child: Text(
+                              'High priority',
+                              style: TextStyle(fontWeight: FontWeight.w700, color: _brandGreen),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Switch(
+                            value: _highPriority,
+                            activeColor: _greenMid,
+                            onChanged: (v) => setState(() => _highPriority = v),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }
+
+                // Wide: single row
+                return Row(
                   children: [
-                    const Text(
-                      'High priority',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: _brandGreen),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    _ModeChip(
+                      text: 'Individuals',
+                      selected: _mode == _AlertMode.individuals,
+                      onTap: () => setState(() => _mode = _AlertMode.individuals),
                     ),
+                    const SizedBox(width: 8),
+                    _ModeChip(
+                      text: 'Department',
+                      selected: _mode == _AlertMode.department,
+                      onTap: () => setState(() => _mode = _AlertMode.department),
+                    ),
+                    const Spacer(),
+                    const Flexible(
+                      child: Text(
+                        'High priority',
+                        style: TextStyle(fontWeight: FontWeight.w700, color: _brandGreen),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Switch(
                       value: _highPriority,
                       activeColor: _greenMid,
                       onChanged: (v) => setState(() => _highPriority = v),
                     ),
                   ],
-                ),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),

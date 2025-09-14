@@ -322,12 +322,11 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                       ),
                     ),
                   ),
-                  // (No status here anymore; prevents overflow)
                 ],
               ),
               const SizedBox(height: 8),
 
-              // Status dropped to its own row
+              // Status
               _statusPill(status),
 
               const SizedBox(height: 12),
@@ -471,8 +470,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       ),
     );
   }
-
-
 
   // ---------- Edit (bottom sheet form) ----------
   void _showEditInvoice(String docId, Map<String, dynamic> inv) {
@@ -988,20 +985,24 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       );
     }
 
-    // 1) Stream the agent's customers (by email or uid)
-    final customersRef = FirebaseFirestore.instance.collection('customers');
+    // 🔥 Directly query ALL invoices belonging to the logged-in agent.
+    final invoicesRef = FirebaseFirestore.instance.collection('invoices');
 
-    Filter? customerOwnerFilter;
+    Filter ownerFilter;
     if (agentEmail != null && agentUid != null) {
-      customerOwnerFilter = Filter.or(
+      ownerFilter = Filter.or(
         Filter('ownerEmail', isEqualTo: agentEmail),
         Filter('ownerUid', isEqualTo: agentUid),
       );
     } else if (agentEmail != null) {
-      customerOwnerFilter = Filter('ownerEmail', isEqualTo: agentEmail);
+      ownerFilter = Filter('ownerEmail', isEqualTo: agentEmail);
     } else {
-      customerOwnerFilter = Filter('ownerUid', isEqualTo: agentUid);
+      ownerFilter = Filter('ownerUid', isEqualTo: agentUid);
     }
+
+    final query = invoicesRef
+        .where(ownerFilter)
+        .orderBy('timestamp', descending: true);
 
     return Scaffold(
       appBar: _buildAppBar(),
@@ -1012,138 +1013,83 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
           _statusQuickFilters(),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: customersRef.where(customerOwnerFilter!).snapshots(),
-              builder: (ctx, custSnap) {
-                if (custSnap.hasError) {
-                  _logFirestoreIndexLink(custSnap.error);
-                  return Center(child: Text('Couldn’t load customers.\n${custSnap.error}'));
+              stream: query.snapshots(),
+              builder: (ctx, invSnap) {
+                if (invSnap.hasError) {
+                  _logFirestoreIndexLink(invSnap.error);
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('We couldn’t load your invoices.\n${invSnap.error}', textAlign: TextAlign.center),
+                    ),
+                  );
                 }
-                if (custSnap.connectionState == ConnectionState.waiting) {
+                if (invSnap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final myCustomerIds = custSnap.data?.docs.map((d) => d.id).toList() ?? <String>[];
-                final myCustomerIdSet = myCustomerIds.toSet();
+                var docs = invSnap.data?.docs ?? [];
 
-                if (myCustomerIds.isEmpty) {
-                  return _emptyState();
-                }
+                // Local UI filters: search, date range, status
+                final filtered = docs.where((d) {
+                  final m    = d.data();
+                  final invN = (m['invoiceNo'] ?? '').toString().toLowerCase();
+                  final cust = (m['customerName'] ?? '').toString().toLowerCase();
 
-                // 2) Build invoice query
-                final invoicesRef = FirebaseFirestore.instance.collection('invoices');
-                Query<Map<String, dynamic>> invoiceQuery;
+                  final statusOk = _statusFilter == 'All'
+                      ? true
+                      : (m['status']?.toString().toLowerCase() ?? '').contains(_statusFilter.toLowerCase());
 
-                if (myCustomerIds.length <= 10) {
-                  // Best path: filter on server
-                  invoiceQuery = invoicesRef
-                      .where('customerId', whereIn: myCustomerIds)
-                      .orderBy('timestamp', descending: true);
-                } else {
-                  // Fallback: narrow by agent ownership (to avoid loading everything),
-                  // then client-filter to only our customers.
-                  Filter? ownerOr;
-                  if (agentEmail != null && agentUid != null) {
-                    ownerOr = Filter.or(
-                      Filter('ownerEmail', isEqualTo: agentEmail),
-                      Filter('ownerUid', isEqualTo: agentUid),
-                    );
-                  } else if (agentEmail != null) {
-                    ownerOr = Filter('ownerEmail', isEqualTo: agentEmail);
+                  final queryOk = _query.isEmpty || invN.contains(_query) || cust.contains(_query);
+                  if (!(statusOk && queryOk)) return false;
+
+                  if (_fromDate == null || _toDate == null) return true;
+
+                  DateTime dt;
+                  final ts = m['timestamp'];
+                  if (ts is Timestamp) {
+                    dt = ts.toDate();
+                  } else if (m['date'] is Timestamp) {
+                    dt = (m['date'] as Timestamp).toDate();
                   } else {
-                    ownerOr = Filter('ownerUid', isEqualTo: agentUid);
+                    return true;
                   }
-                  invoiceQuery = invoicesRef.where(ownerOr!).orderBy('timestamp', descending: true);
-                }
+                  return (dt.isAtSameMomentAs(_fromDate!) || dt.isAfter(_fromDate!)) &&
+                      (dt.isAtSameMomentAs(_toDate!)   || dt.isBefore(_toDate!));
+                }).toList();
 
-                // 3) Stream invoices
-                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: invoiceQuery.snapshots(),
-                  builder: (ctx, invSnap) {
-                    if (invSnap.hasError) {
-                      _logFirestoreIndexLink(invSnap.error);
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text('We couldn’t load your invoices.\n${invSnap.error}', textAlign: TextAlign.center),
-                        ),
-                      );
-                    }
-                    if (invSnap.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                // Only count/sum invoices where payment is taken
+                final paidOnly = filtered.where((d) {
+                  final m = d.data();
+                  final pay = m['payment'];
+                  final takenFlag = (pay is Map && pay['taken'] == true);
+                  final takenByStatus =
+                  (m['status']?.toString().toLowerCase() ?? '').contains('payment taken');
+                  return takenFlag || takenByStatus;
+                }).toList();
 
-                    // Raw docs from server
-                    var docs = invSnap.data?.docs ?? [];
+                final totalPaidAmount = paidOnly.fold<num>(
+                  0, (sum, d) => sum + ((d.data()['grandTotal'] as num?) ?? 0),
+                );
 
-                    // If we used the fallback path (>10 customers), filter to only our customers.
-                    if (myCustomerIds.length > 10) {
-                      docs = docs.where((d) => myCustomerIdSet.contains(d.data()['customerId'] as String?)).toList();
-                    }
+                if (filtered.isEmpty) return _emptyState();
 
-                    // Local UI filters: search, date range, status
-                    final filtered = docs.where((d) {
-                      final m    = d.data();
-                      final invN = (m['invoiceNo'] ?? '').toString().toLowerCase();
-                      final cust = (m['customerName'] ?? '').toString().toLowerCase();
-
-                      final statusOk = _statusFilter == 'All'
-                          ? true
-                          : (m['status']?.toString().toLowerCase() ?? '').contains(_statusFilter.toLowerCase());
-
-                      final queryOk = _query.isEmpty || invN.contains(_query) || cust.contains(_query);
-                      if (!(statusOk && queryOk)) return false;
-
-                      if (_fromDate == null || _toDate == null) return true;
-
-                      DateTime dt;
-                      final ts = m['timestamp'];
-                      if (ts is Timestamp) {
-                        dt = ts.toDate();
-                      } else if (m['date'] is Timestamp) {
-                        dt = (m['date'] as Timestamp).toDate();
-                      } else {
-                        return true;
-                      }
-                      return (dt.isAtSameMomentAs(_fromDate!) || dt.isAfter(_fromDate!)) &&
-                          (dt.isAtSameMomentAs(_toDate!)   || dt.isBefore(_toDate!));
-                    }).toList();
-
-                    // Only count/sum invoices where payment is taken
-                    final paidOnly = filtered.where((d) {
-                      final m = d.data();
-                      final pay = m['payment'];
-                      final takenFlag = (pay is Map && pay['taken'] == true);
-                      final takenByStatus =
-                      (m['status']?.toString().toLowerCase() ?? '').contains('payment taken');
-                      return takenFlag || takenByStatus;
-                    }).toList();
-
-                    final totalPaidAmount = paidOnly.fold<num>(
-                      0, (sum, d) => sum + ((d.data()['grandTotal'] as num?) ?? 0),
-                    );
-
-                    if (filtered.isEmpty) return _emptyState();
-
-                    return Column(
-                      children: [
-                        // Show PAID counts & totals in the header
-                        _statsHeader(
-                          count: paidOnly.length,
-                          total: totalPaidAmount.toDouble(),
-                        ),
-                        Expanded(
-                          // Keep the list itself as per your filters (not restricted to paid)
-                          child: ListView.builder(
-                            itemCount: filtered.length,
-                            itemBuilder: (context, i) {
-                              final doc = filtered[i];
-                              return _invoiceCard(doc.id, doc.data());
-                            },
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                return Column(
+                  children: [
+                    _statsHeader(
+                      count: paidOnly.length,
+                      total: totalPaidAmount.toDouble(),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) {
+                          final doc = filtered[i];
+                          return _invoiceCard(doc.id, doc.data());
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
             ),

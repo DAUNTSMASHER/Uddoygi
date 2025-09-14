@@ -1,21 +1,20 @@
 // lib/push/notify_bootstrap.dart
 //
-// Works with flutter_local_notifications 17.x
-// - Android uses AndroidInitializationSettings & AndroidNotificationDetails
-// - iOS uses DarwinInitializationSettings & DarwinNotificationDetails
+// flutter_local_notifications 17.x compatible
+// - Android: AndroidInitializationSettings & AndroidNotificationDetails
+// - iOS:     DarwinInitializationSettings & DarwinNotificationDetails
 //
-// Provides:
-//   initLocalNotifications()   -> call once in main()
-//   setupOnMessageHandler()    -> mirrors FCM foreground to local banner
-//   showRemoteNotificationFromBackground(RemoteMessage) -> optional mirror in BG
+// Exposes:
+//   initLocalNotifications()                -> call once (e.g., in main())
+//   setupOnMessageHandler()                 -> mirrors FCM foreground to local banner
+//   showRemoteNotificationFromBackground()  -> optional mirror for BG/data-only
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-final FlutterLocalNotificationsPlugin _fln =
-FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
 
-const String _channelId   = 'alert_channel';
+const String _channelId   = 'alert_channel'; // must match AndroidManifest meta-data
 const String _channelName = 'Alerts';
 const String _channelDesc = 'Urgent and general alerts';
 
@@ -26,7 +25,7 @@ Future<void> initLocalNotifications() async {
   if (_inited) return;
   _inited = true;
 
-  // Android init (use your launcher icon)
+  // Android init (use your launcher icon or a monochrome small icon you provide)
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
 
   // iOS / macOS init
@@ -44,7 +43,7 @@ Future<void> initLocalNotifications() async {
   await _fln.initialize(
     settings,
     onDidReceiveNotificationResponse: (resp) async {
-      // TODO: deep-link (payload is resp.payload)
+      // Handle tap when app is foreground/background (payload in resp.payload)
     },
     onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
   );
@@ -52,19 +51,25 @@ Future<void> initLocalNotifications() async {
   // iOS: allow banners while in foreground
   try {
     await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: true, badge: true, sound: true,
+      alert: true,
+      badge: true,
+      sound: true,
     );
   } catch (_) {}
 
-  // Android: create a high-importance channel (Facebook-like)
-  final androidImpl =
-  _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-  await androidImpl?.createNotificationChannel(const AndroidNotificationChannel(
-    _channelId,
-    _channelName,
-    description: _channelDesc,
-    importance: Importance.high,
-  ));
+  // Android: create a high-importance channel
+  final androidImpl = _fln.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  await androidImpl?.createNotificationChannel(
+    const AndroidNotificationChannel(
+      _channelId,
+      _channelName,
+      description: _channelDesc,
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+    ),
+  );
 }
 
 /// Foreground FCM -> show local banner so the user sees an alert instantly.
@@ -76,15 +81,16 @@ void setupOnMessageHandler() {
   });
 }
 
-/// Used by the background handler in main.dart for data-only fallbacks.
-/// (If your server always sends a `notification` block, Android shows it
-/// automatically and this is not strictly necessary.)
+/// Used by a background handler (e.g., in main.dart) for data-only fallbacks.
 Future<void> showRemoteNotificationFromBackground(RemoteMessage m) async {
   final title = m.notification?.title ?? m.data['title'];
   final body  = m.notification?.body  ?? m.data['body'];
   if (title == null && body == null) return;
-  await _showLocal(title ?? 'Alert', body ?? 'You have a new alert',
-      payload: m.data['payload'] ?? 'bg');
+  await _showLocal(
+    title ?? 'Alert',
+    body ?? 'You have a new alert',
+    payload: m.data['payload'] ?? 'bg',
+  );
 }
 
 Future<void> _showLocal(String title, String body, {String? payload}) async {
@@ -111,5 +117,5 @@ Future<void> _showLocal(String title, String body, {String? payload}) async {
 /// Required for background tap handling (v17 API).
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
-  // Handle background tap if needed.
+  // Handle background tap if needed (payload in response.payload).
 }
