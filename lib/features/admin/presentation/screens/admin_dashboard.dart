@@ -10,8 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import '../widgets/admin_drawer.dart';
 import '../widgets/admin_dashboard_summary.dart';
+import 'package:uddoygi/features/common/notification.dart';
 
-const Color _darkBlue   = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF3C0765);
 
 // Base sizes (these get scaled with .sp(context))
 const double _fontSmall = 13.0;
@@ -62,23 +63,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String? name;
   String? photoUrl;
 
-  // --- Search state ---
-  final TextEditingController _searchCtrl = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
-  List<_DashboardItem> _suggestions = const [];
-  String _q = '';
-
-  // Simple keyword map to improve matching
-  late final Map<String, List<String>> _keywords = {
-    'notices'   : ['notice', 'notices', 'news', 'update'],
-    'employees' : ['employee', 'staff', 'people', 'hr', 'all'],
-    'reports'   : ['report', 'reports', 'analytics', 're'],
-    'welfare'   : ['welfare', 'benefit', 'help'],
-    'complaints': ['complaint', 'complaints', 'issue', 'support'],
-    'salary'    : ['salary', 'payroll', 'pay', 'wage'],
-    'messages'  : ['message', 'messages', 'msg', 'chat'],
-    'rnd'       : ['rnd', 'r&d', 'research', 'lab', 'innovation'],
-  };
+  int _currentTab = 0;
 
   // Dashboard items + their "new" sources (by createdAt)
   late final List<_DashboardItem> dashboardItems = [
@@ -147,21 +132,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   void initState() {
     super.initState();
     _loadSessionAndUser();
-    _searchCtrl.addListener(_onSearchChanged);
-    _searchFocus.addListener(() {
-      if (!_searchFocus.hasFocus) {
-        setState(() => _suggestions = const []);
-      } else {
-        _updateSuggestions(_q);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    _searchFocus.dispose();
-    super.dispose();
   }
 
   Future<void> _loadSessionAndUser() async {
@@ -198,67 +168,35 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _openSectionAndClearBadge(_DashboardItem item) async {
     await _markSectionSeen(item.keyId);
     if (!mounted) return;
-    setState(() {}); // forces _BadgeActionCard to re-read lastSeen
+    setState(() {});
     await Navigator.pushNamed(context, item.route);
     if (!mounted) return;
-    setState(() {}); // re-check on return
-  }
-
-  // -------------------- Search helpers --------------------
-  void _onSearchChanged() {
-    final q = _searchCtrl.text.trim();
-    if (q == _q) return;
-    _q = q;
-    _updateSuggestions(q);
-  }
-
-  String _norm(String s) => s.toLowerCase().trim();
-
-  bool _matches(_DashboardItem item, String q) {
-    if (q.isEmpty) return false;
-    final n = _norm(q);
-    if (_norm(item.title).startsWith(n)) return true;
-    final keys = _keywords[item.keyId] ?? const [];
-    for (final k in keys) {
-      if (_norm(k).startsWith(n)) return true;
-    }
-    if (_norm(item.title).contains(n)) return true;
-    for (final k in keys) {
-      if (_norm(k).contains(n)) return true;
-    }
-    return false;
-  }
-
-  void _updateSuggestions(String q) {
-    if (!_searchFocus.hasFocus || q.isEmpty) {
-      setState(() => _suggestions = const []);
-      return;
-    }
-    final list = dashboardItems.where((it) => _matches(it, q)).take(6).toList();
-    setState(() => _suggestions = list);
-  }
-
-  Future<void> _goSearch() async {
-    if (_suggestions.isEmpty) {
-      final q = _q.trim();
-      if (q.isEmpty) return;
-      final allMatches = dashboardItems.where((it) => _matches(it, q)).toList();
-      if (allMatches.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No matching section found')),
-        );
-        return;
-      }
-      await _openSectionAndClearBadge(allMatches.first);
-    } else {
-      await _openSectionAndClearBadge(_suggestions.first);
-    }
-    if (!mounted) return;
-    _searchCtrl.clear();
-    _suggestions = const [];
-    _searchFocus.unfocus();
     setState(() {});
+  }
+
+  // ---------- Unread badges like factory dashboard ----------
+  Stream<int> _unreadMessagesStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream.value(0);
+    final mail = user.email ?? '';
+    return FirebaseFirestore.instance
+        .collection('messages')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
+  }
+
+  Stream<int> _unreadNotificationsStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Stream.value(0);
+    final mail = user.email ?? '';
+    return FirebaseFirestore.instance
+        .collection('notifications')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
   }
 
   @override
@@ -273,7 +211,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         title: Row(
           children: [
             CircleAvatar(
-              radius: 16, // avatar size stays good across devices
+              radius: 16,
               backgroundColor: Colors.white24,
               backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
                   ? NetworkImage(photoUrl!)
@@ -304,6 +242,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ],
         ),
         actions: [
+          // Notification like factory dashboard
+          StreamBuilder<int>(
+            stream: _unreadNotificationsStream(),
+            builder: (_, s) => Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications, color: Colors.white),
+                  tooltip: 'Notifications',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationPage()),
+                  ),
+                ),
+                if ((s.data ?? 0) > 0)
+                  Positioned(
+                    right: 10,
+                    top: 10,
+                    child: _Badge(count: s.data ?? 0, small: true),
+                  ),
+              ],
+            ),
+          ),
           IconButton(
             icon: Icon(Icons.logout, color: Colors.white, size: 20.sp(context, min: 18, max: 24)),
             tooltip: 'Logout',
@@ -316,6 +277,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ],
       ),
       drawer: const AdminDrawer(),
+
+      // Bottom navigation like factory dashboard
+      bottomNavigationBar: _buildBottomNav(),
+
       body: RefreshIndicator(
         color: _darkBlue,
         onRefresh: _refreshSummary,
@@ -323,81 +288,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
-            // Search box + suggestions
-            Stack(
-              children: [
-                Card(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 2,
-                  child: TextField(
-                    controller: _searchCtrl,
-                    focusNode: _searchFocus,
-                    onSubmitted: (_) => _goSearch(),
-                    style: TextStyle(fontSize: _fontMed.sp(context, min: 13, max: 20)),
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      prefixIcon: Icon(Icons.search, color: _darkBlue, size: 22.sp(context)),
-                      hintText: 'Search sections… (e.g., "re" ➜ Reports)',
-                      hintStyle: TextStyle(
-                        fontSize: _fontMed.sp(context, min: 12, max: 18),
-                        color: Colors.black54,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.arrow_forward, color: _darkBlue, size: 22.sp(context)),
-                        onPressed: _goSearch,
-                        tooltip: 'Go',
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                    ),
-                  ),
-                ),
-                if (_suggestions.isNotEmpty && _searchFocus.hasFocus)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 64,
-                    child: Card(
-                      elevation: 8,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        itemCount: _suggestions.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final it = _suggestions[i];
-                          return ListTile(
-                            dense: false,
-                            leading: Icon(it.icon, color: _darkBlue, size: 22.sp(context)),
-                            title: Text(
-                              it.title,
-                              style: TextStyle(
-                                fontSize: _fontLarge.sp(context, min: 14, max: 22),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            onTap: () async {
-                              await _openSectionAndClearBadge(it);
-                              if (!mounted) return;
-                              _searchCtrl.clear();
-                              _suggestions = const [];
-                              _searchFocus.unfocus();
-                              setState(() {});
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 28),
-
             // Summary section
             _sectionHeader('Summary', showSummary, () {
               setState(() => showSummary = !showSummary);
@@ -471,6 +361,77 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  /* -------------------- Bottom Nav -------------------- */
+  Widget _buildBottomNav() {
+    final items = <_NavItem>[
+      _NavItem('Home', Icons.home_rounded, onTap: () => setState(() => _currentTab = 0)),
+      _NavItem('Employees', Icons.people_outline,
+          onTap: () => Navigator.pushNamed(context, '/admin/employees')),
+      _NavItem('Reports', Icons.fact_check_outlined,
+          onTap: () => Navigator.pushNamed(context, '/admin/reports')),
+      _NavItem('Welfare', Icons.volunteer_activism_outlined,
+          onTap: () => Navigator.pushNamed(context, '/common/welfare')),
+      _NavItem(
+        'Notifications',
+        Icons.notifications,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
+        badgeStream: _unreadNotificationsStream(),
+      ),
+      _NavItem('Messages', Icons.message_rounded,
+          onTap: () => Navigator.pushNamed(context, '/common/messages'),
+          badgeStream: _unreadMessagesStream()),
+    ];
+
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(color: _darkBlue),
+        child: Row(
+          children: items.map((it) {
+            final isSelected = items.indexOf(it) == _currentTab;
+            final color = isSelected ? Colors.white : Colors.white70;
+
+            final iconWidget = it.badgeStream == null
+                ? Icon(it.icon, color: color)
+                : StreamBuilder<int>(
+              stream: it.badgeStream,
+              builder: (_, s) => _BadgeIcon(
+                icon: it.icon,
+                color: color,
+                count: s.data ?? 0,
+              ),
+            );
+
+            return Expanded(
+              child: InkWell(
+                onTap: () {
+                  setState(() => _currentTab = items.indexOf(it));
+                  it.onTap();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      iconWidget,
+                      const SizedBox(height: 4),
+                      Text(
+                        it.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   Widget _sectionHeader(String title, bool expanded, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -523,7 +484,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     await prefs.setInt('lastSeen_$key', DateTime.now().millisecondsSinceEpoch);
   }
 }
-/* ===================== BADGED ACTION CARD ===================== */
+
+/* ===================== BADGED ACTION CARD (unchanged) ===================== */
 
 class _BadgeActionCard extends StatefulWidget {
   final _DashboardItem item;
@@ -628,9 +590,8 @@ class _BadgeActionCardState extends State<_BadgeActionCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     child: Row(
                       children: [
-                        // slightly smaller icon bubble to free width
                         Container(
-                          width: 40, // was 44
+                          width: 40,
                           height: 40,
                           decoration: BoxDecoration(
                             color: _darkBlue.withOpacity(0.1),
@@ -639,18 +600,16 @@ class _BadgeActionCardState extends State<_BadgeActionCard> {
                           child: Icon(
                             widget.item.icon,
                             color: _darkBlue,
-                            size: 22.sp(context, min: 18, max: 26), // was 24
+                            size: 22.sp(context, min: 18, max: 26),
                           ),
                         ),
-                        const SizedBox(width: 10), // was 12
-                        // auto-shrink title so it never clips
+                        const SizedBox(width: 10),
                         Expanded(
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: Text(
                               widget.item.title,
-                              // slightly smaller base + responsive
                               style: TextStyle(
                                 fontSize: _fontMed.sp(context, min: 12, max: 18),
                                 fontWeight: FontWeight.w800,
@@ -687,6 +646,67 @@ class _BadgeActionCardState extends State<_BadgeActionCard> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/* ===================== Bottom nav helpers ===================== */
+
+class _NavItem {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Stream<int>? badgeStream;
+  _NavItem(this.label, this.icon, {required this.onTap, this.badgeStream});
+}
+
+class _BadgeIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+  const _BadgeIcon({required this.icon, required this.color, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, color: color),
+        if (count > 0)
+          Positioned(
+            right: -6,
+            top: -6,
+            child: _Badge(count: count, small: true),
+          ),
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final int count;
+  final bool small;
+  const _Badge({required this.count, this.small = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: small ? 5 : 6, vertical: small ? 2 : 3),
+      decoration: BoxDecoration(
+        color: Colors.redAccent,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 1),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: small ? 9 : 10,
+          fontWeight: FontWeight.w800,
+          height: 1.0,
         ),
       ),
     );

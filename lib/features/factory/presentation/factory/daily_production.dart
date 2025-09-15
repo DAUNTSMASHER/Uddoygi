@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'production_dashboard.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFFD51616);
 
 class DailyProductionScreen extends StatefulWidget {
   const DailyProductionScreen({Key? key}) : super(key: key);
@@ -314,6 +314,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
       appBar: AppBar(
         title: const Text('Production'),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.dashboard),

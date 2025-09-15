@@ -196,7 +196,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
                                     ),
                                     if (!isApproved)
                                       IconButton(
-                                        icon: const Icon(Icons.check, color: Colors.blue),
+                                        icon: const Icon(Icons.check, color: Colors.deepPurple),
                                         onPressed: () => _approveMessage(doc.id),
                                       ),
                                     if (isApproved)

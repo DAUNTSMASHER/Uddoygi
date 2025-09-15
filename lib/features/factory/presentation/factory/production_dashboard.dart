@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFFD51616);
 
 class ProductionDashboard extends StatelessWidget {
   const ProductionDashboard({Key? key}) : super(key: key);

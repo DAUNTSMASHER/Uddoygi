@@ -6,6 +6,19 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
+/* ---------- Inline Marketing palette (no external theme import) ---------- */
+const Color _brandBlue   = Color(0xFF0D47A1); // dark
+const Color _blueMid     = Color(0xFF1D5DF1); // accent
+const Color _surface     = Color(0xFFF6F8FF); // near-white
+const Color _cardBorder  = Color(0x1A0D47A1); // 10% blue
+const Color _shadowLite  = Color(0x14000000); // subtle shadow
+
+const LinearGradient _headerGradient = LinearGradient(
+  colors: [_brandBlue, _blueMid],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+);
+
 class OrderProgressScreen extends StatefulWidget {
   const OrderProgressScreen({super.key});
 
@@ -18,12 +31,6 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
   String _search = '';
   String _statusFilter = 'all';
   bool _sortDesc = true;
-
-  // Palette (aligned with your dashboards)
-  static const Color _brandTeal  = Color(0xFF001863);
-  static const Color _indigoCard = Color(0xFF0B2D9F);
-  static const Color _surface    = Color(0xFFF4FBFB);
-  static const Color _boardDark  = Color(0xFF0330AE);
 
   final List<String> _statusOptions = const [
     'all', 'pending', 'processing', 'factory', 'qc', 'packed', 'shipped', 'delivered', 'cancelled'
@@ -43,9 +50,10 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream() {
     if (_session == null || _session!['email'] == null) {
-      // empty stream until session arrives
       return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
     }
+    // NOTE: where('agentEmail') + optional where('status') + orderBy('timestamp')
+    // may require a composite index. Firestore will suggest it if missing.
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('invoices')
         .where('agentEmail', isEqualTo: _session!['email'])
@@ -70,18 +78,8 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
   }
 
   String _bdt(num? n) {
-    if (n == null) return '৳0';
-    final s = n.toStringAsFixed(2);
-    final parts = s.split('.');
-    final intPart = parts[0];
-    final frac = parts[1];
-    final b = StringBuffer();
-    for (int i = 0; i < intPart.length; i++) {
-      final r = intPart.length - i;
-      b.write(intPart[i]);
-      if (r > 1 && r % 3 == 1) b.write(',');
-    }
-    return '৳${b.toString()}.$frac';
+    final f = NumberFormat.currency(locale: 'bn_BD', symbol: '৳', decimalDigits: 0);
+    return f.format(n ?? 0);
   }
 
   int _pieces(Map<String, dynamic> data) {
@@ -102,7 +100,7 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
       case 'qc':        return Colors.deepPurple;
       case 'factory':   return Colors.indigo;
       case 'processing':return Colors.orange;
-      case 'pending':   return Colors.amber;
+      case 'pending':   return Colors.amber[800]!;
       case 'cancelled': return Colors.red;
       default:          return Colors.grey;
     }
@@ -113,7 +111,7 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withOpacity(.14),
+        color: c.withOpacity(.12),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: c.withOpacity(.35)),
       ),
@@ -142,7 +140,7 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
       backgroundColor: _surface,
       appBar: AppBar(
         title: const Text('My Order Progress', style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: _brandTeal,
+        backgroundColor: _brandBlue,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -168,13 +166,22 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
               onChanged: (v) => setState(() => _search = v),
               decoration: InputDecoration(
                 hintText: 'Search by customer, country, note, status…',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, color: _brandBlue),
+                hintStyle: const TextStyle(color: _brandBlue),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
+                  borderSide: const BorderSide(color: _cardBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _cardBorder),
+                ),
+                focusedBorder: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(14)),
+                  borderSide: BorderSide(color: _brandBlue, width: 1.4),
                 ),
               ),
             ),
@@ -190,7 +197,6 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // From stream
           final docs = snap.data!.docs;
 
           // Summary counts by status (before search)
@@ -246,8 +252,8 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black12),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                  border: const BorderSide(color: _cardBorder).toBorder(),
+                  boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 8, offset: Offset(0, 3))],
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
@@ -268,11 +274,7 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: const BoxDecoration(
                           borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                          gradient: LinearGradient(
-                            colors: [_indigoCard, Color(0xFF1D5DF1)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          gradient: _headerGradient,
                         ),
                         child: Row(
                           children: [
@@ -282,7 +284,10 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
                               ),
                             ),
                             _statusChip(status),
@@ -293,20 +298,15 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
                       // Body
                       Padding(
                         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
                           children: [
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: [
-                                _metaChip(Icons.tag, 'Invoice: $invoiceNo'),
-                                if (country.isNotEmpty) _metaChip(Icons.public, country),
-                                _metaChip(Icons.inventory, 'Pieces: $pcs'),
-                                _metaChip(Icons.payments, _bdt(grand)),
-                                _metaChip(Icons.schedule, _fmtDate(date)),
-                              ],
-                            ),
+                            _metaChip(Icons.tag, 'Invoice: $invoiceNo'),
+                            if (country.isNotEmpty) _metaChip(Icons.public, country),
+                            _metaChip(Icons.inventory, 'Pieces: $pcs'),
+                            _metaChip(Icons.payments, _bdt(grand)),
+                            _metaChip(Icons.schedule, _fmtDate(date)),
                           ],
                         ),
                       ),
@@ -322,21 +322,26 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
   }
 
   Widget _overviewBoard({required int total, required Map<String, int> counts}) {
-    // Dark board with 2xN stats
+    // Gradient header board + white stat tiles (2 x N)
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-      decoration: BoxDecoration(color: _boardDark, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        gradient: _headerGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 14, offset: Offset(0, 6))],
+      ),
       child: LayoutBuilder(builder: (context, c) {
         final w = c.maxWidth;
-        final cardW = (w - 12) / 2;
+        final spacing = 12.0;
+        final cardW = (w - spacing) / 2; // two columns on phones
         Widget tile(String label, String value, IconData icon) => SizedBox(
           width: cardW,
           child: _squareStat(label, value, icon),
         );
 
         return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: spacing,
+          runSpacing: spacing,
           children: [
             tile('Total Orders', '$total', Icons.list_alt),
             tile('Pending', '${counts['pending']}', Icons.timelapse),
@@ -356,15 +361,20 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
   Widget _squareStat(String label, String value, IconData icon) {
     return Container(
       height: 100,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const BorderSide(color: _cardBorder).toBorder(),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+      ),
       padding: const EdgeInsets.all(14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Container(
             width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.black.withOpacity(.85), shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 18),
+            decoration: BoxDecoration(color: _brandBlue.withOpacity(.10), shape: BoxShape.circle),
+            child: const Icon(Icons.assessment, color: _brandBlue, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -372,12 +382,27 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _brandBlue,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 22,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _brandBlue,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -398,14 +423,14 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: sel ? Colors.black.withOpacity(.15) : Colors.black.withOpacity(.08),
+              color: sel ? Colors.white.withOpacity(.22) : Colors.white.withOpacity(.15),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white24),
+              border: Border.all(color: Colors.white30),
             ),
             child: Text(
               s.toUpperCase(),
-              style: TextStyle(
-                color: sel ? Colors.white : Colors.white70,
+              style: const TextStyle(
+                color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 11,
               ),
@@ -420,16 +445,24 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black12),
+        border: const BorderSide(color: _cardBorder).toBorder(),
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.black87),
+          Icon(icon, size: 14, color: _brandBlue),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _brandBlue,
+            ),
+          ),
         ],
       ),
     );
@@ -457,18 +490,8 @@ class OrderDetailsScreen extends StatelessWidget {
   }
 
   String _bdt(num? n) {
-    if (n == null) return '৳0';
-    final s = n.toStringAsFixed(2);
-    final parts = s.split('.');
-    final intPart = parts[0];
-    final frac = parts[1];
-    final b = StringBuffer();
-    for (int i = 0; i < intPart.length; i++) {
-      final r = intPart.length - i;
-      b.write(intPart[i]);
-      if (r > 1 && r % 3 == 1) b.write(',');
-    }
-    return '৳${b.toString()}.$frac';
+    final f = NumberFormat.currency(locale: 'bn_BD', symbol: '৳', decimalDigits: 0);
+    return f.format(n ?? 0);
   }
 
   int _pieces() {
@@ -494,10 +517,10 @@ class OrderDetailsScreen extends StatelessWidget {
     final invoiceNo = (data['invoiceNo'] ?? orderId).toString();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4FBFB),
+      backgroundColor: _surface,
       appBar: AppBar(
         title: const Text('Order Details', style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: const Color(0xFF001863),
+        backgroundColor: _brandBlue,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -509,12 +532,8 @@ class OrderDetailsScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0B2D9F), Color(0xFF1D5DF1)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+              gradient: _headerGradient,
+              boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 6, offset: Offset(0, 2))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -541,7 +560,10 @@ class OrderDetailsScreen extends StatelessWidget {
           if (note.isNotEmpty) _kv('Note', note),
 
           const SizedBox(height: 16),
-          const Text('Items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF001863))),
+          const Text(
+            'Items',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _brandBlue),
+          ),
           const SizedBox(height: 8),
 
           // Items list
@@ -558,20 +580,26 @@ class OrderDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.black12),
+                border: const BorderSide(color: _cardBorder).toBorder(),
               ),
               child: ListTile(
                 title: Text(
                   model.isEmpty ? 'Item' : model,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: _brandBlue),
                 ),
-                subtitle: Text('Color: ${color.isEmpty ? '-' : color}  •  Size: ${size.isEmpty ? '-' : size}  •  Qty: $qty'),
+                subtitle: Text(
+                  'Color: ${color.isEmpty ? '-' : color}  •  Size: ${size.isEmpty ? '-' : size}  •  Qty: $qty',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 trailing: Text(_bdt(total), style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
             );
           }),
 
-          const Divider(height: 28, color: Color(0xFF001863)),
+          const Divider(height: 28, color: _cardBorder),
 
           // Totals
           _kv('Shipping Cost', _bdt(ship)),
@@ -592,11 +620,13 @@ class OrderDetailsScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text('$k: ',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: white ? Colors.white : Colors.black87,
-              )),
+          Text(
+            '$k: ',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: white ? Colors.white : _brandBlue,
+            ),
+          ),
           Expanded(
             child: Text(
               v,
@@ -615,21 +645,21 @@ class OrderDetailsScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: white ? Colors.white.withOpacity(.18) : Colors.grey.shade100,
+        color: white ? Colors.white.withOpacity(.18) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: white ? Colors.white30 : Colors.black12),
+        border: Border.all(color: white ? Colors.white30 : _cardBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: white ? Colors.white : Colors.black87),
+          Icon(icon, size: 14, color: white ? Colors.white : _brandBlue),
           const SizedBox(width: 6),
           Text(
             text,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: white ? Colors.white : Colors.black87,
+              fontWeight: FontWeight.w700,
+              color: white ? Colors.white : _brandBlue,
             ),
           ),
         ],
@@ -645,7 +675,7 @@ class OrderDetailsScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black12),
+          border: const BorderSide(color: _cardBorder).toBorder(),
         ),
         child: const Text(
           'No tracking updates yet. You will see factory/QC/packing/shipping events here if available.',
@@ -654,7 +684,6 @@ class OrderDetailsScreen extends StatelessWidget {
       );
     }
 
-    // Sort by time desc (supports Timestamp/DateTime/string)
     final sorted = [...history]..sort((a, b) {
       DateTime A = DateTime.fromMillisecondsSinceEpoch(0);
       DateTime B = DateTime.fromMillisecondsSinceEpoch(0);
@@ -666,8 +695,10 @@ class OrderDetailsScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Tracking History',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF001863))),
+        const Text(
+          'Tracking History',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _brandBlue),
+        ),
         const SizedBox(height: 8),
         ...sorted.map((e) {
           final m = (e is Map) ? e : <String, dynamic>{};
@@ -681,16 +712,24 @@ class OrderDetailsScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.black12),
+              border: const BorderSide(color: _cardBorder).toBorder(),
             ),
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: _statusColor(st).withOpacity(.12),
                 child: Icon(icon, color: _statusColor(st)),
               ),
-              title: Text(st.isEmpty ? 'Update' : st.toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: Text(note.isEmpty ? at : '$note\n$at'),
+              title: Text(
+                st.isEmpty ? 'Update' : st.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                note.isEmpty ? at : '$note\n$at',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
               isThreeLine: note.isNotEmpty,
             ),
           );
@@ -721,9 +760,14 @@ class OrderDetailsScreen extends StatelessWidget {
       case 'qc':        return Colors.deepPurple;
       case 'factory':   return Colors.indigo;
       case 'processing':return Colors.orange;
-      case 'pending':   return Colors.amber;
+      case 'pending':   return Colors.amber[800]!;
       case 'cancelled': return Colors.red;
       default:          return Colors.grey;
     }
   }
+}
+
+/* -------- helper to use BorderSide inside BoxDecoration -------- */
+extension on BorderSide {
+  BoxBorder toBorder() => Border.fromBorderSide(this);
 }

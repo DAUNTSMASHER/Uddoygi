@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:uddoygi/features/attendance/admin_detail_view.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF3C0765);
 
 final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳');
 

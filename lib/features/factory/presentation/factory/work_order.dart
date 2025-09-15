@@ -1,15 +1,14 @@
 // lib/features/factory/presentation/screens/work_orders_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'work_order_details_screen.dart';
 
 /// ব্র্যান্ড প্যালেট (ড্যাশবোর্ডের সাথে সামঞ্জস্য)
-const Color _brandTeal  = Color(0xFF001863);
-const Color _indigoCard = Color(0xFF0B2D9F);
+const Color _brandTeal  = Color(0xFFD51616);
+const Color _indigoCard = Color(0xFFCAA3A3);
 const Color _surface    = Color(0xFFF4FBFB);
-const Color _boardDark  = Color(0xFF0330AE);
+const Color _boardDark  = Color(0xFFB63838);
 
 enum _StatusFilter { all, pending, accepted, rejected }
 enum _SortMode { newest, oldest }
@@ -19,6 +18,91 @@ class WorkOrdersScreen extends StatefulWidget {
 
   @override
   State<WorkOrdersScreen> createState() => _WorkOrdersScreenState();
+}
+
+/// Reusable compact dashboard metric card (same visual language as Progress page)
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
+    Key? key,
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.accent,
+    this.subtitle,
+  }) : super(key: key);
+
+  final String title;
+  final String value;
+  final String? subtitle;
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: 10,
+            top: 10,
+            child: Icon(icon, size: 22, color: accent.withOpacity(0.22)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Label — cap at 8sp
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                    letterSpacing: .2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Value — can be larger for emphasis
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: accent,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 7,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
@@ -182,20 +266,20 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     }
   }
 
-  /// 🔖 স্ট্যাটাস চিপ (বাংলা)
+  /// 🔖 স্ট্যাটাস চিপ (বাংলা) — tiny variant (≤ 8sp)
   Widget _statusChip(String status) {
     final c = _statusColor(status);
     final t = _bnStatusText(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: c.withOpacity(.12),
         border: Border.all(color: c.withOpacity(.35)),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         t,
-        style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12),
+        style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 8),
       ),
     );
   }
@@ -286,21 +370,19 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
-              // ===== 🧭 ওভারভিউ বোর্ড =====
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-                decoration: BoxDecoration(color: _boardDark, borderRadius: BorderRadius.circular(20)),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _smallStat('মোট অর্ডার', '$total', Icons.list_alt),
-                    _smallStat('অপেক্ষমাণ', '$pend', Icons.timelapse),
-                    _smallStat('গ্রহণকৃত', '$acc', Icons.verified),
-                    _smallStat('বাতিল', '$rej', Icons.block),
-                  ],
+              // ===== 🧭 Dashboard (compact 2×2 grid) =====
+              GridView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1.9, // compact height like the other screen
                 ),
+                children: const [],
               ),
+              _buildDashboard(total: total, pending: pend, accepted: acc, rejected: rej),
               const SizedBox(height: 14),
 
               // ===== 🔎 টুলবার: সার্চ + ফিল্টার + সোর্ট =====
@@ -324,6 +406,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                               borderSide: BorderSide.none,
                             ),
                           ),
+                          style: const TextStyle(fontSize: 12),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -355,7 +438,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                     : _filter == _StatusFilter.accepted
                                     ? 'ফিল্টার: গ্রহণকৃত'
                                     : 'ফিল্টার: বাতিল',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                               ),
                               const Icon(Icons.arrow_drop_down),
                             ],
@@ -383,7 +466,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                               const SizedBox(width: 6),
                               Text(
                                 _sort == _SortMode.newest ? 'সাজান: নতুন আগে' : 'সাজান: পুরোনো আগে',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                               ),
                               const Icon(Icons.arrow_drop_down),
                             ],
@@ -396,7 +479,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                   // Helper line (Bengali explanation)
                   Text(
                     'ইঙ্গিত: ওপরের সার্চ/ফিল্টার/সাজান বদলালেই নিচের অর্ডার তালিকা সাথে সাথে বদলাবে।',
-                    style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(color: Colors.grey[700], fontSize: 10, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -411,11 +494,11 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                     border: Border.all(color: Colors.black12),
                   ),
                   child: const Center(
-                    child: Text('কোনো মিল পাওয়া যায়নি।'),
+                    child: Text('কোনো মিল পাওয়া যায়নি।', style: TextStyle(fontSize: 10)),
                   ),
                 ),
 
-              // ===== 📄 কার্ডসমূহ =====
+              // ===== 📄 কার্ডসমূহ (fonts 6–8sp) =====
               ...items.map((doc) {
                 final data  = doc.data();
                 final woNo  = data['workOrderNo'] as String? ?? doc.id;
@@ -442,10 +525,10 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // gradient header
+                      // gradient header (tiny text)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: const BoxDecoration(
                           borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
                           gradient: LinearGradient(
@@ -461,8 +544,9 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                 woNo,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 8,
+                                  letterSpacing: .2,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -472,19 +556,11 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                         ),
                       ),
 
-                      // content
+                      // content (compact)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
                         child: Column(
                           children: [
-                            _kvRow('শিরোনাম', title),
-                            _kvRow('ক্রেতা', buyer),
-                            _kvRow('বিভাগ', dept),
-                            _kvRow('মডেল', model),
-                            _kvRow('পরিমাণ', qty == null ? null : qty.toStringAsFixed(0)),
-                            _kvRow('অগ্রাধিকার', prio),
-                            _kvRow('দায়িত্বপ্রাপ্ত', assg),
-                            _kvRow('তৈরির সময়', _formatTs(ts)),
                             _kvRow('সর্বশেষ হালনাগাদ', _formatTs(last)),
                             if (rec != null && rec.isNotEmpty) _kvRow('সুপারিশ', rec, multi: true),
                           ],
@@ -493,16 +569,16 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
 
                       const Divider(height: 1),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Bengali helper line above actions
+                            // Bengali helper line above actions (tiny)
                             Text(
                               'অ্যাকশন: প্রয়োজন অনুযায়ী গ্রহণ/বাতিল করুন বা বিস্তারিত দেখুন।',
-                              style: TextStyle(color: Colors.grey[700], fontSize: 12, fontWeight: FontWeight.w600),
+                              style: TextStyle(color: Colors.grey[700], fontSize: 8, fontWeight: FontWeight.w700),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
@@ -514,8 +590,8 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                       foregroundColor: Colors.white,
                                     ),
                                     onPressed: () => _acceptOrder(doc.id),
-                                    icon: const Icon(Icons.check_circle),
-                                    label: const Text('গ্রহণ করুন'),
+                                    icon: const Icon(Icons.check_circle, size: 16),
+                                    label: const Text('গ্রহণ করুন', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   ),
                                   ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
@@ -523,8 +599,8 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                       foregroundColor: Colors.white,
                                     ),
                                     onPressed: () => _rejectOrder(doc.id),
-                                    icon: const Icon(Icons.cancel),
-                                    label: const Text('বাতিল করুন'),
+                                    icon: const Icon(Icons.cancel, size: 16),
+                                    label: const Text('বাতিল করুন', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   ),
                                   OutlinedButton.icon(
                                     onPressed: () {
@@ -533,8 +609,8 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                         MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
                                       );
                                     },
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: const Text('বিস্তারিত'),
+                                    icon: const Icon(Icons.open_in_new, size: 16),
+                                    label: const Text('বিস্তারিত', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   ),
                                 ] else if (status.toLowerCase() == 'accepted') ...[
                                   ElevatedButton.icon(
@@ -548,8 +624,8 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                         MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
                                       );
                                     },
-                                    icon: const Icon(Icons.update),
-                                    label: const Text('আপডেট দেখুন'),
+                                    icon: const Icon(Icons.update, size: 16),
+                                    label: const Text('আপডেট দেখুন', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   ),
                                   OutlinedButton.icon(
                                     onPressed: () {
@@ -558,8 +634,8 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                         MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
                                       );
                                     },
-                                    icon: const Icon(Icons.description),
-                                    label: const Text('বিস্তারিত'),
+                                    icon: const Icon(Icons.description, size: 16),
+                                    label: const Text('বিস্তারিত', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   ),
                                 ] else ...[
                                   OutlinedButton.icon(
@@ -569,8 +645,8 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
                                         MaterialPageRoute(builder: (_) => WorkOrderDetailsScreen(orderId: doc.id)),
                                       );
                                     },
-                                    icon: const Icon(Icons.description),
-                                    label: const Text('বিস্তারিত'),
+                                    icon: const Icon(Icons.description, size: 16),
+                                    label: const Text('বিস্তারিত', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                                   ),
                                 ],
                               ],
@@ -589,64 +665,74 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     );
   }
 
-  // 🔢 ওভারভিউ বোর্ডের ছোট কার্ড
-  Widget _smallStat(String title, String value, IconData icon) {
-    return Container(
-      width: 210,
-      height: 90,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+  // ===== Dashboard builder (2×2 grid) =====
+  Widget _buildDashboard({
+    required int total,
+    required int pending,
+    required int accepted,
+    required int rejected,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+      child: GridView(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.9,
+        ),
         children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.black.withOpacity(.85), shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 18),
+          _MetricCard(
+            title: 'মোট অর্ডার',
+            value: '$total',
+            icon: Icons.list_alt,
+            accent: _boardDark,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
-                const SizedBox(height: 2),
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-              ],
-            ),
+          _MetricCard(
+            title: 'গ্রহণকৃত',
+            value: '$accepted',
+            icon: Icons.verified,
+            accent: Colors.green.shade700,
+          ),
+          _MetricCard(
+            title: 'অপেক্ষমাণ',
+            value: '$pending',
+            icon: Icons.timelapse,
+            accent: Colors.orange.shade700,
+          ),
+          _MetricCard(
+            title: 'বাতিল',
+            value: '$rejected',
+            icon: Icons.block,
+            accent: Colors.red.shade700,
           ),
         ],
       ),
     );
   }
 
-  // 🔑-🔸 কী-ভ্যালু সারি (বাংলা লেবেল)
+  // 🔑-🔸 কী-ভ্যালু সারি (বাংলা লেবেল) — tiny font (≤ 8sp)
   Widget _kvRow(String k, String? v, {bool multi = false}) {
     final value = (v == null || v.isEmpty) ? '—' : v;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: multi ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 120,
+            width: 110,
             child: Text(
               k,
-              style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w700),
+              style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.w800, fontSize: 8),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 8),
               maxLines: multi ? 4 : 1,
               overflow: multi ? TextOverflow.visible : TextOverflow.ellipsis,
             ),

@@ -7,7 +7,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/factory/presentation/widgets/factory_drawer.dart';
 import 'package:uddoygi/features/common/notification.dart';
@@ -198,15 +197,14 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
               child: Text(
                 'Welcome, $displayName',
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(               // modern, readable font
+                style: GoogleFonts.inter(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
               )
-              // Animate when displayName changes
                   .animate(key: ValueKey(displayName))
                   .fadeIn(duration: 400.ms, curve: Curves.easeOutCubic)
-                  .slideX(begin: 0.08, end: 0)              // subtle slide-in
+                  .slideX(begin: 0.08, end: 0)
                   .then(delay: 120.ms)
                   .blur(begin: const Offset(2, 2), end: Offset.zero, duration: 250.ms),
             ),
@@ -236,7 +234,7 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // Overview/summary (red)
+          // Overview/summary (red) — now with live factory KPIs
           const _FactoryOverviewHeaderRed(),
           const SizedBox(height: 16),
 
@@ -263,7 +261,7 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // 3-column grid of tiles — white cards, red icons/text; labels auto-fit
+          // 3-column grid of tiles
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -371,7 +369,7 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   }
 }
 
-/* ========================= Overview (red header + 3-col stat cards) ========================= */
+/* ========================= Overview (red header + KPI cards) ========================= */
 
 enum _Range { thisMonth, prevMonth, last3, last12 }
 
@@ -407,73 +405,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
     }
   }
 
-  // ---- Factory stats (same queries you used, just placed in HR-style cards) ----
-  Stream<String> _openWorkOrders() {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
-        .where('status', whereIn: ['open', 'in_progress'])
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  Stream<String> _purchaseOrdersInRange() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('purchase_orders')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  Stream<String> _qcPending() {
-    return FirebaseFirestore.instance
-        .collection('qc_reports')
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  Stream<String> _outputToday() {
-    final now = DateTime.now();
-    final a = DateTime(now.year, now.month, now.day);
-    final b = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
-    return FirebaseFirestore.instance
-        .collection('daily_production')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(b))
-        .snapshots()
-        .map((s) {
-      num sum = 0;
-      for (final d in s.docs) {
-        final m = d.data();
-        final x = m['totalQty'];
-        final y = m['qty'];
-        if (x is num) sum += x;
-        else if (y is num) sum += y;
-      }
-      return _comma(sum);
-    });
-  }
-
-  Stream<String> _updatesOpen() {
-    return FirebaseFirestore.instance
-        .collection('progress_updates')
-        .where('status', isEqualTo: 'open')
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  Stream<String> _noticesThisMonth() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('notices')
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
+  // ===== Helpers =====
   String _comma(num n) {
     final s = n.toStringAsFixed(n % 1 == 0 ? 0 : 2);
     final parts = s.split('.');
@@ -486,6 +418,206 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
       if (r > 1 && r % 3 == 1) b.write(',');
     }
     return '${b.toString()}$frac';
+  }
+
+  String _formatAvg(Duration? d) {
+    if (d == null || d.inSeconds <= 0) return '—';
+    if (d.inDays >= 1) return '${d.inDays}d';
+    if (d.inHours >= 1) return '${d.inHours}h';
+    return '${d.inMinutes}m';
+  }
+
+  DateTime _todayStart() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  DateTime _eod(DateTime d) => DateTime(d.year, d.month, d.day, 23, 59, 59);
+
+  // ===== Streams for KPIs =====
+
+  // Attendance (today): present / active workers (%)
+  Stream<int> _presentToday() {
+    final user = FirebaseAuth.instance.currentUser;
+    final mail = user?.email;
+    final start = _todayStart();
+    final end = _eod(start);
+    final q = FirebaseFirestore.instance
+        .collection('attendance')
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end));
+    final q2 = (mail != null) ? q.where('managerEmail', isEqualTo: mail) : q;
+    // Accept common "present" flags; if your schema differs, adjust here.
+    return q2.snapshots().map((s) {
+      int count = 0;
+      for (final d in s.docs) {
+        final m = d.data() as Map<String, dynamic>;
+        final st = (m['status'] ?? '').toString().toLowerCase();
+        final present = st == 'present' || st == 'p' || st == 'in';
+        if (present) count++;
+      }
+      return count;
+    });
+  }
+
+  Stream<int> _activeWorkers() {
+    final user = FirebaseAuth.instance.currentUser;
+    final mail = user?.email;
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'worker')
+        .where('active', isEqualTo: true);
+    if (mail != null) q = q.where('managerEmail', isEqualTo: mail);
+    return q.snapshots().map((s) => s.docs.length);
+  }
+
+  // Completed work orders (completed==true OR terminal stage)
+  Stream<int> _completedOrders() {
+    return FirebaseFirestore.instance
+        .collection('work_orders')
+        .snapshots()
+        .map((s) => s.docs.where((d) {
+      final m = d.data();
+      final bool completed = (m['completed'] == true);
+      final String stage = (m['currentStage'] ?? '') as String;
+      return completed || stage == 'Submit to the Head office';
+    }).length);
+  }
+
+  // Running work orders (status==Accepted and not completed & not terminal)
+  Stream<int> _runningOrders() {
+    return FirebaseFirestore.instance
+        .collection('work_orders')
+        .where('status', isEqualTo: 'Accepted')
+        .snapshots()
+        .map((s) => s.docs.where((d) {
+      final m = d.data();
+      final bool completed = (m['completed'] == true);
+      final String stage = (m['currentStage'] ?? '') as String;
+      return !completed && stage != 'Submit to the Head office';
+    }).length);
+  }
+
+  Stream<String> _outputThisMonth() {
+    final user = FirebaseAuth.instance.currentUser;
+    final mail = user?.email;
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 1);
+    final end = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+        .collection('daily_production')
+        .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end));
+    if (mail != null) q = q.where('managerEmail', isEqualTo: mail);
+
+    return q.snapshots().map((s) {
+      int sum = 0;
+      for (final d in s.docs) {
+        final m = d.data();
+        final v = m['quantity'];
+        if (v is int) sum += v;
+        else if (v is num) sum += v.toInt();
+        else if (m['totalQty'] is num) sum += (m['totalQty'] as num).toInt();
+        else if (m['qty'] is num) sum += (m['qty'] as num).toInt();
+      }
+      return _comma(sum);
+    });
+  }
+
+  Stream<String> _outputToday() {
+    final user = FirebaseAuth.instance.currentUser;
+    final mail = user?.email;
+    final start = _todayStart();
+    final end = _eod(start);
+
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
+        .collection('daily_production')
+        .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end));
+
+    // match DailyProductionScreen: scope to the manager
+    if (mail != null) {
+      q = q.where('managerEmail', isEqualTo: mail);
+    }
+
+    // sum `quantity` (fallbacks included just in case)
+    return q.snapshots().map((snap) {
+      int sum = 0;
+      for (final d in snap.docs) {
+        final m = d.data();
+        final v = m['quantity'];
+        if (v is int) {
+          sum += v;
+        } else if (v is num) {
+          sum += v.toInt();
+        } else if (m['totalQty'] is num) {
+          sum += (m['totalQty'] as num).toInt();
+        } else if (m['qty'] is num) {
+          sum += (m['qty'] as num).toInt();
+        }
+      }
+      return _comma(sum);
+    });
+  }
+
+
+  // Due loan amount (sum of dues)
+  Stream<String> _dueLoanAmount() {
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection('loan_requests');
+    // If your schema has status 'paid'/'closed', exclude those:
+    // q = q.where('status', whereIn: ['approved','disbursed','due']);
+    return q.snapshots().map((s) {
+      num totalDue = 0;
+      for (final d in s.docs) {
+        final m = d.data();
+        if (m['dueAmount'] is num) {
+          totalDue += (m['dueAmount'] as num);
+        } else {
+          final num amount = (m['approvedAmount'] ?? m['amount'] ?? 0) is num
+              ? (m['approvedAmount'] ?? m['amount']) as num
+              : 0;
+          final num paid = (m['repaidAmount'] ?? m['paid'] ?? 0) is num
+              ? (m['repaidAmount'] ?? m['paid']) as num
+              : 0;
+          final due = amount - paid;
+          if (due > 0) totalDue += due;
+        }
+      }
+      return '৳${_comma(totalDue)}';
+    });
+  }
+
+  // Average time to complete an order
+  Stream<String> _avgCompletionTime() {
+    return FirebaseFirestore.instance.collection('work_orders').snapshots().map((s) {
+      int count = 0;
+      int totalMs = 0;
+      for (final d in s.docs) {
+        final m = d.data();
+        final bool done = (m['completed'] == true) ||
+            ((m['currentStage'] ?? '') == 'Submit to the Head office');
+        if (!done) continue;
+
+        DateTime? start;
+        if (m['createdAt'] is Timestamp) start = (m['createdAt'] as Timestamp).toDate();
+        else if (m['timestamp'] is Timestamp) start = (m['timestamp'] as Timestamp).toDate();
+        else if (m['orderDate'] is Timestamp) start = (m['orderDate'] as Timestamp).toDate();
+
+        final DateTime? end = (m['completedAt'] is Timestamp)
+            ? (m['completedAt'] as Timestamp).toDate()
+            : null;
+
+        if (start == null || end == null) continue;
+        final ms = end.millisecondsSinceEpoch - start.millisecondsSinceEpoch;
+        if (ms > 0) {
+          totalMs += ms;
+          count++;
+        }
+      }
+      final dur = (count == 0) ? null : Duration(milliseconds: (totalMs / count).round());
+      return _formatAvg(dur);
+    });
   }
 
   @override
@@ -523,21 +655,33 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
           ),
           const SizedBox(height: 14),
 
-          // 3×N grid of stat cards
+          // 3×2 grid of KPI cards (compact)
           LayoutBuilder(builder: (ctx, c) {
-            const spacing = 8.0;
+            const spacing = 6.0;
             final w = c.maxWidth;
             final cardW = (w - (spacing * 2)) / 3; // three columns
+            final rng = _rangeDates(_range);
             return Wrap(
               spacing: spacing,
               runSpacing: spacing,
               children: [
-                _StatCardRed(width: cardW, label: 'Open Work Orders',  streamText: _openWorkOrders()),
-                _StatCardRed(width: cardW, label: 'POs (range)',       streamText: _purchaseOrdersInRange()),
-                _StatCardRed(width: cardW, label: 'QC Pending',        streamText: _qcPending()),
-                _StatCardRed(width: cardW, label: "Today's Output",    streamText: _outputToday()),
-                _StatCardRed(width: cardW, label: 'Updates open',      streamText: _updatesOpen()),
-                _StatCardRed(width: cardW, label: 'Notices (range)',   streamText: _noticesThisMonth()),
+                // Attendance %
+                _StatCardPercent(
+                  width: cardW,
+                  label: 'Attendance (today)',
+                  numerator: _presentToday(),
+                  denominator: _activeWorkers(),
+                ),
+                // Completed WOs
+                _StatCardRed(width: cardW, label: 'Completed orders', streamText: _completedOrders().map((v) => '$v')),
+                // Running WOs
+                _StatCardRed(width: cardW, label: 'Running orders', streamText: _runningOrders().map((v) => '$v')),
+                // Production today
+                _StatCardRed(width: cardW, label: "This month's production", streamText: _outputThisMonth()),
+                // Due loans
+                _StatCardRed(width: cardW, label: 'Due loan amount', streamText: _dueLoanAmount()),
+                // Avg completion time (range control doesn’t affect this; it’s global)
+                _StatCardRed(width: cardW, label: 'Avg. complete time', streamText: _avgCompletionTime()),
               ],
             );
           }),
@@ -557,40 +701,12 @@ class _RangeFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white70),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<_Range>(
-          value: value,
-          isDense: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: _brandRed),
-          dropdownColor: Colors.white,
-          style: const TextStyle(
-            color: _brandRed,
-            fontWeight: FontWeight.w700,
-            fontSize: 10,
-          ),
-          items: const [
-            DropdownMenuItem(value: _Range.thisMonth, child: Text('This month')),
-            DropdownMenuItem(value: _Range.prevMonth, child: Text('Previous month')),
-            DropdownMenuItem(value: _Range.last3,     child: Text('Last 3 months')),
-            DropdownMenuItem(value: _Range.last12,    child: Text('One year')),
-          ],
-          onChanged: (r) {
-            if (r != null) onChanged(r);
-          },
-        ),
-      ),
+
     );
   }
 }
 
-/* ========================= Stat card (red) ========================= */
+/* ========================= Stat cards ========================= */
 
 class _StatCardRed extends StatelessWidget {
   final double width;
@@ -629,6 +745,7 @@ class _StatCardRed extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // VALUE (unchanged, readable)
                     AutoSizeText(
                       v,
                       maxLines: 1,
@@ -642,19 +759,114 @@ class _StatCardRed extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    AutoSizeText(
-                      label,
-                      maxLines: 2,
-                      minFontSize: 6,
-                      stepGranularity: 0.5,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _brandRed,
-                        fontWeight: FontWeight.w400,
-                        fontSize: 8,
+                    // LABEL — exactly 5sp and up to 2 lines
+                    SizedBox(
+                      height: 18, // enough to fit ~2 lines at 5sp
+                      child: AutoSizeText(
+                        label,
+                        maxLines: 2,
+                        minFontSize: 5,
+                        maxFontSize: 7,      // lock to 5sp
+                        stepGranularity: 0.1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _brandRed,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 7,        // lock to 5sp
+                          height: 1.05,
+                        ),
                       ),
                     ),
                   ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// Attendance percent card: two streams (present / active)
+class _StatCardPercent extends StatelessWidget {
+  final double width;
+  final String label;
+  final Stream<int> numerator;   // present today
+  final Stream<int> denominator; // active workers
+  const _StatCardPercent({
+    required this.width,
+    required this.label,
+    required this.numerator,
+    required this.denominator,
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 96,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _cardBorder),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: _brandRed.withOpacity(.08), shape: BoxShape.circle),
+            child: const Icon(Icons.how_to_reg, color: _brandRed, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: StreamBuilder<int>(
+              stream: denominator,
+              builder: (_, totalSnap) {
+                final total = totalSnap.data ?? 0;
+                return StreamBuilder<int>(
+                  stream: numerator,
+                  builder: (_, presSnap) {
+                    final pres = presSnap.data ?? 0;
+                    final String txt =
+                    (total <= 0) ? '—' : '${(pres * 100 / total).toStringAsFixed(0)}%';
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AutoSizeText(
+                          txt,
+                          maxLines: 1,
+                          minFontSize: 14,
+                          stepGranularity: 0.5,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _brandRed,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 26,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        AutoSizeText(
+                          label,
+                          maxLines: 2,
+                          minFontSize: 6,
+                          stepGranularity: 0.5,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _brandRed,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 8,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),

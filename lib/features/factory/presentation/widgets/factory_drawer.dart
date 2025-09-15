@@ -4,7 +4,7 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/profile.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFFD51616);
 
 class FactoryDrawer extends StatefulWidget {
   const FactoryDrawer({Key? key}) : super(key: key);

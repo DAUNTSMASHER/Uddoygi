@@ -323,7 +323,7 @@ class _SalesScreenState extends State<SalesScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'Your business at a glance',
+                  'Summary',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

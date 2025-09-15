@@ -1,10 +1,4 @@
 // lib/features/marketing/presentation/order_tracking/factory_tracking.dart
-//
-// Changes:
-// • _BoardItem now carries countryName & countryCode hints from work_orders
-// • _extractCountry recognizes 'countryCode' and more nested paths
-// • Cards now pass REAL order hints instead of an empty map, so flags and names render
-// • No breaking changes to your UI/styling
 
 import 'dart:collection';
 
@@ -21,7 +15,7 @@ const Color _darkBlue = Color(0xFF0D47A1);
 const Color _peach = Color(0xFFFF8A65);
 const Color _surface = Color(0xFFF8F6F5);
 
-// Canonical stages (for the overview path)
+/// Canonical stages (order matters, used for the path + comparisons)
 const List<String> _stages = [
   'Invoice created',
   'Payment taken',
@@ -39,10 +33,22 @@ const List<String> _stages = [
 
 String _normStage(String? s) {
   if (s == null) return '';
-  final x = s.trim().toLowerCase();
+  final x = s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  // Common aliases
   if (x.startsWith('address validat')) return 'Address validation';
   if (x.startsWith('shipped to fedex')) return 'Shipped to FedEx';
-  return _stages.firstWhere((v) => v.toLowerCase() == x, orElse: () => s);
+
+  // Submit to (the) Head Office — allow “submit/submitted”, optional “the”
+  if (RegExp(r'^(submit(ted)?)( to)?( the)? head office$').hasMatch(x)) {
+    return 'Submit to the Head office';
+  }
+
+  // Exact canonical matches (case-insensitive)
+  for (final st in _stages) {
+    if (st.toLowerCase() == x) return st;
+  }
+  return s; // fallback: keep original
 }
 
 int _stageIndex(String? s) {
@@ -79,14 +85,13 @@ String _truncateWords(String s, {int maxWords = 3}) {
 
 String _safeUpper(String s) => s.replaceAll(RegExp(r'[^A-Za-z]'), '').toUpperCase();
 
-/// Try hard to find a country & ISO code from order or invoice maps.
+/// Country extraction bits (unchanged, kept from your version)
 class _CountryInfo {
-  final String name; // may be short/truncated
-  final String iso2; // e.g., US, GB, BD (fallback "UN")
+  final String name;
+  final String iso2;
   const _CountryInfo(this.name, this.iso2);
 }
 
-/// Extract best country from order/invoice (prefers code if present).
 _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? invoice) {
   String _pick(List<String> keys, Map<String, dynamic>? m) {
     if (m == null) return '';
@@ -99,9 +104,8 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
     return '';
   }
 
-  // Prefer explicit 2-letter codes first
   final codeCandidates = <String>[
-    'countryCode',               // common in your customer docs
+    'countryCode',
     'shippingCountryCode',
     'customerCountryCode',
     'billing.countryCode',
@@ -110,9 +114,8 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
     'shippingAddress.countryCode',
   ];
 
-  // Then names/strings
   final nameCandidates = <String>[
-    'buyerCountry',              // seen in work_orders
+    'buyerCountry',
     'shippingCountry',
     'customerCountry',
     'country',
@@ -145,31 +148,26 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
     return '';
   }
 
-  // 1) Try codes first (invoice then order)
   final codeRaw = (_findOne(codeCandidates, invoice).isNotEmpty)
       ? _findOne(codeCandidates, invoice)
       : _findOne(codeCandidates, order);
   if (codeRaw.length == 2 && RegExp(r'^[A-Za-z]{2}$').hasMatch(codeRaw)) {
-    // Also try to get a friendly name if available
     final friendly = _findOne(nameCandidates, invoice).isNotEmpty
         ? _findOne(nameCandidates, invoice)
         : _findOne(nameCandidates, order);
     return _CountryInfo(friendly, codeRaw.toUpperCase());
   }
 
-  // 2) Fallback to names (invoice else order)
   final raw = (_findOne(nameCandidates, invoice).isNotEmpty)
       ? _findOne(nameCandidates, invoice)
       : _findOne(nameCandidates, order);
 
   if (raw.isEmpty) return const _CountryInfo('', 'UN');
 
-  // If already 2-letter code
   if (raw.length == 2 && RegExp(r'^[A-Za-z]{2}$').hasMatch(raw)) {
     return _CountryInfo(raw.toUpperCase(), raw.toUpperCase());
   }
 
-  // Simple name→ISO2 guesses (extend as needed)
   final name = raw.toLowerCase();
   final map = <String, String>{
     'bangladesh': 'BD',
@@ -209,18 +207,16 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
   };
   for (final entry in map.entries) {
     if (name.contains(entry.key)) {
-      final friendly = raw; // keep original capitalization
+      final friendly = raw;
       return _CountryInfo(friendly, entry.value);
     }
   }
 
-  // Fallback: derive ISO from first letters
   final up = _safeUpper(raw);
   final iso = up.isEmpty ? 'UN' : up.substring(0, up.length >= 2 ? 2 : 1).padRight(2, 'N');
   return _CountryInfo(raw, iso);
 }
 
-/// Pull hints (country, countryCode) from a work_order doc.
 ({String? name, String? code}) _countryHintsFromOrder(Map<String, dynamic> m) {
   String _read(String k) => (m[k] ?? '').toString().trim();
   String _readNested(List<String> path) {
@@ -235,7 +231,6 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
     return '$cur'.trim();
   }
 
-  // Codes first
   for (final k in ['countryCode', 'shippingCountryCode', 'customerCountryCode']) {
     final v = _read(k);
     if (v.length == 2) return (name: null, code: v.toUpperCase());
@@ -250,7 +245,6 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
     if (v.length == 2) return (name: null, code: v.toUpperCase());
   }
 
-  // Names next
   for (final k in ['buyerCountry', 'shippingCountry', 'customerCountry', 'country']) {
     final v = _read(k);
     if (v.isNotEmpty) return (name: v, code: null);
@@ -267,19 +261,19 @@ _CountryInfo _extractCountry(Map<String, dynamic>? order, Map<String, dynamic>? 
   return (name: null, code: null);
 }
 
-/// Board model (one card per **local** tracking number / WO)
+/// Board item model
 class _BoardItem {
   _BoardItem({
     required this.workOrderNo,
-    required this.trackingNo, // from work_orders.tracking_number
+    required this.trackingNo,
     required this.bbuyerName,
     required this.lastUpdated,
     required this.currentStage,
     required this.daysLeft,
     required this.itemsCount,
     this.invoiceId,
-    this.orderCountryName,   // NEW hint
-    this.orderCountryCode,   // NEW hint
+    this.orderCountryName,
+    this.orderCountryCode,
   });
 
   final String workOrderNo;
@@ -287,12 +281,11 @@ class _BoardItem {
   final String bbuyerName;
   final DateTime lastUpdated;
   final String currentStage;
-  final int daysLeft; // + = left, 0 = today, - = overdue
+  final int daysLeft;
   final int itemsCount;
   final String? invoiceId;
-
-  final String? orderCountryName; // from work_orders if present
-  final String? orderCountryCode; // from work_orders if present
+  final String? orderCountryName;
+  final String? orderCountryCode;
 }
 
 /// —————————————————————————————————————————————————————
@@ -307,11 +300,7 @@ class FactoryTrackingPage extends StatelessWidget {
   TextStyle get _font6d => GoogleFonts.inter(fontSize: 6,  fontWeight: FontWeight.w700, color: Colors.grey.shade700);
   TextStyle get _font6l => GoogleFonts.inter(fontSize: 6,  fontWeight: FontWeight.w700, color: _darkBlue);
 
-  /// Stream of ONLY my local tracking numbers:
-  ///   - Filter `work_orders` by agentEmail == me
-  ///   - Keep docs where `tracking_number` is non-empty
-  ///   - Sort by timestamp desc
-  ///   - De-duplicate by tracking_number (keep latest)
+  /// Stream of ONLY my local tracking numbers (deduped by tracking_number)
   Stream<List<_BoardItem>> _myLocalTrackingBoard() {
     final userEmail = FirebaseAuth.instance.currentUser?.email ?? '';
     if (userEmail.isEmpty) return const Stream.empty();
@@ -324,20 +313,17 @@ class FactoryTrackingPage extends StatelessWidget {
     return q.map((snap) {
       final docs = snap.docs.toList();
 
-      // Keep only WOs with local tracking
       final list = docs
           .map((d) => d.data())
           .where((m) => (m['tracking_number'] ?? '').toString().trim().isNotEmpty)
           .toList();
 
-      // desc by timestamp
       DateTime _toDate(dynamic x) {
         if (x is Timestamp) return x.toDate();
         return DateTime.fromMillisecondsSinceEpoch(0);
       }
       list.sort((a, b) => _toDate(b['timestamp']).compareTo(_toDate(a['timestamp'])));
 
-      // dedupe by tracking_number
       final byTrk = LinkedHashMap<String, Map<String, dynamic>>();
       for (final m in list) {
         final trk = (m['tracking_number'] ?? '').toString();
@@ -370,7 +356,6 @@ class FactoryTrackingPage extends StatelessWidget {
         final cnt = _sumItems(m['items']);
         final invoiceId = (m['invoiceId'] as String?);
 
-        // NEW: capture country hints from the WO itself
         final hints = _countryHintsFromOrder(m);
 
         return _BoardItem(
@@ -389,24 +374,22 @@ class FactoryTrackingPage extends StatelessWidget {
     });
   }
 
-  /// All updates for a WO (ascending) — used in details sheet
+  /// All updates for a WO — ascending by createdAt (for timeline)
   Stream<List<Map<String, dynamic>>> _updatesForAsc(String woNo) {
     return FirebaseFirestore.instance
         .collection('work_order_tracking')
         .where('workOrderNo', isEqualTo: woNo)
-        .orderBy('createdAt', descending: true)
+        .orderBy('createdAt', descending: false)
         .snapshots()
         .map((s) => s.docs.map((e) => e.data()).toList());
   }
 
-  /// Fetch the linked invoice (for buyer/country)
   Future<Map<String, dynamic>?> _invoiceMeta(String? invoiceId) async {
     if (invoiceId == null || invoiceId.isEmpty) return null;
     final d = await FirebaseFirestore.instance.collection('invoices').doc(invoiceId).get();
     return d.data();
   }
 
-  /// Minimal order snapshot (sometimes handy)
   Future<Map<String, dynamic>?> _orderMeta(String woNo) async {
     final q = await FirebaseFirestore.instance
         .collection('work_orders')
@@ -467,11 +450,9 @@ class FactoryTrackingPage extends StatelessWidget {
             itemBuilder: (ctx, i) {
               final b = boards[i];
 
-              // Prepare a lightweight "order hint" map like your customer list view does
               final orderHint = <String, dynamic>{
                 if ((b.orderCountryName ?? '').isNotEmpty) 'country': b.orderCountryName,
                 if ((b.orderCountryCode ?? '').isNotEmpty) 'countryCode': b.orderCountryCode,
-                // also alias to common keys the extractor looks for
                 if ((b.orderCountryName ?? '').isNotEmpty) 'buyerCountry': b.orderCountryName,
               };
 
@@ -479,11 +460,7 @@ class FactoryTrackingPage extends StatelessWidget {
                 future: _invoiceMeta(b.invoiceId),
                 builder: (c, invSnap) {
                   final invoice = invSnap.data;
-
-                  // Prefer invoice.customerName over order buyerName (if present)
                   final buyer = (invoice?['customerName'] ?? b.bbuyerName).toString();
-
-                  // *** KEY PART: use real order hints + invoice ***
                   final country = _extractCountry(orderHint, invoice);
 
                   return _TrackingBoardCard(
@@ -526,7 +503,7 @@ class FactoryTrackingPage extends StatelessWidget {
 }
 
 /// —————————————————————————————————————————————————————
-/// SMALL BOARD CARD — tiny, readable card for non-tech users
+/// SMALL BOARD CARD
 /// —————————————————————————————————————————————————————
 class _TrackingBoardCard extends StatelessWidget {
   const _TrackingBoardCard({
@@ -567,11 +544,10 @@ class _TrackingBoardCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top row: Flag • Buyer (10sp) • Country (6sp)
+            // Top row: Flag • Buyer • Country
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // leftmost circular flag
                 CircleAvatar(
                   radius: 14,
                   backgroundColor: Colors.white,
@@ -590,7 +566,7 @@ class _TrackingBoardCard extends StatelessWidget {
                           buyerName.isEmpty ? 'Buyer' : buyerName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: font10, // 10sp title
+                          style: font10,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -598,7 +574,7 @@ class _TrackingBoardCard extends StatelessWidget {
                         _truncateWords(country.name.isEmpty ? '' : country.name, maxWords: 3),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: font6d, // 6sp country
+                        style: font6d,
                       ),
                     ],
                   ),
@@ -611,7 +587,7 @@ class _TrackingBoardCard extends StatelessWidget {
             // Tracking number line
             Row(
               children: [
-                Text('Tracking number: ', style: font6l), // 6sp label
+                Text('Tracking number: ', style: font6l),
                 Expanded(
                   child: Row(
                     children: [
@@ -620,7 +596,7 @@ class _TrackingBoardCard extends StatelessWidget {
                           item.trackingNo,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: font8, // 8sp value
+                          style: font8,
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -643,10 +619,9 @@ class _TrackingBoardCard extends StatelessWidget {
 
             const SizedBox(height: 6),
 
-            // Totals row: total products (animated) + remaining time (animated)
+            // Items + Remaining
             Row(
               children: [
-                // Total products animation
                 TweenAnimationBuilder<int>(
                   tween: IntTween(begin: 0, end: item.itemsCount),
                   duration: const Duration(milliseconds: 450),
@@ -660,7 +635,6 @@ class _TrackingBoardCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Remaining time animation
                 TweenAnimationBuilder<double>(
                   tween: Tween<double>(begin: 0, end: 1),
                   duration: const Duration(milliseconds: 600),
@@ -687,14 +661,13 @@ class _TrackingBoardCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                // Right: last updated (quiet)
                 Text(_relativeTime(item.lastUpdated), style: font6d),
               ],
             ),
 
             const SizedBox(height: 8),
 
-            // Bottom status (9sp)
+            // Current status
             Row(
               children: [
                 Container(
@@ -706,7 +679,7 @@ class _TrackingBoardCard extends StatelessWidget {
                   ),
                   child: Text(
                     _normStage(item.currentStage),
-                    style: font9, // 9sp current status
+                    style: font9,
                   ),
                 ),
               ],
@@ -719,7 +692,7 @@ class _TrackingBoardCard extends StatelessWidget {
 }
 
 /// —————————————————————————————————————————————————————
-/// DETAILS SHEET — clear tracking + live timeline (Δ durations)
+/// DETAILS SHEET — includes "Move to Address validation" button
 /// —————————————————————————————————————————————————————
 class _TrackingDetailsSheet extends StatelessWidget {
   const _TrackingDetailsSheet({
@@ -731,6 +704,62 @@ class _TrackingDetailsSheet extends StatelessWidget {
   final _BoardItem item;
   final Map<String, dynamic>? orderMeta;
   final Stream<List<Map<String, dynamic>>> updatesStream;
+
+  /// Treat statuses that *start with* "Done" (case-insensitive) as Done.
+  bool _isDoneStatus(dynamic v) {
+    final s = (v ?? '').toString().trim().toLowerCase();
+    return s == 'done' || s.startsWith('done');
+  }
+
+  Future<void> _markAddressValidation(BuildContext context) async {
+    final db = FirebaseFirestore.instance;
+    final now = FieldValue.serverTimestamp();
+
+    // Find the work_orders doc by id or by workOrderNo
+    Future<DocumentReference<Map<String, dynamic>>> _resolveWorkOrderRef() async {
+      final direct = db.collection('work_orders').doc(item.workOrderNo);
+      final directSnap = await direct.get();
+      if (directSnap.exists) return direct;
+
+      final q = await db
+          .collection('work_orders')
+          .where('workOrderNo', isEqualTo: item.workOrderNo)
+          .limit(1)
+          .get();
+      if (q.docs.isNotEmpty) return q.docs.first.reference;
+
+      // Fallback to direct (will fail if missing, but keeps transaction shape)
+      return direct;
+    }
+
+    final woRef = await _resolveWorkOrderRef();
+    final trkCol = db.collection('work_order_tracking');
+    final updRef = trkCol.doc();
+
+    await db.runTransaction((tx) async {
+      tx.update(woRef, {
+        'currentStage': 'Address validation',
+        'status': 'Address validation',
+        'lastUpdated': now,
+      });
+      tx.set(updRef, {
+        'id': updRef.id,
+        'workOrderNo': item.workOrderNo,
+        'tracking_number': item.trackingNo,
+        'stage': 'Address validation',
+        'status': 'Done',
+        'createdAt': now,
+        'lastUpdated': now,
+        'by': FirebaseAuth.instance.currentUser?.email,
+      });
+    });
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Moved to Address validation')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -778,7 +807,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Tracking line (clear + copy)
+              // Tracking line
               _card(
                 child: Row(
                   children: [
@@ -805,6 +834,30 @@ class _TrackingDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // ---- Quick action: show ONLY when previous step is Done ----
+              // ---- Quick action: Address validation — show whenever we're at "Submit to the Head office"
+              (_normStage(item.currentStage) == 'Submit to the Head office')
+                  ? Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.verified_user),
+                    label: const Text('Move to Address validation'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _darkBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => _markAddressValidation(context),
+                  ),
+                ),
+              )
+                  : const SizedBox.shrink(),
+
+
               const SizedBox(height: 16),
 
               // Detailed Timeline — Δ from previous stage
@@ -824,13 +877,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
                     return Text('No updates yet.', style: GoogleFonts.inter(color: Colors.grey.shade600));
                   }
 
-                  // Ensure ascending order & compute deltas
-                  ups.sort((a, b) {
-                    final aSec = (a['createdAt'] as Timestamp?)?.seconds ?? 0;
-                    final bSec = (b['createdAt'] as Timestamp?)?.seconds ?? 0;
-                    return aSec.compareTo(bSec);
-                  });
-
+                  // Already ascending by query; compute deltas
                   return _card(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
                     child: Column(
@@ -860,7 +907,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
 
                         final isFirst = i == 0;
                         final isLast = i == ups.length - 1;
-                        final highlighted = isLast; // highlight latest
+                        final highlighted = isLast;
 
                         return _timelineRow(
                           title: stage,
@@ -888,8 +935,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
     );
   }
 
-  // Reused UI bits
-
+  // Timeline row
   Widget _timelineRow({
     required String title,
     required String subtitle,
@@ -901,7 +947,6 @@ class _TrackingDetailsSheet extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Left connectors + dot
         SizedBox(
           width: 26,
           child: Column(
@@ -921,7 +966,6 @@ class _TrackingDetailsSheet extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        // Right content
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 14),
@@ -956,7 +1000,6 @@ class _TrackingDetailsSheet extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // rail
               SizedBox(
                 width: 22,
                 child: Column(
@@ -976,7 +1019,6 @@ class _TrackingDetailsSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // label
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 10),
@@ -1011,9 +1053,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
   }
 }
 
-/// —————————————————————————————————————————————————————
-/// SHARED CARD CONTAINER
-/// —————————————————————————————————————————————————————
+/// Shared card container
 Widget _card({required Widget child, EdgeInsetsGeometry? padding}) {
   return Container(
     decoration: BoxDecoration(

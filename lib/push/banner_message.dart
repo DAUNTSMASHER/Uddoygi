@@ -31,10 +31,10 @@ class BannerMessage extends StatelessWidget {
     required this.sender,
     required this.onClose,
     this.subject,
-    this.titleBgColor = const Color(0xFF0D47A1), // deep blue header
-    this.bodyBgColor = const Color(0xFFF7F9FC),  // light body
+    this.titleBgColor = const Color(0xFF3C0765), // deep blue header
+    this.bodyBgColor = const Color(0xFF001863),  // light body
     this.textColor = Colors.white,
-    this.bodyTextColor = const Color(0xFF0F172A), // slate-900-ish
+    this.bodyTextColor = const Color(0xFFF3F3F3), // slate-900-ish
     this.accentColor = const Color(0xFF0D47A1),
   });
 

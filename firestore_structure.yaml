@@ -46,6 +46,146 @@
       - workOrderNo
       - token
       - status
+- alert_dispatch:
+  - 18vJ94FhaJ3h0ep0LDWV:
+      - byUid
+      - uids
+      - createdAtMs
+      - byEmail
+      - tokens
+      - alertId
+      - title
+      - body
+      - priority
+      - createdAt
+      - processingAt
+      - failedCount
+      - sentAt
+      - lastErrors
+      - status
+  - 2Eh5PhPKhHK9n9md2Kvc:
+      - mode
+      - createdAt
+      - recipients
+      - alertId
+      - department
+      - message
+      - priority
+      - repeatUntilAck
+      - error
+      - status
+      - updatedAt
+  - 2GKWGH4nX61A8YpwalKK:
+      - uids
+      - createdAtMs
+      - alertId
+      - title
+      - body
+      - priority
+      - createdAt
+      - processingAt
+      - failedCount
+      - sentAt
+      - lastErrors
+      - status
+  - 2awMZTbtkmp5l5dmcjRX:
+      - uids
+      - createdAtMs
+      - alertId
+      - title
+      - body
+      - priority
+      - createdAt
+      - processingAt
+      - failedCount
+      - sentAt
+      - lastErrors
+      - status
+  - 2v7Dy1RQ0D4FewbsKa65:
+      - uids
+      - alertId
+      - title
+      - body
+      - priority
+      - createdAt
+      - processingAt
+      - failedCount
+      - successCount
+      - sentAt
+      - lastErrors
+      - status
+      - updatedAt
+- alerts:
+  - 0zRIOTNmeWi9IEdF0pz8:
+      - recipientIds
+      - active
+      - acknowledgedBy
+      - message
+      - priority
+      - mode
+      - requiresAck
+      - createdByEmail
+      - createdAt
+      - recipientEmails
+      - department
+      - createdById
+      - updatedAt
+  - 1Pve0B9iwzFms1GOGefr:
+      - recipientIds
+      - active
+      - acknowledgedBy
+      - message
+      - priority
+      - mode
+      - requiresAck
+      - createdByEmail
+      - createdAt
+      - recipientEmails
+      - department
+      - createdById
+      - updatedAt
+  - 3GwjmwLm3JhWSHK7mPYd:
+      - recipientIds
+      - active
+      - acknowledgedBy
+      - message
+      - priority
+      - mode
+      - requiresAck
+      - createdByEmail
+      - createdAt
+      - recipientEmails
+      - department
+      - createdById
+      - updatedAt
+  - 514cEj2xTJDlr7vjtFRM:
+      - recipientIds
+      - active
+      - acknowledgedBy
+      - message
+      - priority
+      - mode
+      - requiresAck
+      - createdByEmail
+      - createdAt
+      - recipientEmails
+      - department
+      - createdById
+      - updatedAt
+  - 5mfD3jAIDJpoTZiHLRtC:
+      - recipientIds
+      - active
+      - acknowledgedBy
+      - message
+      - priority
+      - mode
+      - requiresAck
+      - createdByEmail
+      - createdAt
+      - recipientEmails
+      - department
+      - createdById
+      - updatedAt
 - applicants:
   - 42e3wHmmgOzkduyMqp9x:
       - role
@@ -152,6 +292,37 @@
       - address
       - phone
       - agentName
+- campaigns:
+  - Fwgh1kAgRpKcVNhbKdnx:
+      - endDate
+      - description
+      - totals
+      - title
+      - platforms
+      - createdAt
+      - createdBy
+      - today
+      - name
+      - department
+      - kpis
+      - startDate
+      - status
+      - budget
+  - anniv_2025:
+      - endDate
+      - description
+      - totals
+      - title
+      - platforms
+      - createdAt
+      - createdBy
+      - today
+      - name
+      - department
+      - kpis
+      - startDate
+      - budget
+      - status
 - complaints:
   - 4gJyk9OKKHscWkijw5Xq:
       - submittedBy
@@ -206,16 +377,6 @@
       - resolutionHistory
       - status
 - customers:
-  - 4BlSfhMZHxPkK1c0HBcb:
-      - country
-      - address
-      - phone
-      - createdBy
-      - agentName
-      - email
-      - status
-      - timestamp
-      - name
   - SOskryw6Dp4an9gNrDW7:
       - country
       - address
@@ -236,16 +397,38 @@
       - email
       - ownerEmail
       - createdAt
-  - k3YXb0oMDL7CgmSCiZNe:
+  - fz1ZhyIYFiouxPZnhmDd:
+      - zip
       - country
-      - address
+      - city
+      - agentName
+      - addressLine
+      - phoneCountryCode
       - phone
       - createdBy
+      - countryCode
       - name
-      - agentName
+      - state
       - email
       - status
       - timestamp
+  - h6WWnb89Fz1E8rwde4nC:
+      - zip
+      - country
+      - city
+      - agentName
+      - addressLine
+      - phoneCountryCode
+      - phone
+      - createdBy
+      - countryCode
+      - name
+      - state
+      - status
+      - timestamp
+      - address
+      - email
+      - updatedAt
   - n876o8gg5Ur4GmryBtJX:
       - country
       - address
@@ -256,6 +439,13 @@
       - email
       - status
       - timestamp
+      - zip
+      - phoneCountryCode
+      - city
+      - countryCode
+      - state
+      - addressLine
+      - updatedAt
 - daily_production:
   - 2VQHXVV8doTF0Tk8WpGe:
       - managerEmail
@@ -308,6 +498,13 @@
       - timestamp
       - managerEmail
       - productModel
+- dashboards:
+  - global:
+      - topCountries
+      - today
+      - totals
+      - device
+      - updatedAt
 - employees:
   - OHHP0ZjfqLJINIJveEoJ:
       - phone
@@ -699,12 +896,6 @@
       - decisionAt
       - decidedBy
       - status
-- marketing_campaigns:
-  - aFbFQ1SeDY77cvQM1bU1:
-      - title
-      - submittedBy
-      - status
-      - toHR
 - marketing_customers:
   - LeeuM6RV5xUnnFaqI6mT:
       - name
@@ -868,6 +1059,24 @@
       - to
       - body
       - timestamp
+  - 3ByuwcRXege56NuCDgi6:
+      - toUid
+      - toName
+      - subject
+      - fromName
+      - from
+      - to
+      - body
+      - timestamp
+  - 3T8ZrW95BJ7d99Dpwc1W:
+      - toUid
+      - toName
+      - subject
+      - fromName
+      - from
+      - to
+      - body
+      - timestamp
   - 5J9ucCJyfbOBiylBFwdy:
       - subject
       - fromName
@@ -884,22 +1093,8 @@
       - from
       - to
       - body
-  - 6qRZnKelGxacDNkI0XMQ:
-      - subject
-      - fromName
-      - from
-      - to
-      - body
-      - timestamp
-  - 8WnfcxhCG1qcabja7qmS:
-      - subject
-      - fromName
-      - from
-      - to
-      - body
-      - timestamp
 - notices:
-  - 6MMwfhQXxhCpq2991Y6b:
+  - ImExuRHjhlIb94CVC51L:
       - publishedBy
       - description
       - fileUrl
@@ -918,20 +1113,64 @@
       - timestamp
       - attachments
       - fileUrl
-  - jVIZenCEvB9sFpLSI5PE:
+  - ZPC7mtIMHJ7RgO3DQbyk:
+      - publishedByName
+      - visibility
+      - commentPermission
+      - publishedByEmail
+      - description
+      - files
+      - title
+      - department
+      - timestamp
+  - aP7X8EY82erga85PAvp3:
       - publishedBy
       - description
-      - title
-      - timestamp
-      - attachments
-      - fileUrl
-  - lgBQeEGhgKvtxhSbEBrI:
-      - publishedBy
-      - description
       - fileUrl
       - title
       - timestamp
-      - attachments
+- notifications:
+  - 03s6UIejpNSwz983Ae93:
+      - read
+      - title
+      - body
+      - type
+      - toUserId
+      - createdAt
+  - 08lFNdwuFstswR789E0k:
+      - read
+      - title
+      - body
+      - type
+      - toUserId
+      - createdAt
+  - 1MkiM2cDW3KMCg4bfhJP:
+      - createdAt
+      - read
+      - to
+      - alertId
+      - title
+      - body
+      - type
+      - toUserId
+  - 1O8fpWGXzm6Z9bNH6tPz:
+      - createdAt
+      - read
+      - to
+      - alertId
+      - title
+      - body
+      - type
+      - toUserId
+  - 1d6klyX9ZKPMTDCyqlka:
+      - createdAt
+      - read
+      - to
+      - alertId
+      - title
+      - body
+      - type
+      - toUserId
 - orders:
   - lV2oElq2h1Z6knlXkuQS:
       - agentId
@@ -1048,6 +1287,34 @@
       - unit_price
       - createdAt
       - model_name
+  - BWJDgL3Tggk7X1RAoIUY:
+      - production_cost
+      - curl
+      - notes
+      - gender
+      - density
+      - production_time
+      - unit_price
+      - archived
+      - colour
+      - model_name
+      - size
+      - createdBy
+      - createdAt
+  - NNmAJulO5el5EzViHUfj:
+      - production_cost
+      - curl
+      - notes
+      - gender
+      - density
+      - production_time
+      - unit_price
+      - archived
+      - colour
+      - model_name
+      - size
+      - createdBy
+      - createdAt
   - r2nEbnspI4EgBS5cTD6R:
       - production_cost
       - curl
@@ -1367,6 +1634,25 @@
       - date
       - employeeName
       - shift
+- stocks:
+  - TtV1owdyopxqFREmE4jp:
+      - unit
+      - name
+      - minThreshold
+      - maxThreshold
+      - sku
+      - lastUpdated
+      - qty
+  - yTGlithMoqKsqqaCYzrx:
+      - unit
+      - name
+      - minThreshold
+      - maxThreshold
+      - sku
+      - lastAlertHighAt
+      - lastAlertLowAt
+      - lastUpdated
+      - qty
 - suppliers:
   - io1iHtZ4yR5kdYC5aZLk:
       - name
@@ -1377,6 +1663,70 @@
   - xUzrY1oya5g7UfUKsFv4:
       - name
       - contact
+- tasks:
+  - 2m1WYOYOA2s27hrMEUBx:
+      - assignerName
+      - createdAt
+      - assigneeName
+      - dueDate
+      - description
+      - submission
+      - priority
+      - title
+      - assigneeId
+      - assignerId
+      - status
+      - updatedAt
+  - 3OOhkxAK5s0l80yDYZ05:
+      - createdAt
+      - assignerName
+      - assigneeName
+      - dueDate
+      - description
+      - title
+      - priority
+      - assigneeId
+      - assignerId
+      - submission
+      - status
+      - updatedAt
+  - 8K7ZQhDSO0sVRQbcVzNh:
+      - assignerName
+      - createdAt
+      - assigneeName
+      - dueDate
+      - description
+      - priority
+      - title
+      - assigneeId
+      - assignerId
+      - status
+      - updatedAt
+  - C76GK06ac6wrudWwjkiF:
+      - assignerName
+      - createdAt
+      - assigneeName
+      - dueDate
+      - description
+      - submission
+      - priority
+      - title
+      - assigneeId
+      - assignerId
+      - status
+      - updatedAt
+  - emwELffnhCc5X4KAwimQ:
+      - assignerName
+      - createdAt
+      - assigneeName
+      - dueDate
+      - description
+      - priority
+      - title
+      - assigneeId
+      - assignerId
+      - status
+      - updatedAt
 - taxes:
   - TBWwnXXikN1SY6ZOfRJn:
       - income
@@ -1420,6 +1770,19 @@
       - addressValidation
       - shippedToFedEx
       - finalTrackingCode
+- tracking_index:
+  - TRK-GGGG2025091453222797:
+      - makerEmail
+      - workOrderNo
+      - createdAt
+  - TRK-HEROK20250908584274:
+      - makerEmail
+      - workOrderNo
+      - createdAt
+  - TRK-MUDU202509143856880:
+      - makerEmail
+      - workOrderNo
+      - createdAt
 - users:
   - 1CGKRZALvxV6SjfTG7olnkhApZn1:
       - addedBy
@@ -1509,7 +1872,25 @@
       - workOrderNo
       - assignedTo
       - status
-  - 2HKIretUFtGfA8V7tnwV:
+  - 1LMAm6dkgBGJbEiLIAkB:
+      - timeLimit
+      - stageIndex
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+  - 1Us8DNIkmBTmGovcakKk:
+      - timeLimit
+      - stageIndex
+      - createdAt
+      - lastUpdated
+      - notes
+      - stage
+      - workOrderNo
+      - assignedTo
+  - 2AH28Ys6g0O7XJQKCNUP:
       - timeLimit
       - createdAt
       - lastUpdated
@@ -1517,31 +1898,15 @@
       - stage
       - workOrderNo
       - assignedTo
-  - 2QrQHpbegpiW5VWViQdq:
+  - 2H1DIKsTZHi4dTRZ8nSL:
       - timeLimit
+      - stageIndex
       - createdAt
       - lastUpdated
       - notes
       - stage
       - workOrderNo
       - assignedTo
-  - 2Ycbn7MBJePAQ798nJw8:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-  - C1aSFf5EU9W5uSFHiN4O:
-      - timeLimit
-      - createdAt
-      - lastUpdated
-      - notes
-      - stage
-      - workOrderNo
-      - assignedTo
-      - status
 - work_orders:
   - WO_20250908_155413:
       - finalDate
@@ -1573,9 +1938,32 @@
       - timestamp
       - status
       - currentStatus
+      - addressValidation
       - currentStage
       - lastUpdated
+      - trackingNo
+  - gggg_20250914_53222_797_WO_20250921:
+      - finalDate
+      - instructions
+      - agentEmail
+      - buyerName
+      - deliveryDays
+      - makerEmail
+      - tracking_number
+      - invoiceId
+      - makerName
+      - makerUid
+      - linkedToInvoice
+      - workOrderNo
+      - items
+      - submittedToFactory
+      - timestamp
+      - status
+      - currentStageIndex
       - addressValidation
+      - currentStage
+      - lastUpdated
+      - trackingNo
   - hafsa_09072025_2152_WO_20250711:
       - finalDate
       - instructions
@@ -1598,17 +1986,5 @@
       - items
       - submittedToFactory
       - timestamp
-      - lastUpdated
-      - status
-  - hafsa_20250703_500090_WO_20250711:
-      - finalDate
-      - instructions
-      - deliveryDays
-      - invoiceId
-      - workOrderNo
-      - items
-      - submittedToFactory
-      - timestamp
-      - agentEmail
       - lastUpdated
       - status

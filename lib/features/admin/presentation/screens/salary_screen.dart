@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF3C0765);
 const double _fontMed = 14.0;
 
 class SalaryScreen extends StatefulWidget {

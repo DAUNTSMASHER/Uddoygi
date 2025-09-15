@@ -1,24 +1,45 @@
 // lib/features/marketing/presentation/screens/marketing_dashboard.dart
+
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/sales_screen.dart';
+
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/products.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/renumeration_dashboard.dart';
 import '../widgets/marketing_drawer.dart';
 import 'package:uddoygi/features/common/notification.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/campaign_screen.dart';
-
-// ✅ NEW: import the Stock History screen/class
 import 'package:uddoygi/features/common/stock/stockhistory.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
+// ✅ Import the loan request screen
+import 'package:uddoygi/features/marketing/presentation/screens/loan_request_screen.dart';
 
 /// ===== Palette (blue + white only) =====
-const Color _brandBlue   = Color(0xFF0D47A1); // dark
-const Color _blueMid     = Color(0xFF1D5DF1); // accent
-const Color _surface     = Color(0xFFF6F8FF); // near-white surface
-const Color _cardBorder  = Color(0x1A0D47A1); // 10% blue
-const Color _shadowLite  = Color(0x14000000);
+const Color _brandBlue  = Color(0xFF0D47A1); // dark
+const Color _blueMid    = Color(0xFF1D5DF1); // accent
+const Color _surface    = Color(0xFFF6F8FF); // near-white surface
+const Color _cardBorder = Color(0x1A0D47A1); // 10% blue
+const Color _shadowLite = Color(0x14000000);
+// Running stages (compare in lowercase; supports both `status` and `currentStage`)
+const Set<String> _runningStagesLower = {
+  'submitted to factory',
+  'factory update 1 (base is done)',
+  'hair is ready',
+  'knotting is going on',
+  'putting',
+  'molding',
+};
+
+String _asLower(dynamic v) => (v ?? '').toString().trim().toLowerCase();
+
+bool _isRunningWorkOrder(Map<String, dynamic> m) {
+  final s  = _asLower(m['status']);        // some docs use `status`
+  final cs = _asLower(m['currentStage']);  // some docs use `currentStage`
+  return _runningStagesLower.contains(s) || _runningStagesLower.contains(cs);
+}
 
 class MarketingDashboard extends StatefulWidget {
   const MarketingDashboard({Key? key}) : super(key: key);
@@ -29,6 +50,7 @@ class MarketingDashboard extends StatefulWidget {
 
 class _MarketingDashboardState extends State<MarketingDashboard> {
   String? email;
+  String? uid;
   String _search = '';
   int _currentTab = 0;
 
@@ -40,13 +62,12 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     _DashboardItem('Complaints', Icons.warning_amber, '/common/complaints'),
     _DashboardItem('Messages', Icons.message, '/common/messages'),
     _DashboardItem('Tasks', Icons.task, '/marketing/task_assignment'),
-    _DashboardItem('Campaigns', Icons.campaign, '/marketing/campaign'),
+    _DashboardItem('Campaigns', Icons.campaign, ''), // manual: AdsManagerMobile
     _DashboardItem('Orders', Icons.shopping_bag, '/marketing/orders'),
-    _DashboardItem('Loans', Icons.request_page, '/marketing/loan_request'),
-    _DashboardItem('Products', Icons.inventory, ''),           // manual route
-    _DashboardItem('Renumeration', Icons.paid, ''),            // manual route
-    // ✅ NEW dashboard section
-    _DashboardItem('Stock Update', Icons.sync, ''),            // manual route
+    _DashboardItem('Loans', Icons.request_page, ''), // manual: LoanRequestScreen
+    _DashboardItem('Products', Icons.inventory, ''), // manual: ProductsPage
+    _DashboardItem('Renumeration', Icons.paid, ''),  // manual: RenumerationDashboard
+    _DashboardItem('Stock Update', Icons.sync, ''),  // manual: StockHistoryScreen
   ];
 
   @override
@@ -57,9 +78,11 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
-    if (session != null && mounted) {
-      setState(() => email = session['email'] as String?);
-    }
+    if (!mounted) return;
+    setState(() {
+      email = session?['email'] as String?;
+      uid   = session?['uid'] as String?;
+    });
   }
 
   Future<void> _logout() async {
@@ -69,33 +92,98 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
   }
 
   void _onItemTap(_DashboardItem item) {
-    if (item.title == 'Products') {
-      if (email != null) {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => ProductsPage(userEmail: email!)));
-      }
-      return;
+    switch (item.title) {
+      case 'Products':
+        if (email != null) {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: email!)));
+        }
+        return;
+      case 'Renumeration':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const RenumerationDashboard()));
+        return;
+      case 'Campaigns':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdsManagerMobile()));
+        return;
+      case 'Stock Update':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const StockHistoryScreen()));
+        return;
+      case 'Sales':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesScreen()));
+        return;
+      case 'Loans':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const LoanRequestScreen()));
+        return;
+      default:
+        Navigator.pushNamed(context, item.route);
     }
-    if (item.title == 'Renumeration') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const RenumerationDashboard()));
-      return;
-    }
-    if (item.title == 'Campaigns') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const AdsManagerMobile()));
-      return;
-    }
-    // ✅ NEW: route Stock Update tile to StockHistoryScreen
-    if (item.title == 'Stock Update') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const StockHistoryScreen()),
-      );
-      return;
-    }
+  }
 
-    Navigator.pushNamed(context, item.route);
+  /// ---------- LIVE BADGES: per-tile counts from Firestore ----------
+  Stream<int> _badgeStreamFor(String title) {
+    final mail = email ?? FirebaseAuth.instance.currentUser?.email ?? '';
+    final fs = FirebaseFirestore.instance;
+
+    switch (title) {
+      case 'Notices':
+        return fs
+            .collection('notifications')
+            .where('to', isEqualTo: mail)
+            .where('read', isEqualTo: false)
+            .snapshots()
+            .map((s) => s.docs.length);
+
+      case 'Messages':
+        return _unreadMessagesStream();
+
+      case 'Sales':
+        return fs
+            .collection('invoices')
+            .where('ownerEmail', isEqualTo: mail)
+            .snapshots()
+            .map((s) => s.docs.length);
+
+      case 'Orders':
+        return fs.collection('work_orders')
+            .snapshots()
+            .map((s) => s.docs.where((d) => _isRunningWorkOrder(d.data())).length);
+
+
+
+      case 'Loans':
+        return fs
+            .collection('loans')
+            .where('userEmail', isEqualTo: mail)
+            .snapshots()
+            .map((s) => s.docs.length);
+
+      case 'Renumeration':
+        return fs
+            .collection('marketing_incentives')
+            .where('userEmail', isEqualTo: mail)
+            .snapshots()
+            .map((s) => s.docs.length);
+
+      case 'Clients':
+        return fs.collection('customers').snapshots().map((s) => s.docs.length);
+
+      case 'Campaigns':
+        return fs.collection('campaigns').snapshots().map((s) => s.docs.length);
+
+      case 'Welfare':
+        return fs.collection('welfare').snapshots().map((s) => s.docs.length);
+
+      case 'Complaints':
+        return fs.collection('complaints').snapshots().map((s) => s.docs.length);
+
+      case 'Products':
+        return fs.collection('products').snapshots().map((s) => s.docs.length);
+
+      case 'Tasks':
+        return fs.collection('tasks').snapshots().map((s) => s.docs.length);
+
+      default:
+        return const Stream<int>.empty();
+    }
   }
 
   /// Unread messages badge stream
@@ -117,8 +205,8 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     final mail = user.email ?? '';
     return FirebaseFirestore.instance
         .collection('notifications')
-        .where('to', isEqualTo: mail)          // adjust to your schema
-        .where('read', isEqualTo: false)       // adjust to your schema
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
         .snapshots()
         .map((s) => s.docs.length);
   }
@@ -139,17 +227,34 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
         backgroundColor: _brandBlue,
         foregroundColor: Colors.white,
         title: Text(
-          'Welcome back, ${_niceName(email ?? 'Marketing')}',
+          'Welcome back, ${_niceName(email ?? FirebaseAuth.instance.currentUser?.email ?? 'Marketing')}',
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            tooltip: 'Notifications',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationPage()),
-            ),
+          StreamBuilder<int>(
+            stream: _unreadNotificationsStream(),
+            builder: (_, s) {
+              final count = s.data ?? 0;
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    tooltip: 'Notifications',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotificationPage()),
+                    ),
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: _Badge(count: count, small: true),
+                    ),
+                ],
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -166,7 +271,7 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          _OverviewHeader(userEmail: email),
+          _OverviewHeader(userEmail: email, userUid: uid),
           const SizedBox(height: 16),
 
           TextField(
@@ -203,9 +308,9 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
             ),
             itemBuilder: (_, i) {
               final it = filtered[i];
-              final isMessages = it.title == 'Messages';
+              final stream = _badgeStreamFor(it.title);
               return StreamBuilder<int>(
-                stream: isMessages ? _unreadMessagesStream() : const Stream<int>.empty(),
+                stream: stream,
                 builder: (_, snap) {
                   final count = snap.data ?? 0;
                   return _DashTile(
@@ -227,21 +332,21 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     final items = <_NavItem>[
       _NavItem('Home', Icons.home_rounded, onTap: () => setState(() => _currentTab = 0)),
       _NavItem('Clients', Icons.people_alt_rounded, onTap: () => Navigator.pushNamed(context, '/marketing/clients')),
-      _NavItem('Sales', Icons.point_of_sale_rounded, onTap: () => Navigator.pushNamed(context, '/marketing/sales')),
+      _NavItem(
+        'Sales',
+        Icons.point_of_sale_rounded,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
+      ),
       _NavItem('Products', Icons.inventory_2_rounded, onTap: () {
-        final mail = email;
+        final mail = email ?? FirebaseAuth.instance.currentUser?.email;
         if (mail != null) {
           Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: mail)));
         }
       }),
-      // ✅ NEW: Bottom-nav shortcut to Stock History
       _NavItem(
         'Stock Update',
         Icons.sync,
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const StockHistoryScreen()),
-        ),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockHistoryScreen())),
       ),
       _NavItem(
         'Notifications',
@@ -249,8 +354,12 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
         badgeStream: _unreadNotificationsStream(),
       ),
-      _NavItem('Messages', Icons.message_rounded, onTap: () => Navigator.pushNamed(context, '/common/messages'),
-          badgeStream: _unreadMessagesStream()),
+      _NavItem(
+        'Messages',
+        Icons.message_rounded,
+        onTap: () => Navigator.pushNamed(context, '/common/messages'),
+        badgeStream: _unreadMessagesStream(),
+      ),
     ];
 
     return SafeArea(
@@ -314,20 +423,16 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
   }
 }
 
-/* ========================= Overview, stat cards & helpers remain unchanged ========================= */
+/* ========================= Overview & helpers ========================= */
 
 enum _Range { thisMonth, prevMonth, last3, last12 }
-
-// ... (rest of your file stays exactly the same below here) ...
-// I didn’t modify _OverviewHeader, _StatCard, _DashTile, _NavItem, _BadgeIcon, _Badge, etc.
-
-/* ========================= Overview (blue header + white stat cards, 2x3 + filter) ========================= */
-
+// Running stages (lowercase)
 
 
 class _OverviewHeader extends StatefulWidget {
   final String? userEmail; // optional user scoping if needed
-  const _OverviewHeader({Key? key, this.userEmail}) : super(key: key);
+  final String? userUid;
+  const _OverviewHeader({Key? key, this.userEmail, this.userUid}) : super(key: key);
 
   @override
   State<_OverviewHeader> createState() => _OverviewHeaderState();
@@ -358,104 +463,6 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
     }
   }
 
-  /* ---------- Streams for stats (adjust collection/field names if needed) ---------- */
-
-  // 1) Total sale (sum grandTotal from invoices)
-  Stream<String> _totalSales() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('invoices')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) {
-      num sum = 0;
-      for (final d in s.docs) {
-        final v = d.data()['grandTotal'];
-        if (v is num) sum += v;
-      }
-      return _money(sum);
-    });
-  }
-
-  // 2) Total campaign (invoice count — keep same meaning as before)
-  Stream<String> _totalCampaigns() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('invoices')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  // 3) Pending payment (count invoices by status)
-  Stream<String> _pendingPayments() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('invoices')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .where('status', whereIn: ['pending', 'unpaid', 'processing'])
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  // 4) Work orders running (count work_orders with active statuses)
-  //    Tweak the whereIn list to match your exact statuses.
-  Stream<String> _workOrdersRunning() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('work_orders')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .where('status', whereIn: ['Pending', 'Processing', 'In Progress', 'In Production'])
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  // 5) Incentive amount (sum of amounts from renumerations/incentives)
-  //    Change the collection name if yours is different.
-  static const String _INCENTIVE_COLLECTION = 'renumerations'; // or 'incentives'
-  Stream<String> _incentiveAmount() {
-    final r = _rangeDates(_range);
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection(_INCENTIVE_COLLECTION)
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b));
-    // Optional: scope by user
-    if ((widget.userEmail ?? '').isNotEmpty) {
-      // adjust field if your doc uses 'agentEmail' or 'userEmail'
-      q = q.where('agentEmail', isEqualTo: widget.userEmail);
-    }
-    return q.snapshots().map((s) {
-      num sum = 0;
-      for (final d in s.docs) {
-        final v = d.data()['amount'];
-        if (v is num) sum += v;
-      }
-      return _money(sum);
-    });
-  }
-
-  // 6) Total loans (sum amount from loans)
-  Stream<String> _loansTotal() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('loans')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) {
-      num sum = 0;
-      for (final d in s.docs) {
-        final v = d.data()['amount'];
-        if (v is num) sum += v;
-      }
-      return _money(sum);
-    });
-  }
-
   String _money(num n) {
     final s = n.toStringAsFixed(0);
     final b = StringBuffer();
@@ -467,9 +474,101 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
     return '৳${b.toString()}';
   }
 
+  // 1) Total sale (paid invoices only)
+  Stream<String> _totalSales() {
+    final r = _rangeDates(_range);
+    return FirebaseFirestore.instance
+        .collection('invoices')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .snapshots()
+        .map((s) {
+      num sum = 0;
+      for (final d in s.docs) {
+        final m = d.data();
+        final status = (m['status'] ?? '').toString().toLowerCase();
+        final pay = (m['payment'] is Map)
+            ? Map<String, dynamic>.from(m['payment'])
+            : const <String, dynamic>{};
+        final paid = (pay['taken'] == true) || status.contains('payment taken');
+        if (!paid) continue;
+
+        final v = m['grandTotal'];
+        if (v is num) sum += v;
+      }
+      return _money(sum);
+    });
+  }
+
+  // 2) Total campaign (count created this period)
+  Stream<String> _totalCampaigns() {
+    final r = _rangeDates(_range);
+    return FirebaseFirestore.instance
+        .collection('campaigns')
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .snapshots()
+        .map((s) => '${s.docs.length}');
+  }
+
+  // 3) Pending payment = invoices whose status contains "Invoice Created"
+  Stream<String> _pendingPayments() {
+    final r = _rangeDates(_range);
+    return FirebaseFirestore.instance
+        .collection('invoices')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .snapshots()
+        .map((s) {
+      int count = 0;
+      for (final d in s.docs) {
+        final status = (d.data()['status'] ?? '').toString().toLowerCase();
+        if (status.contains('invoice created')) count++;
+      }
+      return '$count';
+    });
+  }
+
+  // 4) Running work orders = your 7 ongoing stages (case-insensitive)
+  Stream<String> _workOrdersRunning() {
+    final r = _rangeDates(_range);
+    return FirebaseFirestore.instance
+        .collection('work_orders')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('timestamp', isLessThanOrEqualTo:   Timestamp.fromDate(r.b))
+        .snapshots()
+        .map((s) => '${s.docs.where((d) => _isRunningWorkOrder(d.data())).length}');
+  }
+
+
+
+  // 5) Incentive amount (sum totalIncentive from marketing_incentives)
+  Stream<String> _incentiveAmount() {
+    final r = _rangeDates(_range);
+    final me = (widget.userEmail ?? '').trim();
+
+    return FirebaseFirestore.instance
+        .collection('marketing_incentives')
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .snapshots()
+        .map((s) {
+      num sum = 0;
+      for (final d in s.docs) {
+        final m = d.data() as Map<String, dynamic>;
+        final isMine = me.isEmpty
+            ? true
+            : (m['userEmail'] == me) || (m['agentEmail'] == me) || d.id.startsWith('$me');
+        if (!isMine) continue;
+        final v = (m['totalIncentive'] as num?) ?? 0;
+        sum += v;
+      }
+      return _money(sum);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    // header
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       decoration: BoxDecoration(
@@ -484,40 +583,35 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title + Filter
-          Row(
-            children: [
-              const Icon(Icons.insights, color: Colors.white),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Overview',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
-              ),
-              _RangeFilter(
-                value: _range,
-                onChanged: (r) => setState(() => _range = r),
-              ),
-            ],
-          ),
+          Row(children: [
+            const Icon(Icons.insights, color: Colors.white),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Overview',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+            ),
+            _RangeFilter(value: _range, onChanged: (r) => setState(() => _range = r)),
+          ]),
           const SizedBox(height: 14),
-
-          // 2×3 grid of stat cards (fixed two columns)
           LayoutBuilder(builder: (ctx, c) {
-            final w = c.maxWidth;
             final spacing = 10.0;
-            final cardW = (w - spacing) / 2; // two columns
+            final cardW = (c.maxWidth - spacing) / 2; // two columns
             return Wrap(
               spacing: spacing,
               runSpacing: spacing,
               children: [
-                _StatCard(width: cardW, label: 'Total sale',       streamText: _totalSales()),
-                _StatCard(width: cardW, label: 'Total campaign',   streamText: _totalCampaigns()),
-                _StatCard(width: cardW, label: 'Pending payment',  streamText: _pendingPayments()),
+                _StatCard(width: cardW, label: 'Total sale',          streamText: _totalSales()),
+                _StatCard(width: cardW, label: 'Total campaign',      streamText: _totalCampaigns()),
+                _StatCard(width: cardW, label: 'Pending payment',     streamText: _pendingPayments()),
                 _StatCard(width: cardW, label: 'Running Work orders', streamText: _workOrdersRunning()),
-                _StatCard(width: cardW, label: 'Incentive amount', streamText: _incentiveAmount()),
-                _StatCard(width: cardW, label: 'Total loans',      streamText: _loansTotal()),
+                _StatCard(width: cardW, label: 'Incentive amount',    streamText: _incentiveAmount()),
+                _DueLoanStatCard(
+                  width: cardW,
+                  label: 'Current Due loan',
+                  money: _money,
+                  userEmail: widget.userEmail,
+                  userUid: widget.userUid,
+                ),
               ],
             );
           }),
@@ -527,23 +621,11 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
   }
 }
 
-/* ---------- Filter chip row (blue & white only) ---------- */
-
-/* ---------- Filter as a dropdown (blue & white only) ---------- */
-
+/* ---------- Filter (dropdown) ---------- */
 class _RangeFilter extends StatelessWidget {
   final _Range value;
   final ValueChanged<_Range> onChanged;
   const _RangeFilter({required this.value, required this.onChanged});
-
-  String _label(_Range r) {
-    switch (r) {
-      case _Range.thisMonth: return 'This month';
-      case _Range.prevMonth: return 'Previous month';
-      case _Range.last3:     return 'Last 3 months';
-      case _Range.last12:    return 'One year';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -581,9 +663,7 @@ class _RangeFilter extends StatelessWidget {
   }
 }
 
-
 /* ========================= Stat card ========================= */
-
 class _StatCard extends StatelessWidget {
   final double width;
   final String label;
@@ -652,8 +732,255 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/* ========================= Tiles & bottom nav helpers (unchanged) ========================= */
+/* ========================= Due Loan Stat Card (STABLE) ========================= */
+class _DueLoanStatCard extends StatefulWidget {
+  final double width;
+  final String label;
+  final String Function(num) money;
+  final String? userEmail;
+  final String? userUid;
 
+  const _DueLoanStatCard({
+    Key? key,
+    required this.width,
+    required this.label,
+    required this.money,
+    this.userEmail,
+    this.userUid,
+  }) : super(key: key);
+
+  @override
+  State<_DueLoanStatCard> createState() => _DueLoanStatCardState();
+}
+
+class _DueLoanStatCardState extends State<_DueLoanStatCard> {
+  double? _lastStableDue; // cache to avoid flicker
+
+  // Robust number parser: handles "৳20,000", "20,000.50", etc.
+  static double _asDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) {
+      final cleaned = v.replaceAll(RegExp(r'[^0-9.\-]'), '');
+      return double.tryParse(cleaned) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  static double _firstAmount(Map<String, dynamic> m, List<String> keys) {
+    for (final k in keys) {
+      final v = _asDouble(m[k]);
+      if (v > 0) return v;
+    }
+    return 0.0;
+  }
+
+  static const List<String> _repayKeys = ['amount', 'paid', 'value', 'payAmount'];
+  static const Set<String> _outstandingKeys = {
+    'due', 'dueAmount', 'amountDue', 'currentDue', 'totalDue',
+    'outstanding', 'outstandingAmount', 'remaining', 'remainingAmount',
+    'balance', 'leftToPay', 'pendingAmount',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final fs = FirebaseFirestore.instance;
+
+    // Prefer identifiers from parent; fall back to FirebaseAuth.
+    final mail = (widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '').trim();
+    final uid  = (widget.userUid   ?? FirebaseAuth.instance.currentUser?.uid   ?? '').trim();
+
+    Query<Map<String, dynamic>> loansQ = fs.collection('loans');
+    if (mail.isNotEmpty && uid.isNotEmpty) {
+      loansQ = loansQ.where(
+        Filter.or(
+          Filter('userEmail', isEqualTo: mail),
+          Filter('userId',   isEqualTo: uid),
+        ),
+      );
+    } else if (mail.isNotEmpty) {
+      loansQ = loansQ.where('userEmail', isEqualTo: mail);
+    } else if (uid.isNotEmpty) {
+      loansQ = loansQ.where('userId', isEqualTo: uid);
+    } else {
+      // No identity yet → show cache or placeholder
+      return _DueText(
+        label: widget.label,
+        text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
+      );
+    }
+
+    // Single repayments query (OR when both ids exist)
+    Query<Map<String, dynamic>>? repaymentsQ;
+    if (mail.isNotEmpty && uid.isNotEmpty) {
+      repaymentsQ = fs.collectionGroup('repayments').where(
+        Filter.or(
+          Filter('userEmail', isEqualTo: mail),
+          Filter('userId',   isEqualTo: uid),
+        ),
+      );
+    } else if (mail.isNotEmpty) {
+      repaymentsQ = fs.collectionGroup('repayments').where('userEmail', isEqualTo: mail);
+    } else if (uid.isNotEmpty) {
+      repaymentsQ = fs.collectionGroup('repayments').where('userId', isEqualTo: uid);
+    }
+
+    return Container(
+      width: widget.width,
+      height: 96,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _cardBorder),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(color: _brandBlue.withOpacity(.08), shape: BoxShape.circle),
+            child: const Icon(Icons.assessment, color: _brandBlue, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: loansQ.snapshots(),
+              builder: (_, loansSnap) {
+                if (loansSnap.connectionState == ConnectionState.waiting) {
+                  return _DueText(
+                    label: widget.label,
+                    text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
+                  );
+                }
+
+                double explicitSum = 0.0;
+                bool foundExplicitFieldAnywhere = false;
+                double principalSum = 0.0;
+
+                if (loansSnap.hasData) {
+                  for (final d in loansSnap.data!.docs) {
+                    final m = d.data();
+
+                    // Look for any explicit outstanding key; treat presence as authoritative (even if 0).
+                    for (final k in _outstandingKeys) {
+                      if (m.containsKey(k)) {
+                        foundExplicitFieldAnywhere = true;
+                        final v = _asDouble(m[k]);
+                        if (v > 0) explicitSum += v;
+                        break; // one key per doc is enough
+                      }
+                    }
+
+                    // Track principal for fallback path
+                    final status = (m['status'] ?? '').toString().toLowerCase();
+                    if (status == 'approved' || status == 'disbursed' || status == 'closed') {
+                      principalSum += _asDouble(m['amount']);
+                    }
+                  }
+                }
+
+                // If any explicit field was present on any doc, always use its sum (even if zero).
+                if (foundExplicitFieldAnywhere) {
+                  if (_lastStableDue != explicitSum) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) _lastStableDue = explicitSum;
+                    });
+                  }
+                  return _DueText(label: widget.label, text: widget.money(explicitSum));
+                }
+
+                // No explicit due in loans → need repayments. If we cannot query them, keep cache.
+                if (repaymentsQ == null) {
+                  return _DueText(
+                    label: widget.label,
+                    text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
+                  );
+                }
+
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: repaymentsQ.snapshots(),
+                  builder: (_, repaySnap) {
+                    if (repaySnap.connectionState == ConnectionState.waiting) {
+                      return _DueText(
+                        label: widget.label,
+                        text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
+                      );
+                    }
+
+                    double repaid = 0.0;
+                    if (repaySnap.hasData) {
+                      for (final d in repaySnap.data!.docs) {
+                        repaid += _firstAmount(d.data(), _repayKeys);
+                      }
+                    }
+
+                    // If repayments are empty, don't snap to "total principal" — keep the last stable value.
+                    if (repaid == 0.0 && _lastStableDue != null) {
+                      return _DueText(label: widget.label, text: widget.money(_lastStableDue!));
+                    }
+
+                    final dueRaw = principalSum - repaid;
+                    final due = dueRaw <= 0 ? 0.0 : dueRaw;
+
+                    if (_lastStableDue != due) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) _lastStableDue = due;
+                      });
+                    }
+
+                    return _DueText(label: widget.label, text: widget.money(due));
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+
+class _DueText extends StatelessWidget {
+  final String label;
+  final String text;
+  const _DueText({required this.label, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _brandBlue,
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: _brandBlue,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/* ========================= Tiles & bottom nav helpers ========================= */
 class _DashTile extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -779,6 +1106,244 @@ class _Badge extends StatelessWidget {
           fontWeight: FontWeight.w800,
           height: 1.0,
         ),
+      ),
+    );
+  }
+}
+
+/* ======================= (Optional reference UI kept) ======================= */
+
+class _StableRepaidHeader extends StatelessWidget {
+  final FirebaseFirestore db;
+  final String name;
+  final double creditLimit;
+  final Color brand, brandDark, accent;
+  final String Function(num) money;
+  final DateTime? selectedMonth;
+  final String? email;
+  final String? uid;
+
+  final double totalPrincipal;
+  final double Function() cachedTotalGetter;
+  final double Function() cachedRepaidGetter;
+  final void Function(double) cachedRepaidSetter;
+
+  const _StableRepaidHeader({
+    required this.db,
+    required this.name,
+    required this.creditLimit,
+    required this.brand,
+    required this.brandDark,
+    required this.accent,
+    required this.money,
+    required this.selectedMonth,
+    required this.email,
+    required this.uid,
+    required this.totalPrincipal,
+    required this.cachedTotalGetter,
+    required this.cachedRepaidGetter,
+    required this.cachedRepaidSetter,
+  });
+
+  DateTime _monthStart(DateTime d) => DateTime(d.year, d.month, 1);
+  DateTime _monthEndExclusive(DateTime d) => DateTime(d.year, d.month + 1, 1);
+  bool _isInSelectedMonth(DateTime? when) {
+    if (selectedMonth == null || when == null) return true;
+    final s = _monthStart(selectedMonth!);
+    final e = _monthEndExclusive(selectedMonth!);
+    return (when.isAtSameMomentAs(s) || when.isAfter(s)) && when.isBefore(e);
+  }
+
+  DateTime? _repaymentWhen(Map<String, dynamic> m) {
+    final dynamic v = m['paidAt'] ?? m['timestamp'] ?? m['createdAt'] ?? m['date'];
+    if (v is Timestamp) return v.toDate();
+    if (v is DateTime) return v;
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final emailStream = (email == null)
+        ? const Stream<QuerySnapshot<Map<String, dynamic>>>.empty()
+        : db.collectionGroup('repayments').where('userEmail', isEqualTo: email).snapshots();
+
+    final uidStream = (uid == null)
+        ? const Stream<QuerySnapshot<Map<String, dynamic>>>.empty()
+        : db.collectionGroup('repayments').where('userId', isEqualTo: uid).snapshots();
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: emailStream,
+      builder: (context, emailSnap) {
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: uidStream,
+          builder: (context, uidSnap) {
+            if (emailSnap.hasError || uidSnap.hasError) {
+              final total = totalPrincipal != 0 ? totalPrincipal : cachedTotalGetter();
+              final repaid = cachedRepaidGetter();
+              final double due = (total - repaid) < 0 ? 0 : (total - repaid);
+              final progress = (creditLimit <= 0) ? 0.0 : (due / creditLimit).clamp(0.0, 1.0);
+              return _HeaderCard(
+                name: name,
+                total: total,
+                repaid: repaid,
+                due: due,
+                limit: creditLimit,
+                progress: progress,
+                brand: brand,
+                brandDark: brandDark,
+                accent: accent,
+                money: money,
+              );
+            }
+
+            final hasAnyData = (emailSnap.hasData && emailSnap.data != null) ||
+                (uidSnap.hasData && uidSnap.data != null);
+
+            double unionRepaid;
+            if (hasAnyData) {
+              final seen = <String>{};
+              double sum = 0;
+
+              if (emailSnap.hasData && emailSnap.data != null) {
+                for (final d in emailSnap.data!.docs) {
+                  final m = d.data();
+                  final dt = _repaymentWhen(m);
+                  if (!_isInSelectedMonth(dt)) continue;
+                  final path = d.reference.path;
+                  if (seen.add(path)) sum += (m['amount'] as num? ?? 0).toDouble();
+                }
+              }
+              if (uidSnap.hasData && uidSnap.data != null) {
+                for (final d in uidSnap.data!.docs) {
+                  final m = d.data();
+                  final dt = _repaymentWhen(m);
+                  if (!_isInSelectedMonth(dt)) continue;
+                  final path = d.reference.path;
+                  if (seen.add(path)) sum += (m['amount'] as num? ?? 0).toDouble();
+                }
+              }
+
+              unionRepaid = sum;
+              cachedRepaidSetter(unionRepaid);
+            } else {
+              unionRepaid = cachedRepaidGetter();
+            }
+
+            final total = totalPrincipal != 0 ? totalPrincipal : cachedTotalGetter();
+            final double due = (total - unionRepaid) < 0 ? 0 : (total - unionRepaid);
+            final progress = (creditLimit <= 0) ? 0.0 : (due / creditLimit).clamp(0.0, 1.0);
+
+            return _HeaderCard(
+              name: name,
+              total: total,
+              repaid: unionRepaid,
+              due: due,
+              limit: creditLimit,
+              progress: progress,
+              brand: brand,
+              brandDark: brandDark,
+              accent: accent,
+              money: money,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _HeaderCard extends StatelessWidget {
+  final String name;
+  final double total;
+  final double repaid;
+  final double due;
+  final double limit;
+  final double progress;
+  final Color brand, brandDark, accent;
+  final String Function(num) money;
+
+  const _HeaderCard({
+    required this.name,
+    required this.total,
+    required this.repaid,
+    required this.due,
+    required this.limit,
+    required this.progress,
+    required this.brand,
+    required this.brandDark,
+    required this.accent,
+    required this.money,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget stat(String label, num value) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(money(value),
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18)),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
+    );
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+            colors: [brand, brandDark],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x30000000), blurRadius: 12, offset: Offset(0, 6))],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Hi, $name', style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 16,
+                runSpacing: 10,
+                children: [
+                  stat('Total Loan', total),
+                  stat('Repaid', repaid),
+                  stat('Due', due),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text('Limit: ${money(limit)}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            ]),
+          ),
+          SizedBox(
+            width: 84,
+            height: 84,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 84,
+                  height: 84,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 10,
+                    backgroundColor: Colors.white24,
+                    valueColor: AlwaysStoppedAnimation(accent),
+                  ),
+                ),
+                Text('${(progress * 100).round()}%',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
