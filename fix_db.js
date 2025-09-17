@@ -1,238 +1,214 @@
-#!/usr/bin/env node
-'use strict';
-
-/*
-  fix_db.js — audit & debug your push setup from terminal
-
-  Usage:
-    node fix_db.js --project your-project-id --region us-central1 \
-      --key "/absolute/path/serviceAccountKey.json" --testTrigger --verbose
-*/
-
-const yargs = require('yargs/yargs');
-const { hideBin } = require('yargs/helpers');
-const argv = yargs(hideBin(process.argv))
-  .option('project', { type: 'string', demandOption: true, describe: 'GCP/Firebase project id' })
-  .option('region', { type: 'string', default: 'us-central1', describe: 'Functions region' })
-  .option('key', { type: 'string', describe: 'Path to serviceAccountKey.json (optional; uses ADC if omitted)' })
-  .option('testTrigger', { type: 'boolean', default: false, describe: 'Create alert_dispatch test doc and poll for processing' })
-  .option('verbose', { type: 'boolean', default: false })
-  .help().argv;
+/* fix_db.js
+ * Normalize budgets → one doc per month at id "yyyy-MM"
+ * Usage:
+ *   node fix_db.js            # dry-run (no writes)
+ *   COMMIT=1 node fix_db.js   # write changes
+ */
 
 const admin = require('firebase-admin');
-const { google } = require('googleapis');
+const path = require('path');
 
-function log(...a)  { console.log(...a); }
-function warn(...a) { console.warn(...a); }
+const SERVICE_ACCOUNT = require('./serviceAccountKey.json');
+admin.initializeApp({
+  credential: admin.credential.cert(SERVICE_ACCOUNT),
+});
+const db = admin.firestore();
 
-async function initAdmin() {
-  if (argv.key) {
-    const sa = require(argv.key);
-    admin.initializeApp({
-      credential: admin.credential.cert(sa),
-      projectId: argv.project || sa.project_id,
-    });
-  } else {
-    admin.initializeApp({ projectId: argv.project });
-  }
-  return admin.firestore();
+const COMMIT = !!process.env.COMMIT;
+const LOCK_DAYS = Number(process.env.LOCK_DAYS || 7);
+
+/* -------------------------- helpers -------------------------- */
+const MONTHS = {
+  january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+  july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+};
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function keyFromDate(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; // yyyy-MM
 }
 
-async function initGoogleAuth() {
-  const scopes = ['https://www.googleapis.com/auth/cloud-platform'];
-  if (argv.key) {
-    const creds = require(argv.key);
-    const auth = new google.auth.GoogleAuth({ credentials: creds, scopes });
-    google.options({ auth });
-  } else {
-    const auth = await google.auth.getClient({ scopes });
-    google.options({ auth });
-  }
-}
-
-// --------- Firestore: inspect users/*/fcmTokens/* ----------
-async function inspectFcmTokens(db) {
-  const usersSnap = await db.collection('users').get();
-  let usersWithTokens = 0;
-  let tokenCount = 0;
-  const sample = [];
-
-  for (const doc of usersSnap.docs) {
-    const tokensColRef = doc.ref.collection('fcmTokens');
-    const tokenDocs = await tokensColRef.listDocuments();
-    if (tokenDocs.length > 0) {
-      usersWithTokens++;
-      tokenCount += tokenDocs.length;
-      if (sample.length < 5) sample.push({ uid: doc.id, count: tokenDocs.length });
+function parsePeriodKey(periodStr, fallbackDate) {
+  if (typeof periodStr === 'string' && periodStr.trim()) {
+    const parts = periodStr.trim().split(/\s+/); // "September 2025"
+    if (parts.length >= 2) {
+      const m = MONTHS[(parts[0] || '').toLowerCase()];
+      const y = Number(parts[1]);
+      if (m && y) return `${y}-${pad2(m)}`;
     }
   }
-
-  log('— FCM token audit —');
-  log(`Users: ${usersSnap.size}`);
-  log(`Users with tokens: ${usersWithTokens}`);
-  log(`Total tokens: ${tokenCount}`);
-  if (sample.length) log('Sample:', sample);
-  log('');
-  return { users: usersSnap.size, usersWithTokens, tokenCount };
+  // fallback to createdAt/update time if parsing fails
+  return keyFromDate(fallbackDate || new Date());
 }
 
-// --------- Cloud Functions: list Gen1 + Gen2 ----------
-async function listFunctionsAll(project, region) {
-  const parent = `projects/${project}/locations/${region}`;
-  const cfv1 = google.cloudfunctions('v1');
-  const cfv2 = google.cloudfunctions('v2');
-
-  let gen1 = [];
-  let gen2 = [];
-
-  try {
-    const res1 = await cfv1.projects.locations.functions.list({ parent });
-    gen1 = res1.data.functions || [];
-  } catch (e) {
-    warn('Gen1 list error:', e?.message || e);
-  }
-
-  try {
-    const res2 = await cfv2.projects.locations.functions.list({ parent });
-    gen2 = res2.data.functions || [];
-  } catch (e) {
-    warn('Gen2 list error:', e?.message || e);
-  }
-
-  if (argv.verbose) {
-    log(`Gen1 functions found: ${gen1.length}`);
-    log(`Gen2 functions found: ${gen2.length}`);
-  }
-
-  return { gen1, gen2 };
+function displayFromKey(key) {
+  const [y, m] = key.split('-').map(Number);
+  const date = new Date(y, (m || 1) - 1, 1);
+  return date.toLocaleDateString('en', { month: 'long', year: 'numeric' }); // "September 2025"
 }
 
-function funcShortName(f) {
-  const parts = (f.name || '').split('/');
-  return parts[parts.length - 1] || '';
+function numify(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') return Number(v.replace(/,/g, '')) || 0;
+  return 0;
 }
 
-function hasName(fn, wanted) {
-  return funcShortName(fn) === wanted;
+function tsToDate(v) {
+  if (!v) return null;
+  if (v.toDate) return v.toDate();
+  const n = Number(v);
+  return Number.isFinite(n) ? new Date(n) : null;
 }
 
-function isFirestoreTriggerV1(fn) {
-  const et = fn.eventTrigger;
-  if (!et) return false;
-  const type = et.eventType || '';
-  const res = et.resource || '';
-  return type.includes('firestore') && res.includes('alert_dispatch');
+function addDays(d, days) {
+  const x = new Date(d.getTime());
+  x.setDate(x.getDate() + days);
+  return x;
 }
 
-function isFirestoreTriggerV2(fn) {
-  const et = fn.eventTrigger;
-  if (!et) return false;
-  const type = et.eventType || '';
-  if (!type.includes('firestore')) return false;
-  const filters = et.eventFilters || [];
-  return filters.some((f) => (f?.value || '').includes('alert_dispatch'));
-}
-
-function summarizeFunctions({ gen1, gen2 }) {
-  const targets = ['sendAlert', 'sendDeptAlert'];
-
-  const found = {};
-  for (const t of targets) {
-    found[t] = {
-      gen1: gen1.find((f) => hasName(f, t)) || null,
-      gen2: gen2.find((f) => hasName(f, t)) || null,
+function normalizeItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((r, idx) => {
+    const sl = Number(r?.sl ?? idx + 1);
+    return {
+      sl,
+      name: String(r?.name ?? '').trim(),
+      amountNeed: Number(numify(r?.amountNeed)),
+      minAmount: Number(numify(r?.minAmount)),
+      notes: (r?.notes == null || String(r.notes).trim() === '') ? null : String(r.notes).trim(),
     };
-  }
-
-  const triggers = [
-    ...gen1.filter(isFirestoreTriggerV1),
-    ...gen2.filter(isFirestoreTriggerV2),
-  ];
-
-  log('— Cloud Functions audit —');
-  for (const t of targets) {
-    const g1 = found[t].gen1 ? 'YES' : 'no';
-    const g2 = found[t].gen2 ? 'YES' : 'no';
-    log(`${t}: Gen1=${g1}, Gen2=${g2}`);
-  }
-  log(`alert_dispatch triggers: ${triggers.length > 0 ? 'YES' : 'no'}`);
-  if (argv.verbose && triggers.length) {
-    log('Trigger(s):', triggers.map((f) => funcShortName(f)));
-  }
-  log('');
-
-  return { found, triggers };
-}
-
-// --------- Optional trigger test: create doc & poll ----------
-async function testAlertDispatch(db) {
-  log('— Trigger test —');
-  const ref = await db.collection('alert_dispatch').add({
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    status: 'pending',
-    title: 'fix_db.js test',
-    message: `Ping @ ${new Date().toISOString()}`,
   });
-  log('Created', ref.path);
-
-  const deadline = Date.now() + 30_000; // 30s
-  let updated = null;
-
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const snap = await ref.get();
-    const d = snap.data() || {};
-    if ((d.status && d.status !== 'pending') || d.sentAt || d.error) {
-      updated = d;
-      break;
-    }
-    if (argv.verbose) log('…waiting for trigger to process');
-  }
-
-  if (updated) {
-    log('Trigger processed doc:', {
-      status: updated.status,
-      sentAt: updated.sentAt,
-      error: updated.error,
-    });
-  } else {
-    warn('No update observed within 30s. Check function logs.');
-  }
-  log('');
 }
 
-(async () => {
-  try {
-    const db = await initAdmin();
-    await initGoogleAuth();
+function normalizeTargets(targets) {
+  if (!Array.isArray(targets)) return [];
+  return targets.map(t => ({
+    name: String(t?.name ?? '').trim(),
+    maxTarget: Number(numify(t?.maxTarget)),
+    finalTarget: Number(numify(t?.finalTarget)),
+  })).filter(t => t.name);
+}
 
-    await inspectFcmTokens(db);
+function computeTotals(items) {
+  const totalNeed = items.reduce((p, e) => p + numify(e.amountNeed), 0);
+  const totalMin  = items.reduce((p, e) => p + numify(e.minAmount), 0);
+  return { totalNeed, totalMin };
+}
 
-    const fx = await listFunctionsAll(argv.project, argv.region);
-    const summary = summarizeFunctions(fx);
+/* -------------------------- main -------------------------- */
+async function run() {
+  console.log(`[fix_db] starting. COMMIT=${COMMIT ? 'YES' : 'NO (dry-run)'}  LOCK_DAYS=${LOCK_DAYS}`);
 
-    const hasCallable =
-      summary.found.sendAlert.gen1 || summary.found.sendAlert.gen2 ||
-      summary.found.sendDeptAlert.gen1 || summary.found.sendDeptAlert.gen2;
+  const snap = await db.collection('budgets')
+    .orderBy('createdAt', 'desc')
+    .get();
 
-    const hasTrigger = summary.triggers.length > 0;
+  console.log(`[fix_db] scanned ${snap.size} docs`);
 
-    if (!hasCallable && !hasTrigger) {
-      warn('No sendAlert/sendDeptAlert callable functions AND no alert_dispatch trigger found.');
-      warn('You need EITHER the callable(s) OR the Firestore trigger.');
+  // Group by periodKey
+  const groups = new Map(); // key -> array of {id, data, createdAtDate}
+  snap.docs.forEach(d => {
+    const data = d.data() || {};
+    const createdAtDate =
+      tsToDate(data.createdAt) ||
+      tsToDate(data.editableUntil) ||
+      new Date();
+
+    let periodKey = data.periodKey;
+    if (!periodKey) {
+      periodKey = parsePeriodKey(data.period, createdAtDate);
     }
 
-    if (argv.testTrigger) {
-      if (!hasTrigger) {
-        warn('No alert_dispatch Firestore trigger detected; --testTrigger will still insert a doc, but nothing may process it.');
-      }
-      await testAlertDispatch(db);
+    if (!groups.has(periodKey)) groups.set(periodKey, []);
+    groups.get(periodKey).push({ id: d.id, data, createdAtDate });
+  });
+
+  let writes = 0;
+  let deletes = 0;
+  let batches = 0;
+  let batch = db.batch();
+
+  const commitBatch = async () => {
+    if (!COMMIT) return; // dry-run
+    if (writes + deletes === 0) return;
+    await batch.commit();
+    batches++;
+    batch = db.batch();
+  };
+
+  for (const [periodKey, arr] of groups.entries()) {
+    // pick newest by createdAt
+    arr.sort((a, b) => b.createdAtDate - a.createdAtDate);
+    const primary = arr[0];
+    const discard = arr.slice(1);
+
+    const companyName =
+      (primary.data.companyName && String(primary.data.companyName).trim()) ||
+      'Wig Bangladesh';
+
+    // Normalize items/targets
+    const items = normalizeItems(primary.data.items);
+    const salesTargets = normalizeTargets(primary.data.salesTargets);
+    const { totalNeed, totalMin } = computeTotals(items);
+
+    // Timestamps
+    const createdAt = tsToDate(primary.data.createdAt) || primary.createdAtDate || new Date();
+    const editableUntil = tsToDate(primary.data.editableUntil) || addDays(createdAt, LOCK_DAYS);
+
+    const period = displayFromKey(periodKey);
+
+    const canonicalDoc = {
+      periodKey,                 // "yyyy-MM"
+      period,                    // "MMMM yyyy"
+      companyName,               // String
+      createdAt: admin.firestore.Timestamp.fromDate(createdAt),
+      editableUntil: admin.firestore.Timestamp.fromDate(editableUntil),
+      items,
+      salesTargets,
+      totalNeed,
+      totalMin,
+    };
+
+    const targetRef = db.collection('budgets').doc(periodKey);
+
+    // Decide whether we need to write/overwrite
+    let needsWrite = true;
+    if (primary.id === periodKey) {
+      // Already at the right ID—still write to normalize fields
+      needsWrite = true;
     }
 
-    log('Done.');
-    process.exit(0);
-  } catch (e) {
-    console.error(e);
-    process.exit(1);
+    console.log(`\n[fix_db] → month ${periodKey} (${period})`);
+    console.log(`  keep:   ${primary.id}${primary.id === periodKey ? ' (already canonical id)' : ''}`);
+    if (discard.length) console.log(`  delete: ${discard.map(x => x.id).join(', ')}`);
+    console.log(`  totals: need=${totalNeed}  min=${totalMin}`);
+    console.log(`  createdAt=${createdAt.toISOString()}  editableUntil=${editableUntil.toISOString()}`);
+
+    if (needsWrite) {
+      if (COMMIT) batch.set(targetRef, canonicalDoc, { merge: false });
+      writes++;
+    }
+
+    for (const d of discard) {
+      if (d.id === periodKey) continue; // safety
+      if (COMMIT) batch.delete(db.collection('budgets').doc(d.id));
+      deletes++;
+    }
+
+    // Commit in chunks of ~400 ops to be safe (limit is 500)
+    if ((writes + deletes) % 400 === 0) {
+      await commitBatch();
+    }
   }
-})();
+
+  await commitBatch();
+
+  console.log(`\n[fix_db] done. batches=${batches} writes=${writes} deletes=${deletes} (COMMIT=${COMMIT})`);
+}
+
+run().catch(err => {
+  console.error('[fix_db] fatal:', err);
+  process.exit(1);
+});

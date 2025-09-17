@@ -2,58 +2,221 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'employee_details_page.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF3C0765);
+const Color _tileTint = Color(0xFFEEF4FF);
 
-/// Displays tabs for each department and shows filtered employee lists
+/// Displays department tiles (1 per row). Each tile shows a live count and opens a list.
 class AllEmployeesPage extends StatelessWidget {
   const AllEmployeesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 5,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: _darkBlue,
-          elevation: 0,
-          title: const Text(
-            'Employees',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-            ),
-          ),
-          bottom: const TabBar(
-            isScrollable: true,
-            indicatorColor: Colors.white,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white70,
-            labelStyle: TextStyle(fontWeight: FontWeight.w700),
-            unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
-            tabs: [
-              Tab(text: 'HR & Accounts'),
-              Tab(text: 'Marketing'),
-              Tab(text: 'Factory'),
-              Tab(text: 'Admin'),
-              Tab(text: 'All'),
+    final items = <_Dept>[
+      const _Dept(label: 'HR & Accounts', keyValue: 'hr', icon: Icons.groups_2),
+      const _Dept(label: 'Marketing',     keyValue: 'marketing', icon: Icons.campaign),
+      const _Dept(label: 'Factory',       keyValue: 'factory', icon: Icons.factory),
+      const _Dept(label: 'Admin',         keyValue: 'admin', icon: Icons.admin_panel_settings),
+      const _Dept(label: 'All',           keyValue: null, icon: Icons.all_inclusive),
+    ];
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFC18FEA),
+      appBar: AppBar(
+        backgroundColor: _darkBlue,
+        elevation: 0,
+        title: const Text(
+          'Employees',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        children: [
+          // Single-column list of tiles (no overflow)
+          Column(
+            children: [
+              for (final it in items)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _DeptTile(dept: it),
+                ),
             ],
           ),
-        ),
-        body: const TabBarView(
-          children: [
-            EmployeeList(department: 'hr'),
-            EmployeeList(department: 'marketing'),
-            EmployeeList(department: 'factory'),
-            EmployeeList(department: 'admin'),
-            EmployeeList(department: null),
-          ],
-        ),
+          const SizedBox(height: 12),
+
+          // Inline "All" list below tiles (keep/remove as you prefer)
+          const _SectionTitle('All employees'),
+          const SizedBox(height: 6),
+          const EmployeeList(department: null),
+        ],
       ),
     );
   }
 }
+
+/* ------------------------ Department Tile ------------------------ */
+
+class _Dept {
+  final String label;
+  final String? keyValue; // 'hr' | 'marketing' | 'factory' | 'admin' | null => all
+  final IconData icon;
+  const _Dept({required this.label, required this.keyValue, required this.icon});
+}
+
+class _DeptTile extends StatelessWidget {
+  final _Dept dept;
+  const _DeptTile({required this.dept});
+
+  Query<Map<String, dynamic>> _query() {
+    final base = FirebaseFirestore.instance.collection('users');
+    if (dept.keyValue == null) return base;
+    return base.where('department', isEqualTo: dept.keyValue);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _query().snapshots(),
+      builder: (ctx, snap) {
+        final count = snap.hasData ? snap.data!.docs.length : null;
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openList(context, count: count),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: _tileTint,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _darkBlue.withOpacity(.15)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min, // let height adapt; prevents overflow
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _darkBlue.withOpacity(.08),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(dept.icon, color: _darkBlue, size: 28), // bigger icon
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: _darkBlue.withOpacity(.15)),
+                        ),
+                        child: Text(
+                          count == null ? '—' : count.toString(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16, // bigger count
+                            color: _darkBlue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    dept.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20, // bigger title
+                      color: _darkBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    dept.keyValue == null ? 'All employees' : 'Tap to view',
+                    style: const TextStyle(fontSize: 14, color: Colors.black54), // bigger subtitle
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openList(BuildContext context, {int? count}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) {
+        final height = MediaQuery.of(context).size.height * .86;
+        return SizedBox(
+          height: height,
+          child: Column(
+            children: [
+              // drag handle + header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 4,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        dept.label,
+                        style: const TextStyle(
+                          color: _darkBlue,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                    if (count != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _darkBlue.withOpacity(.08),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: _darkBlue,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(child: EmployeeList(department: dept.keyValue)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/* ------------------------ List (reused) ------------------------ */
 
 /// Streams and displays a list of employees, filtered by [department] if provided.
 class EmployeeList extends StatelessWidget {
@@ -64,7 +227,7 @@ class EmployeeList extends StatelessWidget {
   Widget build(BuildContext context) {
     Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection('users')
-        .orderBy('fullName'); // nicer mobile sort
+        .orderBy('fullName'); // stable UX sort
 
     if (department != null && department!.isNotEmpty) {
       query = query.where('department', isEqualTo: department);
@@ -93,14 +256,16 @@ class EmployeeList extends StatelessWidget {
             final d = docs[i];
             final m = d.data();
 
-            final name       = (m['fullName'] as String?)?.trim().isNotEmpty == true
+            final name = (m['fullName'] as String?)?.trim().isNotEmpty == true
                 ? m['fullName'] as String
                 : 'Unknown';
-            final deptRaw    = (m['department'] as String?) ?? '';
-            final deptLabel  = deptRaw.isEmpty ? '—' : deptRaw[0].toUpperCase() + deptRaw.substring(1);
-            final email      = (m['officeEmail'] as String?) ?? '';
+            final deptRaw = (m['department'] as String?) ?? '';
+            final deptLabel = deptRaw.isEmpty
+                ? '—'
+                : deptRaw[0].toUpperCase() + deptRaw.substring(1);
+            final email = (m['officeEmail'] as String?) ?? (m['email'] as String? ?? '');
             final employeeId = (m['employeeId'] as String?) ?? d.id;
-            final photoUrl   = (m['profilePhotoUrl'] as String?) ?? '';
+            final photoUrl = (m['profilePhotoUrl'] as String?) ?? '';
 
             return InkWell(
               onTap: () => Navigator.push(
@@ -117,7 +282,6 @@ class EmployeeList extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 child: Row(
                   children: [
-                    // Avatar
                     Hero(
                       tag: 'emp-avatar-$employeeId',
                       child: CircleAvatar(
@@ -127,13 +291,15 @@ class EmployeeList extends StatelessWidget {
                         child: photoUrl.isEmpty
                             ? Text(
                           _initials(name),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
                         )
                             : null,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Texts
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +324,10 @@ class EmployeeList extends StatelessWidget {
                                   'ID: $employeeId',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white, // kept from your version
+                                  ),
                                 ),
                               ),
                             ],
@@ -166,7 +335,7 @@ class EmployeeList extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_right, color: Colors.black26),
+                    const Icon(Icons.chevron_right, color: Colors.white), // kept from your version
                   ],
                 ),
               ),
@@ -179,6 +348,23 @@ class EmployeeList extends StatelessWidget {
 }
 
 /* ------------------------ tiny helpers ------------------------ */
+
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  const _SectionTitle(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: _darkBlue,
+        fontWeight: FontWeight.w800,
+        fontSize: 16,
+      ),
+    );
+  }
+}
 
 class _Chip extends StatelessWidget {
   final String text;

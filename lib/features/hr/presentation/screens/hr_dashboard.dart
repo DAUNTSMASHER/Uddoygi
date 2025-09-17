@@ -6,14 +6,17 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:intl/intl.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/hr/presentation/widgets/hr_drawer.dart';
 import 'package:uddoygi/features/common/notification.dart';
-import 'package:uddoygi/features/common/alert.dart'; // <-- adjust if your path differs
+import 'package:uddoygi/features/common/alert.dart';
 
-/// ===== Green theme (matches your request) =====
+// NEW: direct page imports
+import 'ROI.dart' show ROIPage;
+import 'budget.dart' show BudgetPage;
+
+/// ===== Green theme =====
 const Color _brandGreen  = Color(0xFF065F46); // deep green
 const Color _greenMid    = Color(0xFF10B981); // accent
 const Color _surface     = Color(0xFFF1F8F4); // near-white surface
@@ -49,14 +52,10 @@ class _HRDashboardState extends State<HRDashboard> {
     setState(() {
       email = session?['email'] as String? ?? current?.email;
       uid = session?['uid'] as String? ?? current?.uid;
-      name = (session?['name'] as String?) ??
-          current?.displayName ??
-          current?.email ??
-          'HR';
+      name = (session?['name'] as String?) ?? current?.displayName ?? current?.email ?? 'HR';
       photoUrl = current?.photoURL;
     });
 
-    // Try to enrich name/photo from users/{uid}
     if (uid != null) {
       try {
         final s = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -92,7 +91,6 @@ class _HRDashboardState extends State<HRDashboard> {
     return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
   }
 
-  /// Unread messages badge stream
   Stream<int> _unreadMessagesStream() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return Stream<int>.value(0);
@@ -105,44 +103,51 @@ class _HRDashboardState extends State<HRDashboard> {
         .map((s) => s.docs.length);
   }
 
-  /// Unread notifications badge stream
   Stream<int> _unreadNotificationsStream() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return Stream<int>.value(0);
     final mail = user.email ?? '';
     return FirebaseFirestore.instance
         .collection('notifications')
-        .where('to', isEqualTo: mail)          // adjust to your schema if needed
+        .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
         .map((s) => s.docs.length);
   }
 
-  // All dashboard tiles (3-column grid)
+  // DASH TILES
   final List<_DashboardItem> _allItems = const [
-    _DashboardItem('Alerts', Icons.notification_important, '/common/alert'), // manual route (explicit push below)
-    _DashboardItem('Directory', Icons.people, '/hr/employee_directory'),
-    _DashboardItem('Attendance', Icons.event_available, '/hr/attendance'),
-    _DashboardItem('Leave', Icons.beach_access, '/hr/leave_management'),
-    _DashboardItem('Payroll', Icons.attach_money, '/hr/payroll_processing'),
-    _DashboardItem('Payslips', Icons.receipt_long, '/hr/payslip'),
-    _DashboardItem('Loans', Icons.account_balance, '/hr/loan_approval'),
-    _DashboardItem('Credits', Icons.trending_up, '/hr/credits'),
-    _DashboardItem('Expenses', Icons.payments, '/hr/expenses'),
-    _DashboardItem('Balance', Icons.account_balance_wallet, '/hr/balance_update'),
-    _DashboardItem('Notices', Icons.notifications, '/hr/notices'),
-    _DashboardItem('Messages', Icons.message, '/common/messages'),
-    _DashboardItem('Complaints', Icons.support_agent, '/common/complaints'),
-    _DashboardItem('Procurement', Icons.shopping_cart, '/hr/procurement'),
+    _DashboardItem('Alerts',      Icons.notification_important, '/common/alert'),
+    _DashboardItem('Directory',   Icons.people,                 '/hr/employee_directory'),
+    _DashboardItem('Attendance',  Icons.event_available,        '/hr/attendance'),
+    _DashboardItem('Payroll',     Icons.attach_money,           '/hr/payroll_processing'),
+    _DashboardItem('Payslips',    Icons.receipt_long,           '/hr/payslip'),
+    _DashboardItem('Loans',       Icons.account_balance,        '/hr/loan_approval'),
+    _DashboardItem('Credits',     Icons.trending_up,            '/hr/credits'),
+    _DashboardItem('Expenses',    Icons.payments,               '/hr/expenses'),
+    _DashboardItem('Balance',     Icons.account_balance_wallet, '/hr/balance_update'),
+    _DashboardItem('Notices',     Icons.notifications,          '/marketing/notices'),
+    _DashboardItem('Messages',    Icons.message,                '/common/messages'),
+    _DashboardItem('Complaints',  Icons.support_agent,          '/common/complaints'),
+    _DashboardItem('Procurement', Icons.shopping_cart,          '/hr/procurement'),
+    // NEW
+    _DashboardItem('ROI',         Icons.insights,               '/hr/roi'),
+    _DashboardItem('Budget',      Icons.account_balance,        '/hr/budget'),
   ];
 
   void _onItemTap(_DashboardItem item) {
-    // Dedicated handling for Alerts (explicit screen import)
     if (item.title == 'Alerts') {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const AlertPage()));
       return;
     }
-    // Notifications is not a tile here (it's in bottom nav). Others use named routes:
+    if (item.title == 'ROI') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const ROIPage()));
+      return;
+    }
+    if (item.title == 'Budget') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetPage()));
+      return;
+    }
     Navigator.pushNamed(context, item.route);
   }
 
@@ -151,11 +156,8 @@ class _HRDashboardState extends State<HRDashboard> {
     final displayName = _niceName(name ?? 'HR');
     final initials = _initialsFor(displayName);
 
-    final filtered = _allItems
-        .where((i) => i.title.toLowerCase().contains(_search.toLowerCase()))
-        .toList();
+    final filtered = _allItems.where((i) => i.title.toLowerCase().contains(_search.toLowerCase())).toList();
 
-    // Exactly 3 columns (as requested). You can make it responsive if you like.
     const cols = 3;
 
     return Scaffold(
@@ -171,37 +173,23 @@ class _HRDashboardState extends State<HRDashboard> {
               backgroundColor: Colors.white24,
               backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty) ? NetworkImage(photoUrl!) : null,
               child: (photoUrl == null || photoUrl!.isEmpty)
-                  ? Text(
-                initials,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-              )
+                  ? Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))
                   : null,
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                'Welcome, $displayName',
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+              child: Text('Welcome, $displayName',
+                  overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
             ),
           ],
         ),
         actions: [
-          // Notifications button (top right)
           IconButton(
             icon: const Icon(Icons.notifications),
             tooltip: 'Notifications',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationPage()),
-            ),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: _logout,
-          ),
+          IconButton(icon: const Icon(Icons.logout), tooltip: 'Logout', onPressed: _logout),
         ],
       ),
 
@@ -212,7 +200,7 @@ class _HRDashboardState extends State<HRDashboard> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // Overview/summary (green)
+          // UPDATED: overview with NO icons
           const _HROverviewHeader(),
           const SizedBox(height: 16),
 
@@ -239,7 +227,7 @@ class _HRDashboardState extends State<HRDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // 3-column grid of tiles — white cards, green icons/text; labels auto-fit
+          // 3-column grid of tiles
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -281,13 +269,9 @@ class _HRDashboardState extends State<HRDashboard> {
           onTap: () => Navigator.pushNamed(context, '/hr/attendance')),
       _NavItem('Payroll', Icons.attach_money_rounded,
           onTap: () => Navigator.pushNamed(context, '/hr/payroll_processing')),
-      // Notifications with unread badge
-      _NavItem(
-        'Notifications',
-        Icons.notifications,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
-        badgeStream: _unreadNotificationsStream(),
-      ),
+      _NavItem('Notifications', Icons.notifications,
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
+          badgeStream: _unreadNotificationsStream()),
       _NavItem('Messages', Icons.message_rounded,
           onTap: () => Navigator.pushNamed(context, '/common/messages'),
           badgeStream: _unreadMessagesStream()),
@@ -305,11 +289,7 @@ class _HRDashboardState extends State<HRDashboard> {
                 ? Icon(it.icon, color: color)
                 : StreamBuilder<int>(
               stream: it.badgeStream,
-              builder: (_, s) => _BadgeIcon(
-                icon: it.icon,
-                color: color,
-                count: s.data ?? 0,
-              ),
+              builder: (_, s) => _BadgeIcon(icon: it.icon, color: color, count: s.data ?? 0),
             );
 
             return Expanded(
@@ -348,7 +328,7 @@ class _HRDashboardState extends State<HRDashboard> {
   }
 }
 
-/* ========================= Overview (green header + 3-col stat cards) ========================= */
+/* ========================= Overview (icon-less cards) ========================= */
 
 enum _Range { thisMonth, prevMonth, last3, last12 }
 
@@ -366,52 +346,27 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
     final now = DateTime.now();
     switch (r) {
       case _Range.thisMonth:
-        final a = DateTime(now.year, now.month, 1);
-        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month, 1), b: DateTime(now.year, now.month + 1, 0, 23, 59, 59));
       case _Range.prevMonth:
-        final a = DateTime(now.year, now.month - 1, 1);
-        final b = DateTime(now.year, now.month, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month - 1, 1), b: DateTime(now.year, now.month, 0, 23, 59, 59));
       case _Range.last3:
-        final a = DateTime(now.year, now.month - 2, 1);
-        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month - 2, 1), b: DateTime(now.year, now.month + 1, 0, 23, 59, 59));
       case _Range.last12:
-        final a = DateTime(now.year, now.month - 11, 1);
-        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month - 11, 1), b: DateTime(now.year, now.month + 1, 0, 23, 59, 59));
     }
   }
 
-  // Streams for stats (adjust to your schema as needed)
-  // Employees in directory
-  Stream<String> _employees() {
-    return FirebaseFirestore.instance.collection('users').snapshots().map((s) => '${s.docs.length}');
-  }
+  // ====== Existing cards ======
+  Stream<String> _employees() =>
+      FirebaseFirestore.instance.collection('users').snapshots().map((s) => '${s.docs.length}');
 
-  // Pending leaves
-  Stream<String> _pendingLeaves() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('leaves')
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
+  // Actual pending complaints only
+  Stream<String> _pendingComplaints() => FirebaseFirestore.instance
+      .collection('complaints')
+      .where('status', isEqualTo: 'pending')
+      .snapshots()
+      .map((s) => '${s.docs.length}');
 
-  // Complaints pending
-  Stream<String> _pendingComplaints() {
-    return FirebaseFirestore.instance
-        .collection('complaints')
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((s) => '${s.docs.length}');
-  }
-
-  // Expenses (sum) within range
   Stream<String> _expensesTotal() {
     final r = _rangeDates(_range);
     return FirebaseFirestore.instance
@@ -430,7 +385,6 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
     });
   }
 
-  // Credits (sum) within range
   Stream<String> _creditsTotal() {
     final r = _rangeDates(_range);
     return FirebaseFirestore.instance
@@ -450,14 +404,158 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
     });
   }
 
-  // Pending procurement requests
-  Stream<String> _pendingProcurement() {
-    return FirebaseFirestore.instance
-        .collection('procurement_requests')
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((s) => '${s.docs.length}');
+  // ====== NEW: Avg ROI (this month, marketing users) ======
+  Stream<String> _avgRoiThisMonth() {
+    final now = DateTime.now();
+    final from = DateTime(now.year, now.month, 1);
+    final to   = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    final fromTs = Timestamp.fromDate(from);
+    final toTs   = Timestamp.fromDate(to);
+    final monthKey = DateFormat('MMMM_yyyy').format(from).toLowerCase();
+    final periodLabel = DateFormat('MMMM yyyy').format(from);
+
+    double _num(dynamic v) {
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v.replaceAll(RegExp(r'[^0-9.\-]'), '')) ?? 0.0;
+      return 0.0;
+    }
+
+    bool _inRange(dynamic ts) =>
+        ts is Timestamp && ts.compareTo(fromTs) >= 0 && ts.compareTo(toTs) <= 0;
+
+    // Drive computation off incentive updates
+    return FirebaseFirestore.instance.collection('marketing_incentives').snapshots().asyncMap((incSnap) async {
+      // Marketing users
+      final users = await FirebaseFirestore.instance
+          .collection('users')
+          .where('department', isEqualTo: 'marketing')
+          .get();
+      final emails = <String>[
+        for (final u in users.docs)
+          ((u.data()['email'] ?? u.data()['officeEmail'] ?? '') as String).toString().trim().toLowerCase()
+      ].where((e) => e.isNotEmpty).toList();
+
+      if (emails.isEmpty) return '—';
+
+      // Incentive per email
+      final incByEmail = <String, double>{};
+      for (final d in incSnap.docs) {
+        final m = d.data();
+        final f = _num(m['totalIncentive']);
+        if (f <= 0) continue;
+        final ue = (m['userEmail'] ?? '').toString().toLowerCase();
+        final ae = (m['agentEmail'] ?? '').toString().toLowerCase();
+        final ts = m['timestamp'];
+
+        // field-based
+        if (_inRange(ts) && (emails.contains(ue) || emails.contains(ae))) {
+          final key = emails.contains(ue) ? ue : ae;
+          incByEmail.update(key, (v) => v + f, ifAbsent: () => f);
+          continue;
+        }
+
+        // id-pattern fallback: "<email>_sales_<MMMM>_<yyyy>"
+        final idLower = d.id.toLowerCase();
+        for (final e in emails) {
+          if (idLower.startsWith(e) && idLower.contains(monthKey)) {
+            incByEmail.update(e, (v) => v + f, ifAbsent: () => f);
+            break;
+          }
+        }
+      }
+
+      // Salaries
+      final paySnap = await FirebaseFirestore.instance
+          .collection('payrolls')
+          .where('period', isEqualTo: periodLabel)
+          .get();
+      final salaryByEmail = <String, double>{};
+      for (final d in paySnap.docs) {
+        final m = d.data();
+        final mail = (m['officeEmail'] ?? '').toString().toLowerCase();
+        if (!emails.contains(mail)) continue;
+        final gross = _num(m['grossSalary']);
+        final t = gross > 0 ? gross : (_num(m['basicSalary']) > 0 ? _num(m['basicSalary']) : _num(m['netSalary']));
+        salaryByEmail[mail] = t;
+      }
+
+      // Compute avg ROI
+      int count = 0;
+      double sumRoi = 0;
+      for (final e in emails) {
+        final f = incByEmail[e] ?? 0.0;
+        final t = salaryByEmail[e] ?? 0.0;
+        if (t == 0 && f == 0) continue;
+
+        final N  = f * (100.0 / 15.0);
+        final T  = t;            // months = 1
+        final EC = T + f + 0.0;  // d = 0
+        final NR = N - EC;
+        final roi = EC == 0 ? 0.0 : (NR / EC);
+
+        sumRoi += roi;
+        count++;
+      }
+
+      if (count == 0) return '—';
+      final avg = sumRoi / count;
+      return '${(avg * 100).toStringAsFixed(1)}%';
+    });
   }
+
+  // ====== NEW: Total budget this month (returned in Lakh) ======
+  Stream<String> _budgetThisMonth() {
+    final now = DateTime.now();
+    final key = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final display = DateFormat('MMMM yyyy').format(DateTime(now.year, now.month));
+
+    double _num(dynamic v) {
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v.replaceAll(RegExp(r'[^0-9.\-]'), '')) ?? 0.0;
+      return 0.0;
+    }
+
+    // Use stable monthly doc; fall back to legacy
+    final ref = FirebaseFirestore.instance.collection('budgets').doc(key);
+    return ref.snapshots().asyncMap((snap) async {
+      if (snap.exists) {
+        final m = snap.data() ?? {};
+        final total = _num(m['totalNeed']);
+        if (total > 0) return _lakh(total); // <<< Lakh
+        final items = (m['items'] as List?) ?? const [];
+        double sum = 0;
+        for (final it in items) {
+          if (it is Map) sum += _num(it['amount']);
+        }
+        return _lakh(sum); // <<< Lakh
+      }
+
+      // Legacy fallback by human-readable month
+      final q = await FirebaseFirestore.instance
+          .collection('budgets')
+          .where('period', isEqualTo: display)
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (q.docs.isNotEmpty) {
+        final m = q.docs.first.data();
+        final total = _num(m['totalNeed']);
+        if (total > 0) return _lakh(total); // <<< Lakh
+        final items = (m['items'] as List?) ?? const [];
+        double sum = 0;
+        for (final it in items) {
+          if (it is Map) sum += _num(it['amount']);
+        }
+        return _lakh(sum); // <<< Lakh
+      }
+
+      return _lakh(0);
+    });
+  }
+
+  // Helpers
+  String _lakh(num n) => '${(n / 100000).toStringAsFixed(2)} L';
 
   String _money(num n) {
     final s = n.toStringAsFixed(0);
@@ -472,41 +570,29 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
 
   @override
   Widget build(BuildContext context) {
-    // header
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_brandGreen, _greenMid],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: const LinearGradient(colors: [_brandGreen, _greenMid], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 14, offset: Offset(0, 6))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title + Filter
+          // Title + Filter (icon removed)
           Row(
             children: [
-              const Icon(Icons.insights, color: Colors.white),
-              const SizedBox(width: 8),
               const Expanded(
-                child: Text(
-                  'Overview',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
+                child: Text('Overview',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
               ),
-              _RangeFilter(
-                value: _range,
-                onChanged: (r) => setState(() => _range = r),
-              ),
+              _RangeFilter(value: _range, onChanged: (r) => setState(() => _range = r)),
             ],
           ),
           const SizedBox(height: 14),
 
-          // 3×N grid of stat cards
+          // 3×N grid of stat cards (no icons in the cards)
           LayoutBuilder(builder: (ctx, c) {
             const spacing = 10.0;
             final w = c.maxWidth;
@@ -515,12 +601,12 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
               spacing: spacing,
               runSpacing: spacing,
               children: [
-                _StatCard(width: cardW, label: 'Employees',          streamText: _employees()),
-                _StatCard(width: cardW, label: 'Pending leaves',     streamText: _pendingLeaves()),
-                _StatCard(width: cardW, label: 'Complaints pending', streamText: _pendingComplaints()),
-                _StatCard(width: cardW, label: 'Expenses (range)',   streamText: _expensesTotal()),
-                _StatCard(width: cardW, label: 'Credits (range)',    streamText: _creditsTotal()),
-                _StatCard(width: cardW, label: 'Procurement pending',streamText: _pendingProcurement()),
+                _StatCard(width: cardW, label: 'Employees',  streamText: _employees()),
+                _StatCard(width: cardW, label: 'Avg ROI',    streamText: _avgRoiThisMonth()),
+                _StatCard(width: cardW, label: 'Complaints', streamText: _pendingComplaints()), // actual pending
+                _StatCard(width: cardW, label: 'Expenses',   streamText: _expensesTotal()),
+                _StatCard(width: cardW, label: 'Credits',    streamText: _creditsTotal()),
+                _StatCard(width: cardW, label: 'Budget',     streamText: _budgetThisMonth()),   // in Lakh
               ],
             );
           }),
@@ -553,11 +639,7 @@ class _RangeFilter extends StatelessWidget {
           isDense: true,
           icon: const Icon(Icons.keyboard_arrow_down, color: _brandGreen),
           dropdownColor: Colors.white,
-          style: const TextStyle(
-            color: _brandGreen,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: _brandGreen, fontWeight: FontWeight.w700, fontSize: 12),
           items: const [
             DropdownMenuItem(value: _Range.thisMonth, child: Text('This month')),
             DropdownMenuItem(value: _Range.prevMonth, child: Text('Previous month')),
@@ -573,14 +655,13 @@ class _RangeFilter extends StatelessWidget {
   }
 }
 
-/* ========================= Stat card (green) ========================= */
+/* ========================= Stat card (NO icon) ========================= */
 
 class _StatCard extends StatelessWidget {
   final double width;
   final String label;
   final Stream<String> streamText;
-  const _StatCard({required this.width, required this.label, required this.streamText, Key? key})
-      : super(key: key);
+  const _StatCard({required this.width, required this.label, required this.streamText, Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -594,55 +675,34 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: _brandGreen.withOpacity(.08), shape: BoxShape.circle),
-            child: const Icon(Icons.assessment, color: _brandGreen, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: StreamBuilder<String>(
-              stream: streamText,
-              builder: (_, snap) {
-                final v = snap.hasData ? snap.data! : '—';
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AutoSizeText(
-                      v,
-                      maxLines: 1,
-                      minFontSize: 14,
-                      stepGranularity: 0.5,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _brandGreen,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    AutoSizeText(
-                      label,
-                      maxLines: 2,
-                      minFontSize: 9,
-                      stepGranularity: 0.5,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _brandGreen,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+      child: StreamBuilder<String>(
+        stream: streamText,
+        builder: (_, snap) {
+          final v = snap.hasData ? snap.data! : '—';
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AutoSizeText(
+                v,
+                maxLines: 1,
+                minFontSize: 14,
+                stepGranularity: 0.5,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _brandGreen, fontWeight: FontWeight.w900, fontSize: 20),
+              ),
+              const SizedBox(height: 2),
+              AutoSizeText(
+                label,
+                maxLines: 2,
+                minFontSize: 9,
+                stepGranularity: 0.5,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _brandGreen, fontWeight: FontWeight.w600, fontSize: 12),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -662,12 +722,7 @@ class _DashTile extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final int badgeCount;
-  const _DashTile({
-    required this.title,
-    required this.icon,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
+  const _DashTile({required this.title, required this.icon, required this.onTap, this.badgeCount = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -703,11 +758,7 @@ class _DashTile extends StatelessWidget {
                           minFontSize: 9,
                           stepGranularity: 0.5,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _brandGreen,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: const TextStyle(color: _brandGreen, fontSize: 12, fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],
@@ -715,11 +766,7 @@ class _DashTile extends StatelessWidget {
                 ),
               ),
               if (badgeCount > 0)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: _Badge(count: badgeCount),
-                ),
+                Positioned(right: 8, top: 8, child: _Badge(count: badgeCount)),
             ],
           ),
         ),
@@ -748,12 +795,7 @@ class _BadgeIcon extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Icon(icon, color: color),
-        if (count > 0)
-          Positioned(
-            right: -6,
-            top: -6,
-            child: _Badge(count: count, small: true),
-          ),
+        if (count > 0) Positioned(right: -6, top: -6, child: _Badge(count: count, small: true)),
       ],
     );
   }
@@ -776,23 +818,17 @@ class _Badge extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: small ? 9 : 10,
-          fontWeight: FontWeight.w800,
-          height: 1.0,
-        ),
+        style: TextStyle(color: Colors.white, fontSize: small ? 9 : 10, fontWeight: FontWeight.w800, height: 1.0),
       ),
     );
   }
 }
 
-/* ======================= Realtime summary carousel (optional, green) ======================= */
+/* ======================= Optional carousel ======================= */
 
 class _RealtimeSummaryCarousel extends StatelessWidget {
   const _RealtimeSummaryCarousel();
 
-  // For future: replace with any HR-specific quick stats you want to rotate through.
   @override
   Widget build(BuildContext context) {
     final items = <Widget>[
@@ -835,12 +871,7 @@ class _LiveStatTile extends StatelessWidget {
   final IconData icon;
   final List<Color> gradient;
   final String value;
-  const _LiveStatTile({
-    required this.title,
-    required this.icon,
-    required this.gradient,
-    required this.value,
-  });
+  const _LiveStatTile({required this.title, required this.icon, required this.gradient, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -854,7 +885,8 @@ class _LiveStatTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            height: 40, width: 40,
+            height: 40,
+            width: 40,
             decoration: BoxDecoration(color: Colors.white.withOpacity(.2), shape: BoxShape.circle),
             child: Icon(icon, color: Colors.white),
           ),

@@ -20,8 +20,8 @@ import 'package:uddoygi/features/factory/presentation/factory/daily_production.d
 import 'package:uddoygi/features/factory/presentation/screens/progress_update_screen.dart';
 
 /// ===== Red theme (HR structure, just red) =====
-const Color _brandRed   = Color(0xFFD51616); // deep red
-const Color _redMid     = Color(0xFFEF4444); // accent
+const Color _brandRed   = Color(0xFF40062D); // deep red
+const Color _redMid     = Color(0xFF500B49); // accent
 const Color _surface    = Color(0xFFFFF5F5); // near-white with warm tone
 const Color _cardBorder = Color(0x1A7F1D1D); // 10% red
 const Color _shadowLite = Color(0x14000000);
@@ -136,7 +136,7 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
     _DashboardItem('Messages', Icons.message, '/common/messages'),
     _DashboardItem('Attendance', Icons.event_available, '/factory/attendance'),
     _DashboardItem('Loan Requests', Icons.request_page, '/marketing/loan_request'),
-    _DashboardItem('Salary & OT', Icons.attach_money, '/factory/salary_overtime'),
+    _DashboardItem('Salary & OT', Icons.attach_money, '/common/salary'),
   ];
 
   void _onItemTap(_DashboardItem item) {

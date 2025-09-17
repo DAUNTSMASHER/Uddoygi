@@ -10,7 +10,8 @@
   },
   "scripts": {
     "worker": "node tools/local_fcm_worker.js",
-    "dev": "concurrently -k -n worker,flutter \"npm:worker\" \"flutter run\""
+    "dev": "concurrently -k -n worker,flutter \"npm:worker\" \"flutter run\"",
+    "admin": "ADMIN_TOKEN=supersecret123 node server.js"
   },
   "repository": {
     "type": "git",
@@ -26,7 +27,9 @@
   "dependencies": {
     "axios": "^1.12.1",
     "concurrently": "^9.0.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
+    "express": "^5.1.0",
     "firebase-admin": "^13.5.0",
     "googleapis": "^159.0.0",
     "yargs": "^18.0.0"

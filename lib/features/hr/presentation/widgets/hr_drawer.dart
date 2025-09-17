@@ -3,109 +3,142 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/profile.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+/// Keep palette in sync with HRDashboard
+const Color _brandGreen  = Color(0xFF065F46);
+const Color _greenMid    = Color(0xFF10B981);
+const Color _ink         = _brandGreen;
+const Color _divider     = Color(0x1A065F46); // 10% green
 
 class HRDrawer extends StatelessWidget {
   const HRDrawer({Key? key}) : super(key: key);
 
+  Stream<int> _unreadNotificationsStream() {
+    final mail = FirebaseAuth.instance.currentUser?.email ?? '';
+    if (mail.isEmpty) return const Stream<int>.empty();
+    return FirebaseFirestore.instance
+        .collection('notifications')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
+  }
+
+  Stream<int> _unreadMessagesStream() {
+    final mail = FirebaseAuth.instance.currentUser?.email ?? '';
+    if (mail.isEmpty) return const Stream<int>.empty();
+    return FirebaseFirestore.instance
+        .collection('messages')
+        .where('to', isEqualTo: mail)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((s) => s.docs.length);
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final email = FirebaseAuth.instance.currentUser?.email;
 
     return Drawer(
       backgroundColor: Colors.white,
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
         builder: (ctx, snap) {
           if (snap.hasError) {
             return const Center(child: Text('Error loading profile'));
           }
-          if (!snap.hasData || !snap.data!.exists) {
+          if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snap.data!.data()!;
+
+          final userDoc = snap.data!;
+          final data = userDoc.data() ?? {};
           final name = (data['fullName'] as String?)?.trim().isNotEmpty == true
               ? data['fullName'] as String
               : (data['name'] as String?) ?? 'HR Panel';
           final photoUrl = (data['profilePhotoUrl'] as String?) ?? '';
 
+          String initials(String s) {
+            final parts = s.trim().split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+            if (parts.isEmpty) return 'H';
+            if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+            return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
+          }
+
           return ListView(
             padding: EdgeInsets.zero,
             children: [
+              // ===== Header =====
               Container(
-                height: 180,
-                color: _darkBlue,
-                padding:
-                const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(16, 44, 16, 16),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [_brandGreen, _greenMid],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
                 child: Row(
                   children: [
                     CircleAvatar(
-                      radius: 36,
-                      backgroundColor: Colors.white,
-                      backgroundImage:
-                      photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                      child: photoUrl.isEmpty
+                      radius: 34,
+                      backgroundColor: Colors.white24,
+                      backgroundImage: (photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                      child: (photoUrl.isEmpty)
                           ? Text(
-                        name.isNotEmpty ? name[0] : 'H',
+                        initials(name),
                         style: const TextStyle(
-                            fontSize: 36, color: Colors.white),
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                        ),
                       )
                           : null,
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextButton(
+                          Text(name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                          if (email != null && email.isNotEmpty)
+                            Text(email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          TextButton.icon(
                             style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(50, 20),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              backgroundColor: Colors.white.withOpacity(.15),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
                             ),
                             onPressed: () {
                               Navigator.pop(context);
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      ProfilePage(userId: uid),
-                                ),
+                                MaterialPageRoute(builder: (_) => ProfilePage(userId: uid)),
                               );
                             },
-                            child: const Text(
-                              'View Profile',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
+                            icon: const Icon(Icons.person_outline, size: 18),
+                            label: const Text('View Profile', style: TextStyle(fontWeight: FontWeight.w700)),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
+                      tooltip: 'Settings',
                       icon: const Icon(Icons.settings, color: Colors.white),
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => ProfilePage(userId: uid),
-                          ),
+                          MaterialPageRoute(builder: (_) => ProfilePage(userId: uid)),
                         );
                       },
                     ),
@@ -113,64 +146,157 @@ class HRDrawer extends StatelessWidget {
                 ),
               ),
 
-              // 📊 Dashboard
-              _drawerItem(context, 'Dashboard', Icons.dashboard, '/hr/dashboard'),
-              const Divider(),
+              const SizedBox(height: 8),
 
-              // 👥 Employee
-              _drawerItem(context, 'Employee Directory', Icons.people, '/hr/employee_directory'),
-              _drawerItem(context, 'Shift Tracker', Icons.schedule, '/hr/shift_tracker'),
-              _drawerItem(context, 'Recruitment', Icons.how_to_reg, '/hr/recruitment'),
-              const Divider(),
+              // ===== Sections =====
+              _SectionLabel('Main'),
+              _NavTile(title: 'Dashboard', icon: Icons.dashboard, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/dashboard');
+              }),
+              _divider(),
 
-              // 📅 Attendance
-              _drawerItem(context, 'Attendance', Icons.event, '/hr/attendance'),
-              _drawerItem(context, 'Leave Management', Icons.beach_access, '/hr/leave_management'),
-              const Divider(),
+              _SectionLabel('People'),
+              _NavTile(title: 'Employee Directory', icon: Icons.people, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/employee_directory');
+              }),
+              _NavTile(title: 'Shift Tracker', icon: Icons.schedule, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/shift_tracker');
+              }),
+              _NavTile(title: 'Recruitment', icon: Icons.how_to_reg, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/recruitment');
+              }),
+              _divider(),
 
-              // 💰 Payroll
-              _drawerItem(context, 'Payroll Processing', Icons.attach_money, '/hr/payroll_processing'),
-              _drawerItem(context, 'Payslips', Icons.receipt_long, '/hr/payslip'),
-              _drawerItem(context, 'Salary Management', Icons.money, '/hr/salary_management'),
-              const Divider(),
+              _SectionLabel('Attendance & Leave'),
+              _NavTile(title: 'Attendance', icon: Icons.event, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/attendance');
+              }),
+              _NavTile(title: 'Leave Management', icon: Icons.beach_access, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/leave_management');
+              }),
+              _divider(),
 
-              // 🎁 Benefits
-              _drawerItem(context, 'Benefits & Compensation', Icons.card_giftcard, '/hr/benefits_compensation'),
-              _drawerItem(context, 'Loan Approval', Icons.account_balance, '/hr/loan_approval'),
-              _drawerItem(context, 'Incentives', Icons.emoji_events, '/hr/incentives'),
-              const Divider(),
+              _SectionLabel('Payroll'),
+              _NavTile(title: 'Payroll Processing', icon: Icons.attach_money, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/payroll_processing');
+              }),
+              _NavTile(title: 'Payslips', icon: Icons.receipt_long, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/payslip');
+              }),
+              _NavTile(title: 'Salary Management', icon: Icons.money, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/salary_management');
+              }),
+              _divider(),
 
-              // 🧾 Finance
-              _drawerItem(context, 'Accounts Payable', Icons.outbox, '/hr/accounts_payable'),
-              _drawerItem(context, 'Accounts Receivable', Icons.inbox, '/hr/accounts_receivable'),
-              _drawerItem(context, 'General Ledger', Icons.book, '/hr/general_ledger'),
-              _drawerItem(context, 'Balance Update', Icons.account_balance_wallet, '/hr/balance_update'),
-              _drawerItem(context, 'Tax Management', Icons.calculate, '/hr/tax'),
-              const Divider(),
+              _SectionLabel('Benefits & Loans'),
+              _NavTile(title: 'Benefits & Compensation', icon: Icons.card_giftcard, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/benefits_compensation');
+              }),
+              _NavTile(title: 'Loan Approval', icon: Icons.account_balance, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/loan_approval');
+              }),
+              _NavTile(title: 'Incentives', icon: Icons.emoji_events, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/incentives');
+              }),
+              _divider(),
 
-              // 📦 Procurement
-              _drawerItem(context, 'Procurement', Icons.shopping_cart, '/hr/procurement'),
-              _drawerItem(context, 'Budget Forecast', Icons.trending_up, '/hr/budget_forecast'),
-              const Divider(),
+              _SectionLabel('Finance'),
+              _NavTile(title: 'Accounts Payable', icon: Icons.outbox, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/accounts_payable');
+              }),
+              _NavTile(title: 'Accounts Receivable', icon: Icons.inbox, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/accounts_receivable');
+              }),
+              _NavTile(title: 'General Ledger', icon: Icons.book, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/general_ledger');
+              }),
+              _NavTile(title: 'Balance Update', icon: Icons.account_balance_wallet, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/balance_update');
+              }),
+              _NavTile(title: 'Tax Management', icon: Icons.calculate, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/tax');
+              }),
+              _divider(),
 
-              // 🔔 Notices & Messages
-              _drawerItem(context, 'Notices', Icons.notifications, '/hr/notices'),
-              _drawerItem(context, 'Messages', Icons.message, '/common/messages'),
-              const Divider(),
+              _SectionLabel('Procurement & Planning'),
+              _NavTile(title: 'Procurement', icon: Icons.shopping_cart, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/procurement');
+              }),
+              _NavTile(title: 'Budget Forecast', icon: Icons.trending_up, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/budget_forecast');
+              }),
+              // Match dashboard quick links
+              _NavTile(title: 'ROI', icon: Icons.insights, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/roi');
+              }),
+              _NavTile(title: 'Budget', icon: Icons.account_balance, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/budget');
+              }),
+              _divider(),
 
-              // ⚠️ Complaints
-              _drawerItem(context, 'Complaints', Icons.support_agent, '/common/complaints'),
-              const Divider(),
-
-              // 🔓 Logout
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.redAccent),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(fontSize: 14, color: Colors.redAccent),
-                ),
-                onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+              _SectionLabel('Comms'),
+              // Use the same route as dashboard (marketing notices)
+              _NavTile(
+                title: 'Notices',
+                icon: Icons.notifications,
+                trailingStreamCount: _unreadNotificationsStream(),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/marketing/notices');
+                },
               ),
+              _NavTile(
+                title: 'Messages',
+                icon: Icons.message,
+                trailingStreamCount: _unreadMessagesStream(),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/common/messages');
+                },
+              ),
+              _NavTile(title: 'Complaints', icon: Icons.support_agent, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/common/complaints');
+              }),
+              _divider(),
+
+              // ===== Logout =====
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                title: const Text('Logout', style: TextStyle(fontSize: 14, color: Colors.redAccent)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  try {
+                    await FirebaseAuth.instance.signOut();
+                  } catch (_) {}
+                  if (context.mounted) {
+                    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
             ],
           );
         },
@@ -178,16 +304,87 @@ class HRDrawer extends StatelessWidget {
     );
   }
 
-  Widget _drawerItem(BuildContext context, String title, IconData icon, String route) {
+  Widget _divider() => Divider(height: 16, thickness: 1, color: Colors.white);
+}
+
+/* ======================= Bits ======================= */
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          color: _ink,
+          fontWeight: FontWeight.w800,
+          fontSize: 11,
+          letterSpacing: 0.6,
+        ),
+      ),
+    );
+  }
+}
+
+class _NavTile extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Stream<int>? trailingStreamCount;
+
+  const _NavTile({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+    this.trailingStreamCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final trailing = trailingStreamCount == null
+        ? null
+        : StreamBuilder<int>(
+      stream: trailingStreamCount,
+      builder: (_, s) {
+        final n = s.data ?? 0;
+        if (n <= 0) return const SizedBox.shrink();
+        return _Badge(count: n);
+      },
+    );
+
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Icon(icon, color: _darkBlue),
-      title: Text(title, style: const TextStyle(color: _darkBlue, fontSize: 14)),
-      onTap: () {
-        Navigator.pop(context);
-        Navigator.pushNamed(context, route);
-      },
+      leading: Icon(icon, color: _ink),
+      title: Text(title, style: const TextStyle(color: _ink, fontSize: 14, fontWeight: FontWeight.w600)),
+      trailing: trailing,
+      onTap: onTap,
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final int count;
+  const _Badge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _greenMid.withOpacity(.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _greenMid.withOpacity(.35)),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: _ink, fontSize: 11, fontWeight: FontWeight.w800),
+      ),
     );
   }
 }

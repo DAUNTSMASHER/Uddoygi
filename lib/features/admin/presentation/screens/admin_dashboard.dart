@@ -109,7 +109,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       keyId: 'salary',
       title: 'Salary',
       icon: Icons.attach_money,
-      route: '/admin/salary',
+      route: '/common/salary',
       queries: [FirebaseFirestore.instance.collection('salaries')],
     ),
     _DashboardItem(

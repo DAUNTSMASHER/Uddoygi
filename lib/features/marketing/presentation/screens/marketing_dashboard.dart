@@ -1,4 +1,5 @@
 // lib/features/marketing/presentation/screens/marketing_dashboard.dart
+import 'package:uddoygi/features/common/salary_screen.dart';
 
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -68,6 +69,8 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
     _DashboardItem('Products', Icons.inventory, ''), // manual: ProductsPage
     _DashboardItem('Renumeration', Icons.paid, ''),  // manual: RenumerationDashboard
     _DashboardItem('Stock Update', Icons.sync, ''),  // manual: StockHistoryScreen
+    _DashboardItem('Salary', Icons.account_balance_wallet_rounded, ''),
+
   ];
 
   @override
@@ -93,6 +96,10 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
 
   void _onItemTap(_DashboardItem item) {
     switch (item.title) {
+      case 'Salary':
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const SalaryScreen()));
+        return;
+
       case 'Products':
         if (email != null) {
           Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: email!)));
@@ -475,30 +482,39 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
   }
 
   // 1) Total sale (paid invoices only)
+  // inside _OverviewHeaderState
   Stream<String> _totalSales() {
     final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
+
+    // prefer the email passed from the parent; fall back to FirebaseAuth user
+    final me = (widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '').trim();
+
+    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('invoices')
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) {
+        .where('timestamp', isLessThanOrEqualTo:   Timestamp.fromDate(r.b));
+
+    if (me.isNotEmpty) {
+      q = q.where('agentEmail', isEqualTo: me); // ← per-agent filter
+    }
+
+    return q.snapshots().map((s) {
       num sum = 0;
       for (final d in s.docs) {
         final m = d.data();
         final status = (m['status'] ?? '').toString().toLowerCase();
-        final pay = (m['payment'] is Map)
-            ? Map<String, dynamic>.from(m['payment'])
-            : const <String, dynamic>{};
-        final paid = (pay['taken'] == true) || status.contains('payment taken');
+        final pay = (m['payment'] is Map) ? Map<String, dynamic>.from(m['payment']) : const {};
+        final paid = (pay['taken'] == true) || status.contains('payment taken') || status.contains('paid');
         if (!paid) continue;
 
         final v = m['grandTotal'];
         if (v is num) sum += v;
       }
+      // money() from parent
       return _money(sum);
     });
   }
+
 
   // 2) Total campaign (count created this period)
   Stream<String> _totalCampaigns() {

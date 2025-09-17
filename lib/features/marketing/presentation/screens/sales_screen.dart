@@ -1,8 +1,10 @@
-// lib/features/marketing/presentation/screens/sales_screen.dart
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+
 import 'new_invoices_screen.dart';
 import 'all_invoices_screen.dart';
 import 'sales_report_screen.dart';
@@ -11,11 +13,9 @@ import 'work_order_screen.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 const Color _ink = Color(0xFF1D5DF1);
-const Color _surface = Color(0xFFF4F6FA);
 const Color _cardBg = Colors.white;
 const Color _okGreen = Color(0xFF2ECC71);
 
-/// Quick-action model (top-level)
 class _Feature {
   final IconData icon;
   final String label;
@@ -31,20 +31,33 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  static const double _fontSmall   = 12;
   static const double _fontRegular = 14;
   static const double _fontLarge   = 16;
 
-  double salesTarget   = 100000;
-  int    orderCount    = 0;     // paid orders (selected month)
-  double totalSales    = 0;     // paid amount only (selected month)
+  // Session / identity
   String? userEmail;
+  String? userFullName; // prefer full name; we also fallback to email local-part
+
+  // Live target watchers
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _curDocSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _curQuerySub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _prevQuerySub;
+
+  // Target values (as set by HR)
+  double? _currentMonthTarget;
+  double? _previousMonthTarget;
+
+  // KPI values
+  double salesTarget = 0;
+  int    orderCount  = 0; // paid orders (selected month)
+  double totalSales  = 0; // paid amount only (selected month)
   bool   targetReached = false;
+
+  // Month picker
   DateTime selectedMonth = DateTime.now();
 
+  // UI state
   int _activeTabIndex = 0;
-
-  // bottom nav
   int _bottomIndex = 0;
 
   @override
@@ -53,16 +66,201 @@ class _SalesScreenState extends State<SalesScreen> {
     _loadUserSession();
   }
 
+  @override
+  void dispose() {
+    _curDocSub?.cancel();
+    _curQuerySub?.cancel();
+    _prevQuerySub?.cancel();
+    super.dispose();
+  }
+
+  // ——————————————————— Session & profile ———————————————————
   Future<void> _loadUserSession() async {
     final session = await LocalStorageService.getSession();
-    if (session != null && mounted) {
-      userEmail = session['email'];
-      await _calculateUserSales();
-      setState(() {});
+    if (session == null || !mounted) return;
+
+    userEmail = (session['email'] as String?)?.trim();
+
+    // Try reading a proper name from session/users; if missing, fallback to email local-part
+    String? sessionName = (session['fullName'] as String?)?.trim();
+
+    String? fetchedName;
+    if (userEmail != null && userEmail!.isNotEmpty) {
+      final u = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: userEmail)
+          .limit(1)
+          .get();
+      if (u.docs.isNotEmpty) {
+        final m = u.docs.first.data();
+        fetchedName = (m['fullName'] ?? m['name'] ?? m['displayName'] ?? '').toString().trim();
+      }
+    }
+
+    userFullName = (sessionName?.isNotEmpty == true ? sessionName : fetchedName)?.trim();
+
+    // Fallback to local part of email if full name is missing
+    if ((userFullName == null || userFullName!.isEmpty) && (userEmail?.isNotEmpty ?? false)) {
+      userFullName = userEmail!.split('@').first;
+    }
+
+    if (kDebugMode) {
+      debugPrint('[SalesScreen] Session email="$userEmail", fullName="$userFullName"');
+    }
+
+    // Start watching HR targets (current + previous month)
+    _attachTargetListeners();
+
+    // Compute sales for the current month
+    await _calculateUserSales();
+    if (mounted) setState(() {});
+  }
+
+  // ——————————————————— Helpers ———————————————————
+  String _periodLabel(DateTime dt) => DateFormat('MMMM yyyy').format(dt);
+
+  String _periodKey(DateTime dt) {
+    final y = dt.year.toString();
+    final m = dt.month.toString().padLeft(2, '0');
+    return '$y-$m';
+  }
+
+  double _asDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
+  }
+
+  String _normalize(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Extract target from a single budget map using multiple strategies.
+  double? _readTargetFromBudget(Map<String, dynamic>? m) {
+    if (m == null) return null;
+
+    final emailLower = (userEmail ?? '').toLowerCase();
+    final nameLower  = _normalize(userFullName ?? '');
+    final localLower = (userEmail ?? '').split('@').first.toLowerCase();
+
+    // 1) Fast path: index by email
+    final idxEmail = (m['targetsIndexEmail'] as Map?)?.map((k, v) => MapEntry(k.toString().toLowerCase(), v));
+    if (idxEmail != null && emailLower.isNotEmpty && idxEmail[emailLower] != null) {
+      final v = _asDouble(idxEmail[emailLower]);
+      if (kDebugMode) debugPrint('[SalesScreen] hit targetsIndexEmail => $v');
+      if (v > 0) return v;
+    }
+
+    // 2) Fast path: index by lower(full name)
+    final idxLower = (m['targetsIndexLower'] as Map?)?.map((k, v) => MapEntry(k.toString().toLowerCase(), v));
+    if (idxLower != null) {
+      if (nameLower.isNotEmpty && idxLower[nameLower] != null) {
+        final v = _asDouble(idxLower[nameLower]);
+        if (kDebugMode) debugPrint('[SalesScreen] hit targetsIndexLower(name) => $v');
+        if (v > 0) return v;
+      }
+      if (localLower.isNotEmpty && idxLower[localLower] != null) {
+        final v = _asDouble(idxLower[localLower]);
+        if (kDebugMode) debugPrint('[SalesScreen] hit targetsIndexLower(local) => $v');
+        if (v > 0) return v;
+      }
+    }
+
+    // 3) Fallback: scan salesTargets list
+    final list = (m['salesTargets'] as List?) ?? const [];
+    if (kDebugMode) debugPrint('[SalesScreen] Scanning salesTargets (${list.length})');
+
+    for (final e in list) {
+      final em  = (e?['email'] ?? '').toString().toLowerCase();
+      final nm  = _normalize((e?['name'] ?? '').toString());
+      final mx  = _asDouble(e?['maxTarget']);
+      final ft  = _asDouble(e?['finalTarget']);
+      final eff = ft > 0 ? ft : mx;
+
+      final byEmail = emailLower.isNotEmpty && em.isNotEmpty && em == emailLower;
+      final byName  = nm.isNotEmpty && (nm == nameLower || nm == localLower);
+
+      if (kDebugMode) {
+        debugPrint('[SalesScreen]   row: name="$nm", email="$em", eff=$eff  match? email=$byEmail name=$byName');
+      }
+
+      if ((byEmail || byName) && eff > 0) return eff;
+    }
+
+    return null;
+  }
+
+  void _updateEffectiveTarget() {
+    final next = _currentMonthTarget ?? _previousMonthTarget ?? salesTarget;
+    if (next != salesTarget) {
+      setState(() {
+        salesTarget = next;
+        targetReached = (salesTarget <= 0) ? false : totalSales >= salesTarget;
+      });
+    } else {
+      setState(() => targetReached = (salesTarget <= 0) ? false : totalSales >= salesTarget);
     }
   }
 
-  /// Update: count/sum **only PAID** invoices for the selected month
+  // ——————————————————— Attach listeners ———————————————————
+  void _attachTargetListeners() {
+    _curDocSub?.cancel();
+    _curQuerySub?.cancel();
+    _prevQuerySub?.cancel();
+
+    final curKey     = _periodKey(selectedMonth);
+    final prevKey    = _periodKey(DateTime(selectedMonth.year, selectedMonth.month - 1, 1));
+    final curPeriod  = _periodLabel(selectedMonth);
+    final prevPeriod = _periodLabel(DateTime(selectedMonth.year, selectedMonth.month - 1, 1));
+
+    if (kDebugMode) {
+      debugPrint('[SalesScreen] Attach listeners: curKey=$curKey prevKey=$prevKey curPeriod="$curPeriod" prevPeriod="$prevPeriod"');
+    }
+
+    // A) Primary: listen to the monthly doc by deterministic key (new HR save writes here)
+    _curDocSub = FirebaseFirestore.instance
+        .collection('budgets')
+        .doc(curKey)
+        .snapshots()
+        .listen((doc) {
+      if (kDebugMode) debugPrint('[SalesScreen] doc/$curKey => exists=${doc.exists}');
+      if (doc.exists) {
+        _currentMonthTarget = _readTargetFromBudget(doc.data());
+        if (kDebugMode) debugPrint('[SalesScreen] cur(doc) target => $_currentMonthTarget');
+        _updateEffectiveTarget();
+      }
+    });
+
+    // B) Legacy fallback: query by human-readable period (current)
+    _curQuerySub = FirebaseFirestore.instance
+        .collection('budgets')
+        .where('period', isEqualTo: curPeriod)
+        .limit(1)
+        .snapshots()
+        .listen((qs) {
+      if (kDebugMode) debugPrint('[SalesScreen] query period="$curPeriod" size=${qs.docs.length}');
+      if (qs.docs.isNotEmpty) {
+        _currentMonthTarget = _readTargetFromBudget(qs.docs.first.data());
+        if (kDebugMode) debugPrint('[SalesScreen] cur (query) target => $_currentMonthTarget');
+        _updateEffectiveTarget();
+      }
+    });
+
+    // C) Legacy fallback: query by previous period for fallback display
+    _prevQuerySub = FirebaseFirestore.instance
+        .collection('budgets')
+        .where('period', isEqualTo: prevPeriod)
+        .limit(1)
+        .snapshots()
+        .listen((qs) {
+      if (kDebugMode) debugPrint('[SalesScreen] query period="$prevPeriod" size=${qs.docs.length}');
+      if (qs.docs.isNotEmpty) {
+        _previousMonthTarget = _readTargetFromBudget(qs.docs.first.data());
+        if (kDebugMode) debugPrint('[SalesScreen] prev (query) target => $_previousMonthTarget');
+        _updateEffectiveTarget();
+      }
+    });
+  }
+
+  // ——————————————————— Sales calc (PAID only) ———————————————————
   Future<void> _calculateUserSales() async {
     if (userEmail == null) return;
     final start = DateTime(selectedMonth.year, selectedMonth.month, 1);
@@ -92,15 +290,15 @@ class _SalesScreenState extends State<SalesScreen> {
       }
     }
 
-    if (mounted) {
-      setState(() {
-        totalSales    = paidTotal;
-        orderCount    = paidCount;
-        targetReached = totalSales >= salesTarget;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      totalSales    = paidTotal;
+      orderCount    = paidCount;
+      targetReached = (salesTarget <= 0) ? false : totalSales >= salesTarget;
+    });
   }
 
+  // ——————————————————— Month picker ———————————————————
   Future<void> _selectMonth(BuildContext ctx) async {
     final picked = await showDatePicker(
       context: ctx,
@@ -115,12 +313,15 @@ class _SalesScreenState extends State<SalesScreen> {
         child: w!,
       ),
     );
+
     if (picked != null && picked != selectedMonth) {
       setState(() => selectedMonth = picked);
-      await _calculateUserSales();
+      _attachTargetListeners();          // re-watch budgets for the new month
+      await _calculateUserSales();       // recalc paid sales
     }
   }
 
+  // ——————————————————— UI ———————————————————
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -143,7 +344,7 @@ class _SalesScreenState extends State<SalesScreen> {
         .orderBy('timestamp', descending: true);
 
     return Scaffold(
-      backgroundColor: Colors.white, // rest of the page is white
+      backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -155,7 +356,7 @@ class _SalesScreenState extends State<SalesScreen> {
           style: TextStyle(
             fontSize: isSmall ? _fontRegular : _fontLarge,
             fontWeight: FontWeight.w800,
-            color: Colors.white, // label foreground white
+            color: Colors.white,
           ),
         ),
         centerTitle: true,
@@ -190,7 +391,6 @@ class _SalesScreenState extends State<SalesScreen> {
 
           return CustomScrollView(
             slivers: [
-              // Glass header with 4 KPIs + month pill
               SliverToBoxAdapter(
                 child: _glassHeader(
                   totalInvoices: totalInvoices,
@@ -199,13 +399,11 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
               ),
 
-              // Five quick actions (kept; page background is white, labels dark blue)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 sliver: SliverToBoxAdapter(child: _featuresGrid(context)),
               ),
 
-              // Section title
               const SliverPadding(
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                 sliver: SliverToBoxAdapter(
@@ -220,10 +418,8 @@ class _SalesScreenState extends State<SalesScreen> {
                 ),
               ),
 
-              // Segmented control
               SliverToBoxAdapter(child: _segmentedTabs()),
 
-              // Content
               SliverToBoxAdapter(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 180),
@@ -239,7 +435,6 @@ class _SalesScreenState extends State<SalesScreen> {
         },
       ),
 
-      // Bottom Navigation Bar (blue background, white labels/icons)
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: _darkBlue,
@@ -272,9 +467,9 @@ class _SalesScreenState extends State<SalesScreen> {
                   break;
               }
             },
-            backgroundColor: _darkBlue,               // blue background
-            selectedItemColor: Colors.white,          // label/icon white
-            unselectedItemColor: Colors.white70,      // slightly dimmed white
+            backgroundColor: _darkBlue,
+            selectedItemColor: Colors.white,
+            unselectedItemColor: Colors.white70,
             selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
             items: const [
@@ -296,7 +491,7 @@ class _SalesScreenState extends State<SalesScreen> {
     required int paid,
     required int pending,
   }) {
-    final achievement = (salesTarget == 0)
+    final achievement = (salesTarget <= 0)
         ? 0.0
         : (totalSales / salesTarget * 100).clamp(0.0, 100.0).toDouble();
 
@@ -318,7 +513,6 @@ class _SalesScreenState extends State<SalesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Greeting + month pill
           Row(
             children: [
               const Expanded(
@@ -343,7 +537,6 @@ class _SalesScreenState extends State<SalesScreen> {
 
           const SizedBox(height: 14),
 
-          // 4 KPIs (Target, Achieved [PAID ONLY], Orders [PAID ONLY], Progress)
           LayoutBuilder(
             builder: (context, c) {
               final wide = c.maxWidth >= 720;
@@ -361,7 +554,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 children: [
                   _kpiTiny(
                     label: 'Target',
-                    value: '৳${salesTarget.toStringAsFixed(0)}',
+                    value: salesTarget > 0 ? '৳${salesTarget.toStringAsFixed(0)}' : '—',
                     icon: Icons.flag_rounded,
                     accent: _darkBlue,
                   ),
@@ -390,7 +583,6 @@ class _SalesScreenState extends State<SalesScreen> {
 
           const SizedBox(height: 10),
 
-          // Inline quick counters for last 30d (kept subtle)
           Row(
             children: [
               Expanded(child: _pillStat('Total', totalInvoices.toString())),
@@ -493,7 +685,7 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  // ——————————————————— Quick actions (5 only) ———————————————————
+  // ——————————————————— Quick actions ———————————————————
   Widget _featuresGrid(BuildContext context) {
     final tiles = <_Feature>[
       _Feature(Icons.description_rounded, 'New invoice', () {
@@ -513,7 +705,6 @@ class _SalesScreenState extends State<SalesScreen> {
       }),
     ];
 
-    // 3 per row on phones, 5 in one row on wide screens
     return LayoutBuilder(
       builder: (context, c) {
         final wide = c.maxWidth >= 720;
@@ -579,7 +770,6 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  // ——————————————————— Tabs ———————————————————
   Widget _segmentedTabs() {
     final tabs = ['All invoices', 'Expenses', 'Income'];
     return Container(
@@ -860,22 +1050,6 @@ class _SalesScreenState extends State<SalesScreen> {
     );
   }
 
-  Widget _card({required Widget child, EdgeInsetsGeometry padding = const EdgeInsets.all(14)}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 4)),
-        ],
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-      ),
-      padding: padding,
-      child: child,
-    );
-  }
-
-  // Minimal details bottom sheet
   void _showDetails(String id, Map<String, dynamic> m) {
     final customer = (m['customerName'] ?? 'N/A').toString();
     final amt = ((m['grandTotal'] as num?) ?? 0).toDouble();

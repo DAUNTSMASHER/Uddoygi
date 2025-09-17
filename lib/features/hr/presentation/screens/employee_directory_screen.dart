@@ -7,7 +7,7 @@ import 'package:uddoygi/features/employee_management/transitions_page.dart';
 class EmployeeDirectoryScreen extends StatelessWidget {
   const EmployeeDirectoryScreen({Key? key}) : super(key: key);
 
-  static const Color _darkBlue = Color(0xFF0D47A1);
+  static const Color _darkBlue = Color(0xFF065F46);
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +20,11 @@ class EmployeeDirectoryScreen extends StatelessWidget {
           context,
           MaterialPageRoute(builder: (_) => const AllEmployeesPage()),
         ),
+      ),
+      _DashboardCard(
+        title: 'Add Employee',
+        icon: Icons.person_add,
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEmployeePage())),
       ),
       _DashboardCard(
         title: 'Submit a New Recommendation',
@@ -35,7 +40,8 @@ class EmployeeDirectoryScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Employee Dashboard'),
-        backgroundColor: _darkBlue,
+        backgroundColor: Color(0xFF065F46),
+        foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.white,
       body: Padding(
@@ -62,7 +68,7 @@ class _DashboardCard extends StatelessWidget {
     required this.onTap,
   });
 
-  static const Color _darkBlue = Color(0xFF0D47A1);
+  static const Color _darkBlue = Color(0xFF065F46);
 
   @override
   Widget build(BuildContext context) {

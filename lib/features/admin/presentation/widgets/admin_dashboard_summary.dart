@@ -47,7 +47,7 @@ class _AvatarBubble extends StatelessWidget {
     required this.keyText,
     this.imageUrl,
     this.size = 56,
-    this.fallbackColor = const Color(0xFF0D47A1),
+    this.fallbackColor = const Color(0xFF3C0765),
   });
 
   @override

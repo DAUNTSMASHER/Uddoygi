@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
-const Color _ink = Color(0xFFD51616);
+const Color _darkBlue = Color(0xFF40062D);
+const Color _ink = Color(0xFF500B49);
 const Color _surface = Color(0xFFF6F8FB);
 const Color _doneGreen = Color(0xFF1B5E20); // dark green for completed cards
 

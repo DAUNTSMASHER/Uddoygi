@@ -30,11 +30,12 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
   final List<String> _statusOptions = ['all', 'pending', 'resolved', 'forwarded', 'closed'];
   final List<String> _actionTypes   = ['all', 'note', 'punishment', 'reward', 'warning', 'forwarded', 'closed', 'pending'];
 
-  // Palette (aligned with your other screens)
-  static const Color _brandTeal  = Color(0xFF001863);
-  static const Color _indigoCard = Color(0xFF0B2D9F);
-  static const Color _surface    = Color(0xFFF4FBFB);
-  static const Color _boardDark  = Color(0xFF0330AE);
+  // Refreshed palette (indigo family + soft surface)
+  static const Color _brand     = Color(0xFF0B2D9F);
+  static const Color _brandDark = Color(0xFF001863);
+  static const Color _surface   = Color(0xFFF5F7FF);
+  static const Color _cardBorder= Color(0x140B2D9F); // 8% border
+  static const Color _shadow    = Color(0x14000000);
 
   @override
   void dispose() {
@@ -72,16 +73,27 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
     if (ts is Timestamp) return ts.toDate();
     if (ts is DateTime) return ts;
     return DateTime.fromMillisecondsSinceEpoch(0);
-    // String/other -> epoch start to keep sort stable
   }
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'resolved':  return Colors.green;
-      case 'pending':   return Colors.orange;
-      case 'forwarded': return Colors.indigo;
-      case 'closed':    return Colors.grey;
-      default:          return Colors.blueGrey;
+      case 'resolved':  return const Color(0xFF199A5D);
+      case 'pending':   return const Color(0xFFE07F1F);
+      case 'forwarded': return const Color(0xFF3A6FF8);
+      case 'closed':    return const Color(0xFF6B7280);
+      default:          return const Color(0xFF64748B);
+    }
+  }
+
+  Color _typeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'punishment': return const Color(0xFFB91C1C);
+      case 'reward':     return const Color(0xFF15803D);
+      case 'warning':    return const Color(0xFFCA8A04);
+      case 'forwarded':  return const Color(0xFF2563EB);
+      case 'closed':     return const Color(0xFF6B7280);
+      case 'pending':    return const Color(0xFFF59E0B);
+      default:           return _brand;
     }
   }
 
@@ -90,12 +102,19 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withOpacity(.13),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: c.withOpacity(.35)),
+        color: c.withOpacity(.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.withOpacity(.28)),
       ),
-      child: Text(status.toUpperCase(),
-          style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 11)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, size: 8, color: c),
+          const SizedBox(width: 6),
+          Text(status.toUpperCase(),
+              style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 11)),
+        ],
+      ),
     );
   }
 
@@ -117,7 +136,6 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
   void _showComplaintDetail(Map<String, dynamic> data, String docId) {
     final List rawHistory = (data['resolutionHistory'] ?? []) as List;
 
-    // Filter by action type and sort by timestamp/editedAt (desc)
     final filteredHistory = rawHistory.where((entry) {
       final t = (entry['type'] ?? '').toString().toLowerCase();
       return _actionTypeFilter == 'all' || t == _actionTypeFilter;
@@ -133,7 +151,7 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (_) => Padding(
         padding: MediaQuery.of(context).viewInsets,
@@ -149,7 +167,17 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
+                  // Handle + header
+                  Center(
+                    child: Container(
+                      width: 44, height: 5,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -159,7 +187,7 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                               ? data['subject']
                               : '(No Subject)',
                           style: const TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.w900, color: Colors.indigo),
+                              fontSize: 20, fontWeight: FontWeight.w900, color: _brand),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -168,8 +196,11 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                   ),
                   const SizedBox(height: 8),
                   if ((data['message'] ?? '').toString().isNotEmpty)
-                    Text(data['message'], style: const TextStyle(fontSize: 15)),
-                  const SizedBox(height: 12),
+                    Text(
+                      data['message'],
+                      style: const TextStyle(fontSize: 15, height: 1.35, color: Color(0xFF0F172A)),
+                    ),
+                  const SizedBox(height: 14),
 
                   // Meta chips
                   Wrap(
@@ -186,31 +217,49 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                   ),
 
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Icon(Icons.filter_alt, size: 18),
-                      const SizedBox(width: 8),
-                      DropdownButton<String>(
-                        value: _actionTypeFilter,
-                        items: _actionTypes
-                            .map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase())))
-                            .toList(),
-                        onChanged: (val) => setState(() => _actionTypeFilter = val!),
-                      ),
-                      const Spacer(),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _brand.withOpacity(.06),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _brand.withOpacity(.15)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.filter_alt, size: 18, color: _brand),
+                        const SizedBox(width: 10),
+                        const Text('Filter actions:', style: TextStyle(fontWeight: FontWeight.w700, color: _brand)),
+                        const SizedBox(width: 10),
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _actionTypeFilter,
+                            icon: const Icon(Icons.keyboard_arrow_down, color: _brand),
+                            items: _actionTypes
+                                .map((e) => DropdownMenuItem(value: e, child: Text(e.toUpperCase())))
+                                .toList(),
+                            onChanged: (val) => setState(() => _actionTypeFilter = val!),
+                          ),
+                        ),
+                        const Spacer(),
+                      ],
+                    ),
                   ),
-                  const Divider(height: 24),
+
+                  const SizedBox(height: 12),
+                  const Divider(),
 
                   if (filteredHistory.isEmpty)
-                    const Text('No actions recorded.',
-                        style: TextStyle(fontStyle: FontStyle.italic)),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('No actions recorded.', style: TextStyle(fontStyle: FontStyle.italic)),
+                    ),
 
                   if (filteredHistory.isNotEmpty)
-                    ListView.builder(
+                    ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: filteredHistory.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
                         final entry = filteredHistory[i] as Map;
                         final type = (entry['type'] ?? 'note').toString();
@@ -218,35 +267,38 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                         final by   = (entry['by'] ?? '').toString();
                         final ts   = entry['editedAt'] ?? entry['timestamp'];
                         final dateStr = _fmtTs(ts);
+                        final color = _typeColor(type);
 
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.black12),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _cardBorder),
+                            boxShadow: const [BoxShadow(color: _shadow, blurRadius: 8, offset: Offset(0, 3))],
                           ),
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.indigo.withOpacity(.12),
-                              child: Icon(_actionIcon(type), color: Colors.indigo),
+                            leading: Container(
+                              width: 42, height: 42,
+                              decoration: BoxDecoration(color: color.withOpacity(.12), shape: BoxShape.circle),
+                              child: Icon(_actionIcon(type), color: color),
                             ),
-                            title: Text(
-                              '${type.toUpperCase()}',
-                              style: const TextStyle(fontWeight: FontWeight.w800),
+                            title: Row(
+                              children: [
+                                Text(type.toUpperCase(),
+                                    style: TextStyle(fontWeight: FontWeight.w900, color: color)),
+                                const SizedBox(width: 8),
+                                Text('• $dateStr', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                              ],
                             ),
                             subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                'By: $by\n$note',
-                                style: const TextStyle(height: 1.3),
-                              ),
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text('By: $by\n$note', style: const TextStyle(height: 1.35)),
                             ),
                             isThreeLine: true,
                             trailing: (widget.role == 'hr' || widget.role == 'admin')
                                 ? IconButton(
                               tooltip: 'Edit note',
-                              icon: const Icon(Icons.edit, color: Colors.indigo),
+                              icon: const Icon(Icons.edit, color: _brand),
                               onPressed: () => _editHistoryEntry(docId, rawHistory, i, entry),
                             )
                                 : null,
@@ -294,7 +346,7 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+            style: ElevatedButton.styleFrom(backgroundColor: _brand),
             onPressed: () async {
               history[index]['note'] = controller.text.trim();
               history[index]['editedAt'] = Timestamp.now();
@@ -323,13 +375,21 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
       backgroundColor: _surface,
       appBar: AppBar(
         title: const Text('Complaints', style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: _brandTeal,
-        foregroundColor: Colors.white,
+        centerTitle: true,
         elevation: 0,
+        foregroundColor: Colors.white,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_brandDark, _brand],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: _sortDesc ? 'Newest first' : 'Oldest first',
-            icon: const Icon(Icons.sort),
+            icon: const Icon(Icons.swap_vert),
             onPressed: () => setState(() => _sortDesc = !_sortDesc),
           ),
           PopupMenuButton<String>(
@@ -342,23 +402,13 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(58),
+          preferredSize: const Size.fromHeight(64),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: TextField(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: _SearchField(
               controller: _searchController,
               onChanged: (val) => setState(() => _searchText = val),
-              decoration: InputDecoration(
-                hintText: 'Search subject, message, name, email, dept…',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-              ),
+              hint: 'Search subject, message, name, email, dept…',
             ),
           ),
         ),
@@ -370,7 +420,6 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // All docs from stream
           final docs = snapshot.data!.docs;
 
           // Summary counts (from stream, before search)
@@ -410,9 +459,9 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                 return Column(
                   children: [
                     _overviewBoard(total: total, pending: p, resolved: r, forwarded: f, closed: c),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     _quickStatusChips(), // handy chips under board
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                   ],
                 );
               }
@@ -432,24 +481,24 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.black12),
-                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _cardBorder),
+                  boxShadow: const [BoxShadow(color: _shadow, blurRadius: 10, offset: Offset(0, 4))],
                 ),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                   onTap: () => _showComplaintDetail(data, doc.id),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header gradient
+                      // Header ribbon with gradient + status
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: const BoxDecoration(
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                           gradient: LinearGradient(
-                            colors: [_indigoCard, Color(0xFF1D5DF1)],
+                            colors: [_brand, Color(0xFF3D62F5)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
@@ -472,7 +521,7 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
 
                       // Body
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -481,9 +530,9 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                                 message,
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 14, height: 1.35),
+                                style: const TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF0F172A)),
                               ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 10),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
@@ -520,37 +569,65 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
   }) {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-      decoration: BoxDecoration(color: _boardDark, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_brandDark, _brand],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: _shadow, blurRadius: 12, offset: Offset(0, 5))],
+      ),
       child: LayoutBuilder(builder: (context, c) {
         final w = c.maxWidth;
         final tileW = (w - 12) / 2;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: tileW, child: _squareStat('Total Complaints', '$total', Icons.list_alt)),
-            SizedBox(width: tileW, child: _squareStat('Pending', '$pending', Icons.timelapse)),
-            SizedBox(width: tileW, child: _squareStat('Resolved', '$resolved', Icons.verified)),
-            SizedBox(width: tileW, child: _squareStat('Forwarded', '$forwarded', Icons.forward_to_inbox)),
-            SizedBox(width: tileW, child: _squareStat('Closed', '$closed', Icons.lock)),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8, left: 2),
+              child: Text('Overview',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+            ),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(width: tileW, child: _squareStat('Total', '$total', Icons.list_alt, Colors.white)),
+                SizedBox(width: tileW, child: _squareStat('Pending', '$pending', Icons.timelapse, const Color(0xFFFFEDD5))),
+                SizedBox(width: tileW, child: _squareStat('Resolved', '$resolved', Icons.verified, const Color(0xFFD1FAE5))),
+                SizedBox(width: tileW, child: _squareStat('Forwarded', '$forwarded', Icons.forward_to_inbox, const Color(0xFFDBEAFE))),
+                SizedBox(width: tileW, child: _squareStat('Closed', '$closed', Icons.lock, const Color(0xFFE5E7EB))),
+              ],
+            ),
           ],
         );
       }),
     );
   }
 
-  Widget _squareStat(String label, String value, IconData icon) {
+  Widget _squareStat(String label, String value, IconData icon, Color tint) {
+    final darkText = label == 'Total' ? Colors.white : Colors.black87;
+    final subText  = label == 'Total' ? Colors.white70 : Colors.black54;
+
     return Container(
-      height: 100,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      height: 102,
+      decoration: BoxDecoration(
+        color: label == 'Total' ? Colors.white.withOpacity(.08) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: label == 'Total' ? Colors.white24 : _cardBorder),
+        boxShadow: const [BoxShadow(color: _shadow, blurRadius: 10, offset: Offset(0, 4))],
+      ),
       padding: const EdgeInsets.all(14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.black.withOpacity(.85), shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 18),
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: label == 'Total' ? Colors.white.withOpacity(.18) : tint,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: label == 'Total' ? Colors.white : _brand, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -561,9 +638,9 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
                 Text(value,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: darkText)),
                 const SizedBox(height: 2),
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: subText)),
               ],
             ),
           ),
@@ -574,39 +651,65 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
 
   Widget _emptyState() {
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-      child: const Center(
-        child: Text('No complaints found.', style: TextStyle(fontSize: 14)),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _cardBorder),
+        boxShadow: const [BoxShadow(color: _shadow, blurRadius: 10, offset: Offset(0, 4))],
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.inbox_rounded, size: 40, color: Colors.black45),
+          SizedBox(height: 8),
+          Text('No complaints found.', style: TextStyle(fontSize: 14, color: Colors.black87)),
+        ],
       ),
     );
   }
 
   Widget _quickStatusChips() {
     final items = _statusOptions;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: items.map((s) {
-        final sel = _statusFilter == s;
-        final c = sel ? Colors.white : Colors.white70;
-        return InkWell(
-          onTap: () => setState(() => _statusFilter = s),
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: sel ? Colors.black.withOpacity(.15) : Colors.black.withOpacity(.08),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white24),
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _cardBorder),
+        boxShadow: const [BoxShadow(color: _shadow, blurRadius: 8, offset: Offset(0, 3))],
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: items.map((s) {
+          final sel = _statusFilter == s;
+          final chipColor = sel ? _brand : Colors.black54;
+          final bg = sel ? _brand.withOpacity(.10) : Colors.black.withOpacity(.04);
+          return InkWell(
+            onTap: () => setState(() => _statusFilter = s),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: sel ? _brand.withOpacity(.35) : Colors.black12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, size: 8, color: chipColor),
+                  const SizedBox(width: 6),
+                  Text(
+                    s.toUpperCase(),
+                    style: TextStyle(color: chipColor, fontWeight: FontWeight.w800, fontSize: 11),
+                  ),
+                ],
+              ),
             ),
-            child: Text(
-              s.toUpperCase(),
-              style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 11),
-            ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -615,16 +718,74 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.black12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _cardBorder),
+        boxShadow: const [BoxShadow(color: _shadow, blurRadius: 6, offset: Offset(0, 2))],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.black87),
+          Icon(icon, size: 14, color: _brand),
           const SizedBox(width: 6),
-          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+        ],
+      ),
+    );
+  }
+}
+
+/* ====================== Reusable Search Field ====================== */
+
+class _SearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final String hint;
+
+  const _SearchField({
+    required this.controller,
+    required this.onChanged,
+    required this.hint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 8, offset: Offset(0, 3))],
+        border: Border.all(color: const Color(0x140B2D9F)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 10),
+          const Icon(Icons.search, color: Color(0xFF0B2D9F)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: hint,
+                hintStyle: const TextStyle(color: Colors.black45),
+                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              ),
+            ),
+          ),
+          if (controller.text.isNotEmpty)
+            IconButton(
+              tooltip: 'Clear',
+              icon: const Icon(Icons.close, size: 18, color: Colors.black45),
+              onPressed: () {
+                controller.clear();
+                onChanged('');
+              },
+            ),
+          const SizedBox(width: 6),
         ],
       ),
     );

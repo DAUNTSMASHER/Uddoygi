@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'work_order_details_screen.dart';
 
 /// ব্র্যান্ড প্যালেট (ড্যাশবোর্ডের সাথে সামঞ্জস্য)
-const Color _brandTeal  = Color(0xFFD51616);
-const Color _indigoCard = Color(0xFFCAA3A3);
+const Color _brandTeal  = Color(0xFF40062D);
+const Color _indigoCard = Color(0xFFA82295);
 const Color _surface    = Color(0xFFF4FBFB);
 const Color _boardDark  = Color(0xFFB63838);
 

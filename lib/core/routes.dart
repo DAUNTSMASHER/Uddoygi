@@ -12,7 +12,6 @@ import 'package:uddoygi/features/admin/presentation/screens/reports_screen.dart'
 import 'package:uddoygi/features/admin/presentation/screens/reports_graph_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/welfare_scheme_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/complaints_screen.dart';
-import 'package:uddoygi/features/admin/presentation/screens/salary_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/notices_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_all_notices_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_messages_screen.dart';
@@ -79,6 +78,7 @@ import 'package:uddoygi/features/factory/presentation/screens/factory_attendance
 import 'package:uddoygi/features/common/presentation/screens/messages_screen.dart';
 import 'package:uddoygi/features/common/presentation/screens/welfare_screen.dart';
 import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
+import 'package:uddoygi/features/common/salary_screen.dart';
 
 final Map<String, WidgetBuilder> appRoutes = {
   '/login': (context) => const LoginScreenWrapper(),
@@ -99,7 +99,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/reports/incentives': (context) => const IncentiveScreen(),
   '/admin/welfare': (context) => const WelfareSchemeScreen(),
   '/admin/complaints': (context) => const ComplaintsScreen(),
-  '/admin/salary': (context) => const SalaryScreen(),
   '/admin/notices': (context) => const AdminNoticeScreen(),
   '/admin/notices/all': (context) => const AdminAllNoticesScreen(),
   '/admin/messages': (context) => const AdminMessagesScreen(),
@@ -126,6 +125,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/hr/procurement': (context) => const ProcurementScreen(),
   '/hr/budget_forecast': (context) => const BudgetForecastScreen(),
   '/hr/notices': (context) => const HRNoticeScreen(),
+  '/marketing/notices': (context) => const MarketingNoticeScreen(),
 
   // 🟠 Marketing
   '/marketing/dashboard': (context) => const MarketingDashboard(),
@@ -156,4 +156,5 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/common/messages': (context) => const MessagesScreen(),
   '/common/welfare': (context) => const WelfareScreen(),
   '/common/complaints': (context) => const ComplaintScreen(),
+  '/common/salary': (context) => const SalaryScreen(),
 };
