@@ -9,41 +9,61 @@ plugins {
 
 android {
     namespace = "com.example.uddoygi"
-    compileSdk = 35
-    ndkVersion = "27.0.12077973"
+
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.uddoygi"
-        minSdk = 23
-        targetSdk = 35
+        minSdk = flutter.minSdkVersion
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
 
+    // (Optional) Configure build types; keep debug signing for local builds
     buildTypes {
-        release {
+        getByName("debug") {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+        getByName("release") {
+            // Turn both ON together
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
 
-        // ✅ REQUIRED for flutter_local_notifications (and other libs using Java time APIs)
+    // Java 17 + desugaring
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
 
+    // Kotlin 17
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
+
+    // (Optional) Packaging tweaks if you hit duplicate files
+    // packaging {
+    //     resources {
+    //         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    //     }
+    // }
+}
+
+dependencies {
+    // Core library desugaring (required when using Java 8+ APIs on lower minsdk)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {
     source = "../.."
-}
-
-dependencies {
-    // ✅ Add this single line for core library desugaring
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

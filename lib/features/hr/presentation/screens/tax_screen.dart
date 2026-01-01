@@ -109,7 +109,7 @@ class _TaxScreenState extends State<TaxScreen> {
   Future<void> _exportToExcel() async {
     final ex    = Excel.createExcel();
     final sheet = ex['Tax'];
-    sheet.appendRow(['Entity','Type','Company','Income','Tax','Date']);
+    sheet.appendRow(["Entity",'Type','Company','Income','Tax','Date']);
     for (var r in _taxHistory) {
       sheet.appendRow([
         r['entity'],
