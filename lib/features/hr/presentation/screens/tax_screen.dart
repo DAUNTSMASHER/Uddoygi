@@ -2,6 +2,8 @@
 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:excel/excel.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +24,7 @@ class TaxScreen extends StatefulWidget {
 }
 
 class _TaxScreenState extends State<TaxScreen> {
+  String _cid = '';
   final _formKey               = GlobalKey<FormState>();
   final _entityNameController  = TextEditingController();
   final _incomeController      = TextEditingController();
@@ -33,6 +36,9 @@ class _TaxScreenState extends State<TaxScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _fetchTaxHistory();
   }
 
@@ -76,13 +82,12 @@ class _TaxScreenState extends State<TaxScreen> {
       'tax':          _calculatedTax,
       'date':         DateFormat('yyyy-MM-dd').format(DateTime.now()),
     };
-    await FirebaseFirestore.instance.collection('taxes').add(data);
+    await DB.colSync(_cid, C.taxes).add(data);
     _fetchTaxHistory();
   }
 
   Future<void> _fetchTaxHistory() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('taxes')
+    final snap = await DB.colSync(_cid, C.taxes)
         .orderBy('date', descending: true)
         .get();
     setState(() => _taxHistory = snap.docs.map((d) => d.data()).toList());
@@ -134,7 +139,9 @@ class _TaxScreenState extends State<TaxScreen> {
       backgroundColor: _white,
       appBar: AppBar(
         backgroundColor: _darkBlue,
-        title: const Text('Tax Management'),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Tax Management', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             icon: const Icon(Icons.download_outlined),

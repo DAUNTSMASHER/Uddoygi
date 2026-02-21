@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +22,7 @@ class SalesReportScreen extends StatefulWidget {
 }
 
 class _SalesReportScreenState extends State<SalesReportScreen> {
+  String _cid = '';
   // —— UI scale ——
   static const double _fontSmall = 12;
   static const double _fontRegular = 14;
@@ -45,12 +48,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _fetchTarget();
   }
 
   Future<void> _fetchTarget() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('targets')
+    final snap = await DB.colSync(_cid, C.targets)
         .doc(_agentEmail)
         .get();
 
@@ -153,8 +158,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         'timestamp': FieldValue.serverTimestamp(),
       };
 
-      await FirebaseFirestore.instance
-          .collection('marketing_incentives')
+      await DB.colSync(_cid, C.marketingIncentives)
           .doc(docId)
           .set(data);
 
@@ -476,8 +480,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     return Scaffold(
       backgroundColor: _surface,
       appBar: AppBar(
-        title: const Text('Sales Report'),
+        title: const Text('Sales Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       bottomNavigationBar: (_selectedMonth == null)
           ? null
@@ -495,8 +501,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             onPressed: (_submitting || isSubmitted)
                 ? null
                 : () async {
-              final qs = await FirebaseFirestore.instance
-                  .collection('invoices')
+              final qs = await DB.colSync(_cid, C.invoices)
                   .where('agentEmail', isEqualTo: _agentEmail)
                   .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(getMonthStart()))
                   .where('timestamp', isLessThan: Timestamp.fromDate(getMonthEnd()))
@@ -547,8 +552,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             else
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('invoices')
+                  stream: DB.colSync(_cid, C.invoices)
                       .where('agentEmail', isEqualTo: _agentEmail)
                       .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(getMonthStart()))
                       .where('timestamp', isLessThan: Timestamp.fromDate(getMonthEnd()))

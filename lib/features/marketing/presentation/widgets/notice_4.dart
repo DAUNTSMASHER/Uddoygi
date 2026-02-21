@@ -1,5 +1,7 @@
 // lib/widgets/notice_4.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -33,6 +35,7 @@ class CommentSettingsSheet extends StatefulWidget {
 }
 
 class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
+  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   CommentPermission _perm = CommentPermission.anyone;
@@ -42,6 +45,9 @@ class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _perm = widget.initial;
     _resolvedEmail =
         widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '';
@@ -54,7 +60,7 @@ class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
   Future<void> _loadFromFirestore() async {
     setState(() => _loading = true);
     try {
-      final doc = await FirebaseFirestore.instance
+      final doc = await DB.firestore
           .collection(widget.settingsCollection)
           .doc(_resolvedEmail)
           .get();
@@ -75,7 +81,7 @@ class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
       'commentPermission': _permToString(p),
       'updatedAt': FieldValue.serverTimestamp(),
     };
-    await FirebaseFirestore.instance
+    await DB.firestore
         .collection(widget.settingsCollection)
         .doc(_resolvedEmail)
         .set(map, SetOptions(merge: true));

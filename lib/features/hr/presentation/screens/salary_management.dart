@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -12,6 +14,7 @@ class SalaryManagementScreen extends StatefulWidget {
 }
 
 class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
+  String _cid = '';
   String? _selectedEmployee;
   DateTime? _selectedMonth;
   final _salaryController = TextEditingController();
@@ -19,7 +22,7 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
   final _deductionController = TextEditingController();
 
   Future<void> _exportPDF(List<QueryDocumentSnapshot> salaries) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     pdf.addPage(
       pw.Page(
         build: (pw.Context context) => pw.Column(
@@ -80,9 +83,9 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
                   'deduction': double.tryParse(_deductionController.text) ?? 0.0,
                 };
                 if (isEdit) {
-                  await FirebaseFirestore.instance.collection('salaries').doc(doc.id).update(data);
+                  await DB.colSync(_cid, C.salaries).doc(doc.id).update(data);
                 } else {
-                  await FirebaseFirestore.instance.collection('salaries').add(data);
+                  await DB.colSync(_cid, C.salaries).add(data);
                 }
                 Navigator.pop(context);
               },
@@ -107,18 +110,28 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
     }
     return true;
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Salary Management'),
+        title: const Text('Salary Management', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: () async {
-              final snapshot = await FirebaseFirestore.instance.collection('salaries').get();
+              final snapshot = await DB.colSync(_cid, C.salaries).get();
               _exportPDF(snapshot.docs);
             },
           )
@@ -162,7 +175,7 @@ class _SalaryManagementScreenState extends State<SalaryManagementScreen> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('salaries').snapshots(),
+              stream: DB.colSync(_cid, C.salaries).snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 

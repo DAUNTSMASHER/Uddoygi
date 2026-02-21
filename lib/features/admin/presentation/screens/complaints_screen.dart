@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 
 class ComplaintsScreen extends StatefulWidget {
@@ -9,10 +11,11 @@ class ComplaintsScreen extends StatefulWidget {
 }
 
 class _ComplaintsScreenState extends State<ComplaintsScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  String _cid = '';
+  final FirebaseFirestore _firestore = DB.firestore;
 
   Future<void> _addRecommendation(String complaintId, String recommendation) async {
-    await _firestore.collection('complaints').doc(complaintId).update({
+    await DB.colSync(_cid, C.complaints).doc(complaintId).update({
       'recommendation': recommendation,
       'status': 'forwarded_to_hr',
       'adminUpdatedAt': Timestamp.now(),
@@ -55,6 +58,14 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
       ),
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -62,12 +73,15 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
       appBar: AppBar(
         title: const Text(
           'Complaints Management',
-          style: TextStyle(color: Colors.white), // Changed to white
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
+        backgroundColor: const Color(0xFF5B21B6),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('complaints').orderBy('timestamp', descending: true).snapshots(),
+        stream: DB.colSync(_cid, C.complaints).orderBy('timestamp', descending: true).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Center(child: Text('Something went wrong.'));

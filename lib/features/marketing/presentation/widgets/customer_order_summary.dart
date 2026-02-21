@@ -16,6 +16,7 @@
 //   fl_chart: ^0.68.0
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -36,11 +37,15 @@ class CustomerOrderSummary extends StatefulWidget {
 }
 
 class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
+  String _cid = '';
   String? agentEmail;
 
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadUserEmail();
   }
 
@@ -98,7 +103,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
           curve: Curves.easeOutCubic,
           builder: (_, val, __) => Text(
             isMoney ? _formatCurrency(val) : val.toStringAsFixed(0),
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ubuntu(
               fontSize: 18,
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -108,7 +113,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
         const SizedBox(height: 2),
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ubuntu(
             fontSize: 12,
             color: Colors.white70,
             fontWeight: FontWeight.w600,
@@ -126,7 +131,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
           value: 1,
           color: Colors.blueGrey.shade100,
           title: 'No data',
-          titleStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54),
+          titleStyle: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54),
         ),
       ];
     }
@@ -136,14 +141,14 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
         color: Colors.green.shade500,
         title: 'Shipped\n${((shipped / total) * 100).toStringAsFixed(0)}%',
         radius: 48,
-        titleStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+        titleStyle: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
       ),
       PieChartSectionData(
         value: pending.toDouble(),
         color: Colors.orange.shade500,
         title: 'Pending\n${((pending / total) * 100).toStringAsFixed(0)}%',
         radius: 48,
-        titleStyle: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+        titleStyle: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
       ),
     ];
   }
@@ -201,7 +206,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
                       '${_formatCurrency(grandTotal)} • Qty: $quantity',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ubuntu(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         color: Colors.indigo.shade900,
@@ -239,7 +244,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
                         'Note: ${data['note']}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ubuntu(
                           fontSize: 10,                 // was 12
                           fontWeight: FontWeight.w400,  // was w500-ish
                           color: Colors.blueGrey.shade500,
@@ -279,7 +284,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
           Text(
             text,
             // ↓↓↓ size 10, weight 400 per your spec
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ubuntu(
               fontSize: 10,
               fontWeight: FontWeight.w400,
               color: color,
@@ -293,7 +298,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = GoogleFonts.inter(fontWeight: FontWeight.w800);
+    final titleStyle = GoogleFonts.ubuntu(fontWeight: FontWeight.w800);
     final perCustomer = (widget.email.trim().isNotEmpty);
 
     return Scaffold(
@@ -362,7 +367,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
             alignment: Alignment.centerLeft,
             child: Text(
               'Order Status Distribution',
-              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900),
+              style: GoogleFonts.ubuntu(fontSize: 16, fontWeight: FontWeight.w900),
             ),
           ),
           const SizedBox(height: 10),
@@ -401,7 +406,7 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
             alignment: Alignment.centerLeft,
             child: Text(
               'Detailed Orders',
-              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w900),
+              style: GoogleFonts.ubuntu(fontSize: 16, fontWeight: FontWeight.w900),
             ),
           ),
           const SizedBox(height: 10),
@@ -423,7 +428,8 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
    AGENT header (stats) + PER-CUSTOMER order list
 ============================================================================ */
 
-class _AgentHeaderPlusCustomerList extends StatelessWidget {
+class _AgentHeaderPlusCustomerList extends StatefulWidget {
+
   final String agentEmail;
   final String customerEmail;
   final Widget Function({
@@ -443,6 +449,13 @@ class _AgentHeaderPlusCustomerList extends StatelessWidget {
     required this.buildOrderCard,
   });
 
+  @override
+  State<_AgentHeaderPlusCustomerList> createState() => _AgentHeaderPlusCustomerListState();
+}
+
+class _AgentHeaderPlusCustomerListState extends State<_AgentHeaderPlusCustomerList> {
+  String _cid = '';
+
   int _extractQty(dynamic value) {
     if (value is int) return value;
     if (value is double) return value.toInt();
@@ -457,18 +470,24 @@ class _AgentHeaderPlusCustomerList extends StatelessWidget {
   }
 
   @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Stream ALL invoices for this agent (for header/pie)
-    final agentInvoicesQ = FirebaseFirestore.instance
-        .collection('invoices')
-        .where('agentEmail', isEqualTo: agentEmail)
+    final agentInvoicesQ = DB.colSync(_cid, C.invoices)
+        .where('agentEmail', isEqualTo: widget.agentEmail)
         .orderBy('timestamp', descending: true);
 
     // Stream ONLY this customer's invoices for this agent (for list)
-    final customerInvoicesQ = FirebaseFirestore.instance
-        .collection('invoices')
-        .where('agentEmail', isEqualTo: agentEmail)
-        .where('customerEmail', isEqualTo: customerEmail)
+    final customerInvoicesQ = DB.colSync(_cid, C.invoices)
+        .where('agentEmail', isEqualTo: widget.agentEmail)
+        .where('customerEmail', isEqualTo: widget.customerEmail)
         .orderBy('timestamp', descending: true);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -489,7 +508,7 @@ class _AgentHeaderPlusCustomerList extends StatelessWidget {
           final data = doc.data();
           final grandTotal = _toDouble(data['grandTotal']);
           final items = data['items'] as List<dynamic>? ?? const [];
-          final quantity = items.fold<int>(0, (sum, item) => sum + _extractQty(item['qty']));
+          final quantity = items.fold<int>(0, (sum, item) => (sum + _extractQty(item['qty'])).toInt());
           final status = (data['status'] ?? 'Pending').toString();
 
           agentTotalAmount += grandTotal;
@@ -509,13 +528,13 @@ class _AgentHeaderPlusCustomerList extends StatelessWidget {
             final customerOrders = custSnap.data!.docs;
 
             // Pass agent stats + customer orders list to the shared header renderer
-            return buildHeader(
-              ordersCount: agentOrders.length,         // agent-wide count (dashboard)
-              totalAmount: agentTotalAmount,           // agent-wide total
-              totalQuantity: agentTotalQuantity,       // agent-wide quantity
-              shipped: shipped,                        // agent-wide shipped
-              pending: pending,                        // agent-wide pending
-              orders: customerOrders,                  // LIST shows this customer's orders
+            return widget.buildHeader(
+              ordersCount: agentOrders.length,
+              totalAmount: agentTotalAmount,
+              totalQuantity: agentTotalQuantity,
+              shipped: shipped,
+              pending: pending,
+              orders: customerOrders,
             );
           },
         );
@@ -528,7 +547,8 @@ class _AgentHeaderPlusCustomerList extends StatelessWidget {
    MODE B: Agent-wide invoices stream (ALL orders for this agent)
 ============================================================================ */
 
-class _AgentAllInvoices extends StatelessWidget {
+class _AgentAllInvoices extends StatefulWidget {
+
   final String agentEmail;
   final Widget Function({
   required int ordersCount,
@@ -546,6 +566,13 @@ class _AgentAllInvoices extends StatelessWidget {
     required this.buildOrderCard,
   });
 
+  @override
+  State<_AgentAllInvoices> createState() => _AgentAllInvoicesState();
+}
+
+class _AgentAllInvoicesState extends State<_AgentAllInvoices> {
+  String _cid = '';
+
   int _extractQty(dynamic value) {
     if (value is int) return value;
     if (value is double) return value.toInt();
@@ -560,11 +587,18 @@ class _AgentAllInvoices extends StatelessWidget {
   }
 
   @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Stream ALL invoices for this agent (header + list)
-    final invoicesQ = FirebaseFirestore.instance
-        .collection('invoices')
-        .where('agentEmail', isEqualTo: agentEmail)
+    final invoicesQ = DB.colSync(_cid, C.invoices)
+        .where('agentEmail', isEqualTo: widget.agentEmail)
         .orderBy('timestamp', descending: true);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -586,7 +620,7 @@ class _AgentAllInvoices extends StatelessWidget {
                   Icon(Icons.inbox_outlined, size: 48, color: Colors.blueGrey.shade300),
                   const SizedBox(height: 10),
                   Text('No orders for this agent yet.',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w900)),
+                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
                 ],
               ),
             ),
@@ -602,7 +636,7 @@ class _AgentAllInvoices extends StatelessWidget {
           final data = doc.data();
           final grandTotal = _toDouble(data['grandTotal']);
           final items = data['items'] as List<dynamic>? ?? const [];
-          final quantity = items.fold<int>(0, (sum, item) => sum + _extractQty(item['qty']));
+          final quantity = items.fold<int>(0, (sum, item) => (sum + _extractQty(item['qty'])).toInt());
           final status = (data['status'] ?? 'Pending').toString();
 
           totalAmount += grandTotal;
@@ -611,13 +645,13 @@ class _AgentAllInvoices extends StatelessWidget {
           if (status.toLowerCase() == 'pending') pending++;
         }
 
-        return buildHeader(
+        return widget.buildHeader(
           ordersCount: orders.length,
           totalAmount: totalAmount,
           totalQuantity: totalQuantity,
           shipped: shipped,
           pending: pending,
-          orders: orders, // list = agent-wide
+          orders: orders,
         );
       },
     );

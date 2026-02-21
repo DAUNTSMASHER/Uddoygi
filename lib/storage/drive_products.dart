@@ -9,8 +9,10 @@ import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 // your target Drive folder
 const String _driveFolderId = '14Qws-stNhY1966KoPECG95nyY1c4bITw';
 
@@ -34,6 +36,7 @@ class DriveProductPage extends StatefulWidget {
 }
 
 class _DriveProductPageState extends State<DriveProductPage> {
+  String _cid = '';
   bool _loading = false;
   double _progress = 0.0;
 
@@ -49,6 +52,9 @@ class _DriveProductPageState extends State<DriveProductPage> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _googleSignIn.onCurrentUserChanged.listen((acct) {
       _currentUser = acct;
     });
@@ -142,8 +148,7 @@ class _DriveProductPageState extends State<DriveProductPage> {
       final url = 'https://drive.google.com/uc?id=${created.id}';
 
       // update Firestore
-      await FirebaseFirestore.instance
-          .collection('products')
+      await DB.colSync(_cid, C.products)
           .doc(widget.productId)
           .update({'imageUrl': url});
 
@@ -161,8 +166,10 @@ class _DriveProductPageState extends State<DriveProductPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Upload Product Image'),
+        title: const Text('Upload Product Image', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Center(
         child: _loading

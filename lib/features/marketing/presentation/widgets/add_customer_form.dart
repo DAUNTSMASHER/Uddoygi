@@ -24,6 +24,8 @@ import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class AddCustomerForm extends StatefulWidget {
   final String userId;
@@ -40,6 +42,7 @@ class AddCustomerForm extends StatefulWidget {
 }
 
 class _AddCustomerFormState extends State<AddCustomerForm> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
@@ -52,7 +55,8 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
   final _zipCtrl = TextEditingController();
   final _countryCtrl = TextEditingController();
 
-  late final String _agentName;
+  // Agent name — loaded from Firestore; falls back to email local-part
+  String _agentName = '';
 
   // Country state
   String _countryName = '';
@@ -62,7 +66,34 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
   @override
   void initState() {
     super.initState();
-    _agentName = _extractAgentName(widget.email);
+    _init();
+  }
+
+  Future<void> _init() async {
+    final id = await LocalStorageService.getSavedCompanyId();
+    if (!mounted) return;
+    setState(() => _cid = id ?? '');
+    await _loadAgentName();
+  }
+
+  Future<void> _loadAgentName() async {
+    if (_cid.isEmpty || widget.userId.isEmpty) {
+      setState(() => _agentName = _extractAgentName(widget.email));
+      return;
+    }
+    try {
+      final snap = await DB.colSync(_cid, 'users').doc(widget.userId).get();
+      if (!mounted) return;
+      final data = snap.data();
+      final fullName = (data?['fullName'] ?? data?['name'] ?? data?['displayName'] ?? '')
+          .toString()
+          .trim();
+      setState(() {
+        _agentName = fullName.isNotEmpty ? fullName : _extractAgentName(widget.email);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _agentName = _extractAgentName(widget.email));
+    }
   }
 
   @override
@@ -99,7 +130,7 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
           prefixIcon: const Icon(Icons.search),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        textStyle: GoogleFonts.inter(),
+        textStyle: GoogleFonts.ubuntu(),
       ),
       onSelect: (Country c) {
         setState(() {
@@ -132,7 +163,7 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
       'timestamp': Timestamp.now(),
     };
 
-    await FirebaseFirestore.instance.collection('customers').add(data);
+    await (await DB.col(C.customers)).add(data);
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -158,9 +189,9 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800);
-    final labelStyle = GoogleFonts.inter(fontWeight: FontWeight.w600);
-    final helperStyle = GoogleFonts.inter(fontSize: 12, color: Colors.grey[600]);
+    final titleStyle = GoogleFonts.ubuntu(fontSize: 18, fontWeight: FontWeight.w800);
+    final labelStyle = GoogleFonts.ubuntu(fontWeight: FontWeight.w600);
+    final helperStyle = GoogleFonts.ubuntu(fontSize: 12, color: Colors.grey[600]);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -199,7 +230,7 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(color: Colors.indigo.withOpacity(.2)),
                           ),
-                          child: Text('Agent: $_agentName', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                          child: Text('Agent: $_agentName', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -245,7 +276,7 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
                                 const SizedBox(width: 6),
                                 Text(
                                   _phoneCountryCode.isEmpty ? '+ Code' : '+$_phoneCountryCode',
-                                  style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: Colors.indigo),
+                                  style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: Colors.indigo),
                                 ),
                                 const SizedBox(width: 6),
                                 const Icon(Icons.expand_more, size: 16, color: Colors.indigo),
@@ -326,7 +357,7 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.check_circle_outline),
-                        label: Text('Submit', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+                        label: Text('Submit', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.indigo,
                           foregroundColor: Colors.white,
@@ -386,10 +417,10 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
         keyboardType: keyboardType,
         textInputAction: textInputAction,
         inputFormatters: inputFormatters,
-        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+        style: GoogleFonts.ubuntu(fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, color: Colors.grey[700]),
+          labelStyle: GoogleFonts.ubuntu(fontWeight: FontWeight.w600, color: Colors.grey[700]),
           filled: true,
           fillColor: const Color(0xFFF7F9FC),
           prefixIcon: icon == null ? null : Icon(icon, color: Colors.indigo),

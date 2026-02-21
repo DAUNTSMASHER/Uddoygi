@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -29,6 +31,7 @@ class BudgetPage extends StatefulWidget {
 }
 
 class _BudgetPageState extends State<BudgetPage> {
+  String _cid = '';
   final DateTime _now = DateTime.now();
   late final String _periodNowDisplay = _displayFromDate(_now);
   late final String _periodNowKey = _keyFromDate(_now);
@@ -36,7 +39,7 @@ class _BudgetPageState extends State<BudgetPage> {
   /// Open-or-create a budget document at a STABLE id (yyyy-MM) so
   /// Firestore physically cannot have more than one doc for that month.
   Future<DocumentReference<Map<String, dynamic>>> _openOrCreateMonth(String periodKey, String periodDisplay) async {
-    final ref = FirebaseFirestore.instance.collection('budgets').doc(periodKey);
+    final ref = DB.colSync(_cid, C.budgets).doc(periodKey);
     final snap = await ref.get();
     if (snap.exists) return ref;
 
@@ -56,8 +59,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
   /// Legacy-friendly finder (for safety with old data that may not use the stable id yet)
   Future<DocumentSnapshot<Map<String, dynamic>>?> _findLegacyByDisplay(String periodDisplay) async {
-    final q = await FirebaseFirestore.instance
-        .collection('budgets')
+    final q = await DB.colSync(_cid, C.budgets)
         .where('period', isEqualTo: periodDisplay)
         .limit(1)
         .get();
@@ -74,11 +76,18 @@ class _BudgetPageState extends State<BudgetPage> {
     if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
     return 0;
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    final budgetsStream = FirebaseFirestore.instance
-        .collection('budgets')
+    final budgetsStream = DB.colSync(_cid, C.budgets)
     // order by most recent month if available, else createdAt
         .orderBy('periodKey', descending: true)
         .orderBy('createdAt', descending: true)
@@ -88,7 +97,9 @@ class _BudgetPageState extends State<BudgetPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: _green,
-        title: const Text('Budget Overview', style: TextStyle(color: Colors.white)),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Budget Overview', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             icon: const Icon(Icons.addchart, color: Colors.white),

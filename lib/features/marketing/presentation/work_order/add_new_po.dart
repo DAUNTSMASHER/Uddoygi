@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
@@ -16,6 +18,7 @@ class AddNewPurchaseOrderScreen extends StatefulWidget {
 }
 
 class _AddNewPurchaseOrderScreenState extends State<AddNewPurchaseOrderScreen> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
 
   // Invoices
@@ -36,6 +39,9 @@ class _AddNewPurchaseOrderScreenState extends State<AddNewPurchaseOrderScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadInvoices();
     _loadProducts();
   }
@@ -48,8 +54,7 @@ class _AddNewPurchaseOrderScreenState extends State<AddNewPurchaseOrderScreen> {
 
   Future<void> _loadInvoices() async {
     final userEmail = FirebaseAuth.instance.currentUser?.email;
-    final snap = await FirebaseFirestore.instance
-        .collection('invoices')
+    final snap = await DB.colSync(_cid, C.invoices)
         .where('agentEmail', isEqualTo: userEmail)
         .orderBy('timestamp', descending: true)
         .get();
@@ -57,8 +62,7 @@ class _AddNewPurchaseOrderScreenState extends State<AddNewPurchaseOrderScreen> {
   }
 
   Future<void> _loadProducts() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('products')
+    final snap = await DB.colSync(_cid, C.products)
         .orderBy('model_name')
         .get();
     setState(() => _products = snap.docs);
@@ -340,8 +344,7 @@ class _AddNewPurchaseOrderScreenState extends State<AddNewPurchaseOrderScreen> {
       'timestamp': Timestamp.now(),
     };
 
-    await FirebaseFirestore.instance
-        .collection('purchase_orders')
+    await DB.colSync(_cid, C.purchaseOrders)
         .doc(poNo)
         .set(poData);
 
@@ -357,9 +360,10 @@ class _AddNewPurchaseOrderScreenState extends State<AddNewPurchaseOrderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()),
-        title: const Text('New Purchase Order'),
+        title: const Text('New Purchase Order', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

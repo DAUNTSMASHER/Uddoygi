@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -13,17 +15,21 @@ class LeaveManagementScreen extends StatefulWidget {
 }
 
 class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
+  String _cid = '';
   int approved = 0, rejected = 0, pending = 0;
   bool showNewAlert = false;
 
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _fetchLeaveStats();
   }
 
   Future<void> _fetchLeaveStats() async {
-    final snapshot = await FirebaseFirestore.instance.collection('leaves').get();
+    final snapshot = await DB.colSync(_cid, C.leaves).get();
     int a = 0, r = 0, p = 0;
 
     for (var doc in snapshot.docs) {
@@ -43,7 +49,7 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
   }
 
   Future<void> _exportPDF(List<QueryDocumentSnapshot> leaves) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
 
     pdf.addPage(
       pw.Page(
@@ -73,12 +79,12 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
   }
 
   void _updateLeaveStatus(String id, String status) async {
-    await FirebaseFirestore.instance.collection('leaves').doc(id).update({'status': status});
+    await DB.colSync(_cid, C.leaves).doc(id).update({'status': status});
     _fetchLeaveStats();
   }
 
   void _deleteLeave(String id) async {
-    await FirebaseFirestore.instance.collection('leaves').doc(id).delete();
+    await DB.colSync(_cid, C.leaves).doc(id).delete();
     _fetchLeaveStats();
   }
 
@@ -147,9 +153,9 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
                 };
 
                 if (isEdit) {
-                  await FirebaseFirestore.instance.collection('leaves').doc(doc.id).update(data);
+                  await DB.colSync(_cid, C.leaves).doc(doc.id).update(data);
                 } else {
-                  await FirebaseFirestore.instance.collection('leaves').add(data);
+                  await DB.colSync(_cid, C.leaves).add(data);
                 }
 
                 Navigator.pop(context);
@@ -194,8 +200,10 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Leave Management'),
+        title: const Text('Leave Management', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           Icon(Icons.notifications, color: showNewAlert ? Colors.yellow : Colors.white),
           const SizedBox(width: 10),
@@ -208,8 +216,7 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
         icon: const Icon(Icons.add),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('leaves')
+        stream: DB.colSync(_cid, C.leaves)
             .orderBy('appliedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {

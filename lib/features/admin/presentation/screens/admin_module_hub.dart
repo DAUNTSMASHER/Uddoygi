@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'admin_report_detail.dart';
-
 class AdminModuleHub extends StatelessWidget {
   final String title;
   final String? orgId;
@@ -73,15 +71,11 @@ class AdminModuleHub extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     onTap: () {
                       HapticFeedback.selectionClick();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AdminReportDetailPage(
-                            orgId: orgId,
-                            range: range,
-                            headTitle: title,
-                            label: label,
-                          ),
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('$title › $label'),
+                          behavior: SnackBarBehavior.floating,
+                          backgroundColor: const Color(0xFF5B21B6),
                         ),
                       );
                     },

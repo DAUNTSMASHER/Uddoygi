@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/profile.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 
 const Color _darkBlue = Color(0xFFD51616);
 
@@ -14,6 +15,7 @@ class FactoryDrawer extends StatefulWidget {
 }
 
 class _FactoryDrawerState extends State<FactoryDrawer> {
+  String _cid = '';
   String? _uid;
   String _name = 'User';
   String _email = '';
@@ -22,6 +24,9 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _uid = FirebaseAuth.instance.currentUser?.uid;
     _loadSession();
     if (_uid != null) _listenProfile();
@@ -35,8 +40,7 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
   }
 
   void _listenProfile() {
-    FirebaseFirestore.instance
-        .collection('users')
+    DB.colSync(_cid, C.users)
         .doc(_uid)
         .snapshots()
         .listen((snap) {
@@ -54,8 +58,7 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
   }
 
   Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-    await LocalStorageService.clearSession();
+    await LocalStorageService.performLogout();
     if (mounted) Navigator.pushReplacementNamed(context, '/login');
   }
 
@@ -109,7 +112,7 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
                             ),
                           );
                         },
-                        child: const Text('View Profile',
+                        child: const Text('প্রোফাইল দেখুন',
                             style: TextStyle(color: Colors.white70, fontSize: 14)),
                       ),
                     ],
@@ -133,20 +136,20 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
           ),
 
           // Menu items
-          _tile(context, Icons.dashboard, 'Dashboard', '/factory/dashboard'),
-          _tile(context, Icons.notifications_active, 'Notices', '/factory/notices'),
-          _tile(context, Icons.volunteer_activism, 'Welfare', '/common/welfare'),
-          _tile(context, Icons.message, 'Messages', '/common/messages'),
-          _tile(context, Icons.work, 'Work Orders', '/factory/work_orders'),
-          _tile(context, Icons.request_page, 'Resource Requests',
+          _tile(context, Icons.dashboard, 'ড্যাশবোর্ড', '/factory/dashboard'),
+          _tile(context, Icons.notifications_active, 'নোটিশ', '/factory/notices'),
+          _tile(context, Icons.volunteer_activism, 'কল্যাণ', '/common/welfare'),
+          _tile(context, Icons.message, 'বার্তা', '/common/messages'),
+          _tile(context, Icons.work, 'ওয়ার্ক অর্ডার', '/factory/work_orders'),
+          _tile(context, Icons.request_page, 'রিসোর্স অনুরোধ',
               '/factory/resource_requests'),
-          _tile(context, Icons.update, 'Progress Update',
+          _tile(context, Icons.update, 'অগ্রগতি আপডেট',
               '/factory/progress_update'),
           _tile(
-              context, Icons.event_available, 'Attendance', '/factory/attendance'),
-          _tile(context, Icons.request_page, 'Loan Requests',
+              context, Icons.event_available, 'উপস্থিতি', '/factory/attendance'),
+          _tile(context, Icons.request_page, 'ঋণের আবেদন',
               '/factory/loan_requests'),
-          _tile(context, Icons.money_off, 'Salary & Overtime',
+          _tile(context, Icons.money_off, 'বেতন ও ওভারটাইম',
               '/factory/salary_overtime'),
 
           const Spacer(),
@@ -155,7 +158,7 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
           ListTile(
             leading: const Icon(Icons.logout, color: _darkBlue),
             title:
-            const Text('Logout', style: TextStyle(color: _darkBlue)),
+            const Text('লগআউট', style: TextStyle(color: _darkBlue)),
             onTap: _logout,
           ),
           const SizedBox(height: 12),

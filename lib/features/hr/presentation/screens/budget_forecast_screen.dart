@@ -1,4 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -13,7 +15,16 @@ class BudgetForecastScreen extends StatefulWidget {
 }
 
 class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
+  String _cid = '';
   int selectedYear = DateTime.now().year;
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -21,8 +32,9 @@ class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.indigo,
-        title: const Text('Budget Forecast', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Budget Forecast', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
@@ -68,8 +80,7 @@ class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
 
   Widget _buildForecastList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('budget')
+      stream: DB.colSync(_cid, C.budget)
           .where('year', isEqualTo: selectedYear)
           .snapshots(),
       builder: (context, snapshot) {
@@ -127,8 +138,7 @@ class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => FirebaseFirestore.instance
-                                    .collection('budget')
+                                onPressed: () => DB.colSync(_cid, C.budget)
                                     .doc(item['id'])
                                     .delete(),
                               ),
@@ -215,7 +225,7 @@ class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
                   final amount = double.tryParse(amountController.text.trim()) ?? 0;
                   if (category.isEmpty || amount <= 0) return;
 
-                  await FirebaseFirestore.instance.collection('budget').add({
+                  await DB.colSync(_cid, C.budget).add({
                     'category': category,
                     'amount': amount,
                     'used': 0,
@@ -250,7 +260,7 @@ class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
           ElevatedButton(
             onPressed: () async {
               final newAmount = double.tryParse(amountController.text.trim()) ?? 0;
-              await FirebaseFirestore.instance.collection('budget').doc(item['id']).update({
+              await DB.colSync(_cid, C.budget).doc(item['id']).update({
                 'amount': newAmount,
               });
               Navigator.pop(context);
@@ -263,12 +273,11 @@ class _BudgetForecastScreenState extends State<BudgetForecastScreen> {
   }
 
   Future<void> _exportForecastPdf() async {
-    final query = await FirebaseFirestore.instance
-        .collection('budget')
+    final query = await DB.colSync(_cid, C.budget)
         .where('year', isEqualTo: selectedYear)
         .get();
 
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     final logs = query.docs;
 
     pdf.addPage(

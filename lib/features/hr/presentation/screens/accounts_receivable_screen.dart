@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// ========================= EXPENSES (count & add) =========================
 class ExpensesScreen extends StatefulWidget {
@@ -10,6 +12,7 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
+  String _cid = '';
   final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳');
   final _dateFmt = DateFormat('yyyy-MM-dd');
 
@@ -25,6 +28,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     final now = DateTime.now();
     _periodStart = DateTime(now.year, now.month, 1);
     _periodEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
@@ -32,8 +38,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   Query _query() {
     // Only reads expenses and counts/sums them; no payments involved.
-    return FirebaseFirestore.instance
-        .collection('expenses')
+    return DB.colSync(_cid, C.expenses)
         .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(_periodStart))
         .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(_periodEnd))
         .orderBy('dueDate');
@@ -396,11 +401,11 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final db = FirebaseFirestore.instance;
+    final db = DB.firestore;
     final now = Timestamp.now();
     final amount = double.parse(_amount.text.trim());
 
-    await db.collection('expenses').add({
+    await (await DB.col(C.expenses)).add({
       'vendor': _vendor.text.trim(),
       'category': _category,
       'amount': amount,
@@ -444,20 +449,34 @@ class ExpensesHistoryScreen extends StatelessWidget {
   }
 }
 
-class _MonthTile extends StatelessWidget {
+class _MonthTile extends StatefulWidget {
+
   final String label;
   final DateTime start;
   final DateTime end;
   const _MonthTile({required this.label, required this.start, required this.end});
+  @override
+  State<_MonthTile> createState() => _MonthTileState();
+}
+
+class _MonthTileState extends State<_MonthTile> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final money = NumberFormat.currency(locale: 'en_BD', symbol: '৳');
 
-    final q = FirebaseFirestore.instance
-        .collection('expenses')
-        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
+    final q = DB.colSync(_cid, C.expenses)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(widget.start))
+        .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(widget.end))
         .orderBy('dueDate');
 
     return StreamBuilder<QuerySnapshot>(
@@ -476,7 +495,7 @@ class _MonthTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             side: const BorderSide(color: Colors.black12),
           ),
-          title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          title: Text(widget.label, style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Text('Entries: $count'),
           trailing: Text(
             money.format(total),
@@ -484,7 +503,7 @@ class _MonthTile extends StatelessWidget {
           ),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => _MonthDetailPage(start: start, end: end, label: label),
+              builder: (_) => _MonthDetailPage(start: widget.start, end: widget.end, label: widget.label),
             ),
           ),
         );
@@ -493,32 +512,45 @@ class _MonthTile extends StatelessWidget {
   }
 
   static num _n(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v;
-    if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
-    return 0;
-  }
+      if (v == null) return 0;
+      if (v is num) return v;
+      if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
+      return 0;
+    }
 }
 
 /// Simple detail page to view that month’s expenses (read-only)
-class _MonthDetailPage extends StatelessWidget {
+class _MonthDetailPage extends StatefulWidget {
   final DateTime start, end;
   final String label;
-  _MonthDetailPage({required this.start, required this.end, required this.label, super.key});
+  const _MonthDetailPage({required this.start, required this.end, required this.label, super.key});
 
+  @override
+  State<_MonthDetailPage> createState() => _MonthDetailPageState();
+}
+
+class _MonthDetailPageState extends State<_MonthDetailPage> {
+  String _cid = '';
   final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳');
   final _dateFmt = DateFormat('yyyy-MM-dd');
 
   @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final q = FirebaseFirestore.instance
-        .collection('expenses')
-        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
+    final q = DB.colSync(_cid, C.expenses)
+        .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(widget.start))
+        .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(widget.end))
         .orderBy('dueDate');
 
     return Scaffold(
-      appBar: AppBar(title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+      appBar: AppBar(title: Text(widget.label, style: const TextStyle(fontWeight: FontWeight.w700))),
       body: StreamBuilder<QuerySnapshot>(
         stream: q.snapshots(),
         builder: (context, snap) {
@@ -536,7 +568,7 @@ class _MonthDetailPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                 child: _SummaryCardBig(
-                  title: 'Total for $label',
+                  title: 'Total for ${widget.label}',
                   value: _money.format(total),
                 ),
               ),
@@ -579,11 +611,11 @@ class _MonthDetailPage extends StatelessWidget {
   }
 
   static num _n(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v;
-    if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
-    return 0;
-  }
+      if (v == null) return 0;
+      if (v is num) return v;
+      if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
+      return 0;
+    }
 }
 
 /// ========================= Small UI bits =========================

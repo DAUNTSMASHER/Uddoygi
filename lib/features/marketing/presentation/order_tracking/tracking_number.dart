@@ -1,5 +1,7 @@
 // lib/features/factory/presentation/screens/tracking_number_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,12 +19,12 @@ class TrackingNumberPage extends StatefulWidget {
 }
 
 class _TrackingNumberPageState extends State<TrackingNumberPage> {
+  String _cid = '';
   String _search = '';
   bool _onlyMissing = true;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _validatedOrders() {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
+    return DB.colSync(_cid, C.workOrders)
         .where('currentStage', isEqualTo: _addressValidatedStage)
         .orderBy('lastUpdated', descending: true)
         .snapshots();
@@ -46,9 +48,9 @@ class _TrackingNumberPageState extends State<TrackingNumberPage> {
     final user = FirebaseAuth.instance.currentUser;
     final assignedTo = user?.email ?? user?.uid ?? '';
 
-    final batch = FirebaseFirestore.instance.batch();
+    final batch = DB.firestore.batch();
 
-    final trackRef = FirebaseFirestore.instance.collection('work_order_tracking').doc();
+    final trackRef = DB.colSync(_cid, C.workOrderTracking).doc();
     batch.set(trackRef, {
       'workOrderNo': workOrderNo,
       'stage': _stageShippedFedex,
@@ -72,6 +74,14 @@ class _TrackingNumberPageState extends State<TrackingNumberPage> {
       SnackBar(content: Text('WO $workOrderNo moved to “$_stageShippedFedex”.')),
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +91,7 @@ class _TrackingNumberPageState extends State<TrackingNumberPage> {
       backgroundColor: const Color(0xFFF7F8FB),
       appBar: AppBar(
         elevation: 0,
+        foregroundColor: Colors.white,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -91,7 +102,7 @@ class _TrackingNumberPageState extends State<TrackingNumberPage> {
           ),
         ),
         titleSpacing: 0,
-        title: const Text('FedEx Tracking', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('FedEx Tracking', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(36),
           child: Padding(

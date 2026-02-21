@@ -10,6 +10,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 const Color _peach = Color(0xFFFF8A65);
@@ -291,22 +293,36 @@ class _BoardItem {
 /// —————————————————————————————————————————————————————
 /// PAGE
 /// —————————————————————————————————————————————————————
-class FactoryTrackingPage extends StatelessWidget {
+class FactoryTrackingPage extends StatefulWidget {
   const FactoryTrackingPage({Key? key}) : super(key: key);
 
-  TextStyle get _font10 => GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: _darkBlue);
-  TextStyle get _font9  => GoogleFonts.inter(fontSize: 9,  fontWeight: FontWeight.w700, color: _darkBlue);
-  TextStyle get _font8  => GoogleFonts.inter(fontSize: 8,  fontWeight: FontWeight.w900, color: _darkBlue);
-  TextStyle get _font6d => GoogleFonts.inter(fontSize: 6,  fontWeight: FontWeight.w700, color: Colors.grey.shade700);
-  TextStyle get _font6l => GoogleFonts.inter(fontSize: 6,  fontWeight: FontWeight.w700, color: _darkBlue);
+  @override
+  State<FactoryTrackingPage> createState() => _FactoryTrackingPageState();
+}
+
+class _FactoryTrackingPageState extends State<FactoryTrackingPage> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  TextStyle get _font10 => GoogleFonts.ubuntu(fontSize: 10, fontWeight: FontWeight.w800, color: _darkBlue);
+  TextStyle get _font9  => GoogleFonts.ubuntu(fontSize: 9,  fontWeight: FontWeight.w700, color: _darkBlue);
+  TextStyle get _font8  => GoogleFonts.ubuntu(fontSize: 8,  fontWeight: FontWeight.w900, color: _darkBlue);
+  TextStyle get _font6d => GoogleFonts.ubuntu(fontSize: 6,  fontWeight: FontWeight.w700, color: Colors.grey.shade700);
+  TextStyle get _font6l => GoogleFonts.ubuntu(fontSize: 6,  fontWeight: FontWeight.w700, color: _darkBlue);
 
   /// Stream of ONLY my local tracking numbers (deduped by tracking_number)
   Stream<List<_BoardItem>> _myLocalTrackingBoard() {
     final userEmail = FirebaseAuth.instance.currentUser?.email ?? '';
     if (userEmail.isEmpty) return const Stream.empty();
 
-    final q = FirebaseFirestore.instance
-        .collection('work_orders')
+    final q = DB.colSync(_cid, C.workOrders)
         .where('agentEmail', isEqualTo: userEmail)
         .snapshots();
 
@@ -376,8 +392,7 @@ class FactoryTrackingPage extends StatelessWidget {
 
   /// All updates for a WO — ascending by createdAt (for timeline)
   Stream<List<Map<String, dynamic>>> _updatesForAsc(String woNo) {
-    return FirebaseFirestore.instance
-        .collection('work_order_tracking')
+    return DB.colSync(_cid, C.workOrderTracking)
         .where('workOrderNo', isEqualTo: woNo)
         .orderBy('createdAt', descending: false)
         .snapshots()
@@ -386,13 +401,12 @@ class FactoryTrackingPage extends StatelessWidget {
 
   Future<Map<String, dynamic>?> _invoiceMeta(String? invoiceId) async {
     if (invoiceId == null || invoiceId.isEmpty) return null;
-    final d = await FirebaseFirestore.instance.collection('invoices').doc(invoiceId).get();
+    final d = await (await DB.col(C.invoices)).doc(invoiceId).get();
     return d.data();
   }
 
   Future<Map<String, dynamic>?> _orderMeta(String woNo) async {
-    final q = await FirebaseFirestore.instance
-        .collection('work_orders')
+    final q = await (await DB.col(C.workOrders))
         .where('workOrderNo', isEqualTo: woNo)
         .limit(1)
         .get();
@@ -411,7 +425,7 @@ class FactoryTrackingPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: _surface,
       appBar: AppBar(
-        title: Text('My Tracking Board', style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+        title: Text('My Tracking Board', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800)),
         centerTitle: true,
         elevation: 0,
         backgroundColor: _darkBlue,
@@ -433,7 +447,7 @@ class FactoryTrackingPage extends StatelessWidget {
                     const Icon(Icons.local_shipping_outlined, color: _darkBlue),
                     const SizedBox(width: 10),
                     Text('No tracking numbers yet',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ubuntu(
                           color: Colors.grey.shade700,
                           fontWeight: FontWeight.w700,
                         )),
@@ -694,7 +708,7 @@ class _TrackingBoardCard extends StatelessWidget {
 /// —————————————————————————————————————————————————————
 /// DETAILS SHEET — includes "Move to Address validation" button
 /// —————————————————————————————————————————————————————
-class _TrackingDetailsSheet extends StatelessWidget {
+class _TrackingDetailsSheet extends StatefulWidget {
   const _TrackingDetailsSheet({
     required this.item,
     required this.orderMeta,
@@ -705,35 +719,46 @@ class _TrackingDetailsSheet extends StatelessWidget {
   final Map<String, dynamic>? orderMeta;
   final Stream<List<Map<String, dynamic>>> updatesStream;
 
-  /// Treat statuses that *start with* "Done" (case-insensitive) as Done.
+  @override
+  State<_TrackingDetailsSheet> createState() => _TrackingDetailsSheetState();
+}
+
+class _TrackingDetailsSheetState extends State<_TrackingDetailsSheet> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   bool _isDoneStatus(dynamic v) {
     final s = (v ?? '').toString().trim().toLowerCase();
     return s == 'done' || s.startsWith('done');
   }
 
   Future<void> _markAddressValidation(BuildContext context) async {
-    final db = FirebaseFirestore.instance;
+    final db = DB.firestore;
     final now = FieldValue.serverTimestamp();
 
-    // Find the work_orders doc by id or by workOrderNo
     Future<DocumentReference<Map<String, dynamic>>> _resolveWorkOrderRef() async {
-      final direct = db.collection('work_orders').doc(item.workOrderNo);
+      final direct = (await DB.col(C.workOrders)).doc(widget.item.workOrderNo);
       final directSnap = await direct.get();
       if (directSnap.exists) return direct;
 
-      final q = await db
-          .collection('work_orders')
-          .where('workOrderNo', isEqualTo: item.workOrderNo)
+      final q = await (await DB.col(C.workOrders))
+          .where('workOrderNo', isEqualTo: widget.item.workOrderNo)
           .limit(1)
           .get();
       if (q.docs.isNotEmpty) return q.docs.first.reference;
 
-      // Fallback to direct (will fail if missing, but keeps transaction shape)
       return direct;
     }
 
     final woRef = await _resolveWorkOrderRef();
-    final trkCol = db.collection('work_order_tracking');
+    final trkCol = DB.colSync(_cid, C.workOrderTracking);
     final updRef = trkCol.doc();
 
     await db.runTransaction((tx) async {
@@ -744,8 +769,8 @@ class _TrackingDetailsSheet extends StatelessWidget {
       });
       tx.set(updRef, {
         'id': updRef.id,
-        'workOrderNo': item.workOrderNo,
-        'tracking_number': item.trackingNo,
+        'workOrderNo': widget.item.workOrderNo,
+        'tracking_number': widget.item.trackingNo,
         'stage': 'Address validation',
         'status': 'Done',
         'createdAt': now,
@@ -763,7 +788,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final customer = (orderMeta?['customerName'] ?? orderMeta?['buyerName'] ?? 'Customer').toString();
+    final customer = (widget.orderMeta?['customerName'] ?? widget.orderMeta?['buyerName'] ?? 'Customer').toString();
 
     return DraggableScrollableSheet(
       expand: false,
@@ -797,10 +822,10 @@ class _TrackingDetailsSheet extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'WO# ${item.workOrderNo} • $customer',
+                      'WO# ${widget.item.workOrderNo} • $customer',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _darkBlue, fontSize: 16),
+                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: _darkBlue, fontSize: 16),
                     ),
                   ),
                 ],
@@ -811,19 +836,19 @@ class _TrackingDetailsSheet extends StatelessWidget {
               _card(
                 child: Row(
                   children: [
-                    Text('Tracking:', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _darkBlue)),
+                    Text('Tracking:', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: _darkBlue)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: SelectableText(
-                        item.trackingNo,
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _darkBlue),
+                        widget.item.trackingNo,
+                        style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: _darkBlue),
                       ),
                     ),
                     IconButton(
                       tooltip: 'Copy',
                       icon: const Icon(Icons.copy_rounded, color: _darkBlue),
                       onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: item.trackingNo));
+                        await Clipboard.setData(ClipboardData(text: widget.item.trackingNo));
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Copied')),
@@ -837,7 +862,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
 
               // ---- Quick action: show ONLY when previous step is Done ----
               // ---- Quick action: Address validation — show whenever we're at "Submit to the Head office"
-              (_normStage(item.currentStage) == 'Submit to the Head office')
+              (_normStage(widget.item.currentStage) == 'Submit to the Head office')
                   ? Padding(
                 padding: const EdgeInsets.only(top: 8, bottom: 8),
                 child: SizedBox(
@@ -861,10 +886,10 @@ class _TrackingDetailsSheet extends StatelessWidget {
               const SizedBox(height: 16),
 
               // Detailed Timeline — Δ from previous stage
-              Text('Detailed Timeline', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _darkBlue)),
+              Text('Detailed Timeline', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: _darkBlue)),
               const SizedBox(height: 8),
               StreamBuilder<List<Map<String, dynamic>>>(
-                stream: updatesStream,
+                stream: widget.updatesStream,
                 builder: (ctx, s) {
                   if (!s.hasData) {
                     return const Padding(
@@ -874,7 +899,7 @@ class _TrackingDetailsSheet extends StatelessWidget {
                   }
                   final ups = List<Map<String, dynamic>>.from(s.data!);
                   if (ups.isEmpty) {
-                    return Text('No updates yet.', style: GoogleFonts.inter(color: Colors.grey.shade600));
+                    return Text('No updates yet.', style: GoogleFonts.ubuntu(color: Colors.grey.shade600));
                   }
 
                   // Already ascending by query; compute deltas
@@ -924,9 +949,9 @@ class _TrackingDetailsSheet extends StatelessWidget {
               const SizedBox(height: 14),
 
               // Path overview (done/current/upcoming)
-              Text('Path (stages)', style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: _darkBlue)),
+              Text('Path (stages)', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: _darkBlue)),
               const SizedBox(height: 8),
-              _detailPath(currentStage: item.currentStage),
+              _detailPath(currentStage: widget.item.currentStage),
               const SizedBox(height: 18),
             ],
           ),
@@ -936,121 +961,121 @@ class _TrackingDetailsSheet extends StatelessWidget {
   }
 
   // Timeline row
-  Widget _timelineRow({
-    required String title,
-    required String subtitle,
-    required bool isFirst,
-    required bool isLast,
-    bool highlighted = false,
-  }) {
-    final Color bullet = highlighted ? _peach : _darkBlue;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 26,
-          child: Column(
-            children: [
-              if (!isFirst) Container(width: 2, height: 10, color: Colors.grey.shade300),
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: bullet, width: 2),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              if (!isLast) Container(width: 2, height: 26, color: Colors.grey.shade300),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 14),
+    Widget _timelineRow({
+      required String title,
+      required String subtitle,
+      required bool isFirst,
+      required bool isLast,
+      bool highlighted = false,
+    }) {
+      final Color bullet = highlighted ? _peach : _darkBlue;
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 26,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(color: Colors.grey.shade900, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(subtitle, style: GoogleFonts.inter(color: Colors.grey.shade600, fontSize: 12)),
+                if (!isFirst) Container(width: 2, height: 10, color: Colors.grey.shade300),
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: bullet, width: 2),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!isLast) Container(width: 2, height: 26, color: Colors.grey.shade300),
               ],
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _detailPath({required String currentStage}) {
-    final curr = _stageIndex(currentStage);
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: List.generate(_stages.length, (i) {
-          final s = _stages[i];
-          final bool done = i < curr;
-          final bool currFlag = i == curr;
-          final Color dot = currFlag ? _peach : (done ? Colors.green.shade600 : Colors.grey.shade400);
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 22,
-                child: Column(
-                  children: [
-                    if (i != 0) Container(width: 2, height: 8, color: Colors.grey.shade300),
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: currFlag ? Colors.white : (done ? Colors.green.shade600 : Colors.white),
-                        border: Border.all(color: dot, width: 2),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    if (i != _stages.length - 1) Container(width: 2, height: 20, color: Colors.grey.shade300),
-                  ],
-                ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.ubuntu(color: Colors.grey.shade900, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: GoogleFonts.ubuntu(color: Colors.grey.shade600, fontSize: 12)),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
+            ),
+          ),
+        ],
+      );
+    }
+  
+    Widget _detailPath({required String currentStage}) {
+      final curr = _stageIndex(currentStage);
+      return _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(_stages.length, (i) {
+            final s = _stages[i];
+            final bool done = i < curr;
+            final bool currFlag = i == curr;
+            final Color dot = currFlag ? _peach : (done ? Colors.green.shade600 : Colors.grey.shade400);
+  
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Text(
-                          s,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                            color: Colors.grey.shade900,
-                            fontWeight: currFlag ? FontWeight.w800 : FontWeight.w600,
-                          ),
+                      if (i != 0) Container(width: 2, height: 8, color: Colors.grey.shade300),
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: currFlag ? Colors.white : (done ? Colors.green.shade600 : Colors.white),
+                          border: Border.all(color: dot, width: 2),
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      if (done || currFlag)
-                        Icon(
-                          done ? Icons.check_circle : Icons.radio_button_checked,
-                          size: 16,
-                          color: done ? Colors.green.shade600 : _peach,
-                        ),
+                      if (i != _stages.length - 1) Container(width: 2, height: 20, color: Colors.grey.shade300),
                     ],
                   ),
                 ),
-              ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            s,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.ubuntu(
+                              color: Colors.grey.shade900,
+                              fontWeight: currFlag ? FontWeight.w800 : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (done || currFlag)
+                          Icon(
+                            done ? Icons.check_circle : Icons.radio_button_checked,
+                            size: 16,
+                            color: done ? Colors.green.shade600 : _peach,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ),
+      );
+    }
 }
 
 /// Shared card container

@@ -18,6 +18,8 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
@@ -59,11 +61,8 @@ class DevicePresence with WidgetsBindingObserver {
     } catch (_) {}
 
     final String deviceId = token ?? 'dev_${DateTime.now().millisecondsSinceEpoch}';
-    _docRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('devices')
-        .doc(deviceId);
+    // Device presence stays root-level (not company-scoped)
+    _docRef = DB.devicesCol(user.uid).doc(deviceId);
 
     await _docRef!.set({
       'online'   : true,
@@ -97,9 +96,7 @@ class DevicePresence with WidgetsBindingObserver {
       final u = FirebaseAuth.instance.currentUser;
       if (u == null) return;
 
-      final newRef = FirebaseFirestore.instance
-          .collection('users').doc(u.uid)
-          .collection('devices').doc(newT);
+      final newRef = DB.devicesCol(u.uid).doc(newT);
 
       try {
         await newRef.set({

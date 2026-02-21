@@ -1,66 +1,36 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../data/models/payroll_model.dart';
+import 'package:uddoygi/services/db.dart';
 
 class PayrollDataSource {
-  final CollectionReference _payrollCollection =
-  FirebaseFirestore.instance.collection('payrolls');
+  Future<CollectionReference> get _col => DB.col(C.payrolls);
 
   Future<void> addPayroll(PayrollModel payroll) async {
-    try {
-      await _payrollCollection.add(payroll.toJson());
-    } catch (e) {
-      print('Error adding payroll: $e');
-      rethrow;
-    }
+    await (await _col).add(payroll.toJson());
   }
 
   Future<void> updatePayroll(String id, PayrollModel payroll) async {
-    try {
-      await _payrollCollection.doc(id).update(payroll.toJson());
-    } catch (e) {
-      print('Error updating payroll: $e');
-      rethrow;
-    }
+    await (await _col).doc(id).update(payroll.toJson());
   }
 
   Future<void> deletePayroll(String id) async {
-    try {
-      await _payrollCollection.doc(id).delete();
-    } catch (e) {
-      print('Error deleting payroll: $e');
-      rethrow;
-    }
+    await (await _col).doc(id).delete();
   }
 
   Future<List<PayrollModel>> getPayrollsByEmployee(String employeeId) async {
-    try {
-      final querySnapshot = await _payrollCollection
-          .where('employeeId', isEqualTo: employeeId)
-          .orderBy('period', descending: true)
-          .get();
-
-      return querySnapshot.docs.map((doc) {
-        return PayrollModel.fromJson(
-            doc.data() as Map<String, dynamic>, doc.id);
-      }).toList();
-    } catch (e) {
-      print('Error fetching payrolls by employee: $e');
-      return [];
-    }
+    final snap = await (await _col)
+        .where('employeeId', isEqualTo: employeeId)
+        .orderBy('period', descending: true)
+        .get();
+    return snap.docs
+        .map((d) => PayrollModel.fromJson(d.data() as Map<String, dynamic>, d.id))
+        .toList();
   }
 
   Future<List<PayrollModel>> getAllPayrolls() async {
-    try {
-      final querySnapshot =
-      await _payrollCollection.orderBy('period', descending: true).get();
-
-      return querySnapshot.docs.map((doc) {
-        return PayrollModel.fromJson(
-            doc.data() as Map<String, dynamic>, doc.id);
-      }).toList();
-    } catch (e) {
-      print('Error fetching all payrolls: $e');
-      return [];
-    }
+    final snap = await (await _col).orderBy('period', descending: true).get();
+    return snap.docs
+        .map((d) => PayrollModel.fromJson(d.data() as Map<String, dynamic>, d.id))
+        .toList();
   }
 }

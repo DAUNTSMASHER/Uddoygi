@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class NewComplaintScreen extends StatefulWidget {
   final String userEmail;
@@ -16,6 +18,7 @@ class NewComplaintScreen extends StatefulWidget {
 }
 
 class _NewComplaintScreenState extends State<NewComplaintScreen> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
   final _subjectController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -35,6 +38,9 @@ class _NewComplaintScreenState extends State<NewComplaintScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _fetchDepartments();
   }
 
@@ -55,7 +61,7 @@ class _NewComplaintScreenState extends State<NewComplaintScreen> {
     });
 
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('users').get();
+      final snapshot = await (await DB.col(C.users)).get();
       final set = <String>{};
       for (final doc in snapshot.docs) {
         final dep = doc.data()['department'];
@@ -85,8 +91,7 @@ class _NewComplaintScreenState extends State<NewComplaintScreen> {
     });
 
     try {
-      final q = await FirebaseFirestore.instance
-          .collection('users')
+      final q = await DB.colSync(_cid, C.users)
           .where('department', isEqualTo: dept)
           .get();
 
@@ -121,7 +126,7 @@ class _NewComplaintScreenState extends State<NewComplaintScreen> {
     setState(() => _submitting = true);
 
     try {
-      await FirebaseFirestore.instance.collection('complaints').add({
+      await (await DB.col(C.complaints)).add({
         'submittedBy': widget.userEmail,
         'department': _selectedDept ?? '',
         // If no users in department, allow empty 'against'

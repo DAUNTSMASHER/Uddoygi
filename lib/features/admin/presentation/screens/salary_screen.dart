@@ -1,11 +1,12 @@
 // lib/features/marketing/presentation/screens/salary_screen.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF3C0765);
+const Color _darkBlue = Color(0xFF2A0A4B);
 const double _fontMed = 14.0;
 
 class SalaryScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class SalaryScreen extends StatefulWidget {
 
 class _SalaryScreenState extends State<SalaryScreen>
     with SingleTickerProviderStateMixin {
+  String _cid = '';
   late final TabController _tabs;
   String? _email;
   String? _uid;
@@ -25,6 +27,9 @@ class _SalaryScreenState extends State<SalaryScreen>
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _tabs = TabController(length: 2, vsync: this);
     _loadSession();
   }
@@ -51,16 +56,14 @@ class _SalaryScreenState extends State<SalaryScreen>
 
   Stream<QuerySnapshot<Map<String,dynamic>>> _mySalaryStream() {
     final key = _email ?? _uid;
-    return FirebaseFirestore.instance
-        .collection('payrolls')
+    return DB.colSync(_cid, C.payrolls)
         .where('userId', isEqualTo: key)
         .orderBy('month', descending: true)
         .snapshots();
   }
 
   Stream<QuerySnapshot<Map<String,dynamic>>> _allSalaryStream() {
-    return FirebaseFirestore.instance
-        .collection('payrolls')
+    return DB.colSync(_cid, C.payrolls)
         .orderBy('month', descending: true)
         .snapshots();
   }

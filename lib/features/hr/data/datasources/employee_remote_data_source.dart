@@ -1,19 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class EmployeeRemoteDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Stream all employees
-  Stream<QuerySnapshot> getAllEmployees() {
-    return _firestore.collection('employees').snapshots();
+  Stream<QuerySnapshot> getAllEmployees() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.employees).snapshots();
   }
 
-  // Get single employee by ID
   Future<DocumentSnapshot> getEmployeeById(String docId) async {
-    return await _firestore.collection('employees').doc(docId).get();
+    final ref = await DB.doc(C.employees, docId);
+    return ref.get();
   }
 
-  // Add a new employee
   Future<void> addEmployee({
     required String fullName,
     required String email,
@@ -21,9 +22,11 @@ class EmployeeRemoteDataSource {
     required String department,
     required String designation,
     required String joiningDate,
-    required String status, // 'active', 'inactive'
+    required String status,
   }) async {
-    await _firestore.collection('employees').add({
+    final _cid = await _getCid();
+    final col = DB.colSync(_cid, C.employees);
+    await col.add({
       'fullName': fullName,
       'email': email,
       'phone': phone,
@@ -35,13 +38,13 @@ class EmployeeRemoteDataSource {
     });
   }
 
-  // Update employee data
-  Future<void> updateEmployee(String docId, Map<String, dynamic> updatedData) async {
-    await _firestore.collection('employees').doc(docId).update(updatedData);
+  Future<void> updateEmployee(String docId, Map<String, dynamic> data) async {
+    final ref = await DB.doc(C.employees, docId);
+    await ref.update(data);
   }
 
-  // Delete an employee
   Future<void> deleteEmployee(String docId) async {
-    await _firestore.collection('employees').doc(docId).delete();
+    final ref = await DB.doc(C.employees, docId);
+    await ref.delete();
   }
 }

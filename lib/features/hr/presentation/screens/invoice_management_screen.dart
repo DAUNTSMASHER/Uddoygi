@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 
 class InvoiceManagementScreen extends StatefulWidget {
@@ -10,6 +12,7 @@ class InvoiceManagementScreen extends StatefulWidget {
 }
 
 class _InvoiceManagementScreenState extends State<InvoiceManagementScreen> {
+  String _cid = '';
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
 
@@ -77,12 +80,11 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen> {
                 };
 
                 if (isEdit) {
-                  await FirebaseFirestore.instance
-                      .collection('invoices')
+                  await DB.colSync(_cid, C.invoices)
                       .doc(doc.id)
                       .update(data);
                 } else {
-                  await FirebaseFirestore.instance.collection('invoices').add(data);
+                  await DB.colSync(_cid, C.invoices).add(data);
                 }
 
                 Navigator.pop(context);
@@ -98,15 +100,25 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen> {
   }
 
   void _deleteInvoice(String id) async {
-    await FirebaseFirestore.instance.collection('invoices').doc(id).delete();
+    await DB.colSync(_cid, C.invoices).doc(id).delete();
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Invoice Management'),
+        title: const Text('Invoice Management', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showInvoiceForm(),
@@ -136,8 +148,7 @@ class _InvoiceManagementScreenState extends State<InvoiceManagementScreen> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('invoices')
+              stream: DB.colSync(_cid, C.invoices)
                   .orderBy('date', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {

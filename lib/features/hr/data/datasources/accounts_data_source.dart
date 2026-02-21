@@ -1,22 +1,25 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class AccountsDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Get all accounts (payables and receivables)
-  Stream<QuerySnapshot> getAllAccounts() {
-    return _firestore.collection('accounts').snapshots();
+  Stream<QuerySnapshot> getAllAccounts() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.accounts).snapshots();
   }
 
-  // Add a new account record
   Future<void> addAccount({
-    required String type, // 'payable' or 'receivable'
+    required String type,
     required double amount,
     required String description,
-    required String status, // 'paid', 'unpaid'
+    required String status,
     required String date,
   }) async {
-    await _firestore.collection('accounts').add({
+    final _cid = await _getCid();
+    final col = DB.colSync(_cid, C.accounts);
+    await col.add({
       'type': type,
       'amount': amount,
       'description': description,
@@ -26,13 +29,13 @@ class AccountsDataSource {
     });
   }
 
-  // Update an existing account record
-  Future<void> updateAccount(String docId, Map<String, dynamic> updatedData) async {
-    await _firestore.collection('accounts').doc(docId).update(updatedData);
+  Future<void> updateAccount(String docId, Map<String, dynamic> data) async {
+    final ref = await DB.doc(C.accounts, docId);
+    await ref.update(data);
   }
 
-  // Delete an account record
   Future<void> deleteAccount(String docId) async {
-    await _firestore.collection('accounts').doc(docId).delete();
+    final ref = await DB.doc(C.accounts, docId);
+    await ref.delete();
   }
 }

@@ -1,18 +1,37 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 
-class AdminAllBuyersPage extends StatelessWidget {
+class AdminAllBuyersPage extends StatefulWidget {
   const AdminAllBuyersPage({super.key});
+
+  @override
+  State<AdminAllBuyersPage> createState() => _AdminAllBuyersPageState();
+}
+
+class _AdminAllBuyersPageState extends State<AdminAllBuyersPage> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Buyers'),
+        title: const Text('All Buyers', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('customers').snapshots(),
+        stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.customers).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../storage/drive.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B); // app brand purple
 
 class ProfilePage extends StatefulWidget {
   final String userId;
@@ -15,10 +17,12 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final _users = FirebaseFirestore.instance.collection('users');
+  String _cid = '';
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> get _profileStream =>
-      _users.doc(widget.userId).snapshots();
+  Stream<DocumentSnapshot<Map<String, dynamic>>> get _profileStream {
+    if (_cid.isEmpty) return const Stream.empty();
+    return DB.colSync(_cid, C.users).doc(widget.userId).snapshots();
+  }
 
   Future<void> _pickAndUpload(
       String field,
@@ -118,12 +122,25 @@ class _ProfilePageState extends State<ProfilePage> {
       onTap: onTap,
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('My Profile'), backgroundColor: _darkBlue),
+      appBar: AppBar(
+        title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _profileStream,
         builder: (ctx, snap) {

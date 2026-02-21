@@ -1,5 +1,7 @@
 // lib/features/factory/presentation/screens/shipped_to_fedex_page.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -17,11 +19,11 @@ class shippingAgentDirectoryPage extends StatefulWidget {
 }
 
 class _ShippedToFedexPageState extends State<shippingAgentDirectoryPage> {
+  String _cid = '';
   String _search = '';
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _shippedOrders() {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
+    return DB.colSync(_cid, C.workOrders)
         .where('currentStage', isEqualTo: _stageShippedFedex)
         .orderBy('lastUpdated', descending: true)
         .snapshots();
@@ -55,6 +57,14 @@ class _ShippedToFedexPageState extends State<shippingAgentDirectoryPage> {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +74,7 @@ class _ShippedToFedexPageState extends State<shippingAgentDirectoryPage> {
       backgroundColor: const Color(0xFFF7F8FB),
       appBar: AppBar(
         elevation: 0,
+        foregroundColor: Colors.white,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -74,7 +85,7 @@ class _ShippedToFedexPageState extends State<shippingAgentDirectoryPage> {
           ),
         ),
         titleSpacing: 0,
-        title: const Text('Shipped to FedEx', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Shipped to FedEx', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(36),
           child: Padding(

@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'user_attendance_view.dart'; // <-- make sure this is imported
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 class AdminDetailView extends StatefulWidget {
   const AdminDetailView({super.key});
@@ -13,19 +15,30 @@ class AdminDetailView extends StatefulWidget {
 }
 
 class _AdminDetailViewState extends State<AdminDetailView> {
+  String _cid = '';
   String selectedMonth = DateFormat('MMMM').format(DateTime.now());
   String selectedYear = DateFormat('yyyy').format(DateTime.now());
   String? _errorMessage;
 
   final List<String> months =
   List.generate(12, (i) => DateFormat('MMMM').format(DateTime(0, i + 1)));
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Employee Attendance Summary'),
+        title: const Text('Employee Attendance Summary', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -60,8 +73,7 @@ class _AdminDetailViewState extends State<AdminDetailView> {
             ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('attendance')
+              stream: DB.colSync(_cid, C.attendance)
                   .snapshots(),
               builder: (context, attendanceSnap) {
                 if (!attendanceSnap.hasData) {
@@ -82,7 +94,7 @@ class _AdminDetailViewState extends State<AdminDetailView> {
                 }).toList();
 
                 return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
+                  stream: DB.firestore
                       .collectionGroup('records')
                       .snapshots(),
                   builder: (context, recordSnap) {
@@ -124,8 +136,7 @@ class _AdminDetailViewState extends State<AdminDetailView> {
                     }
 
                     return FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('users')
+                      future: DB.colSync(_cid, C.users)
                           .get(),
                       builder: (context, userSnap) {
                         if (!userSnap.hasData) {

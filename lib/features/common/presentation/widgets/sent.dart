@@ -1,28 +1,43 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-class SentTab extends StatelessWidget {
+class SentTab extends StatefulWidget {
   final String userEmail;
   const SentTab({super.key, required this.userEmail});
 
   @override
+  State<SentTab> createState() => _SentTabState();
+}
+
+class _SentTabState extends State<SentTab> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('messages')
-          .where('from', isEqualTo: userEmail)
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
+      stream: _cid.isEmpty
+          ? const Stream.empty()
+          : DB.colSync(_cid, C.messages)
+              .where('from', isEqualTo: widget.userEmail)
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: Colors.indigo));
         }
         final docs = snapshot.data?.docs ?? [];
-        // Debug print to see how many sent messages fetched
-        print('SentTab: fetched ${docs.length} sent messages for $userEmail');
         if (docs.isEmpty) {
-          // Placeholder if no messages
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -31,13 +46,13 @@ class SentTab extends StatelessWidget {
                 color: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: ListTile(
-                  leading: CircleAvatar(
+                  leading: const CircleAvatar(
                     backgroundColor: Colors.blueAccent,
-                    child: const Icon(Icons.send, color: Colors.white),
+                    child: Icon(Icons.send, color: Colors.white),
                   ),
                   title: const Text('No sent messages',
                       style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-                  subtitle: Text('Sent messages for $userEmail',
+                  subtitle: Text('Sent messages for ${widget.userEmail}',
                       style: const TextStyle(color: Colors.black54)),
                   trailing: const Icon(Icons.check_circle, color: Colors.blueAccent),
                 ),
@@ -50,8 +65,6 @@ class SentTab extends StatelessWidget {
           itemCount: docs.length,
           itemBuilder: (context, idx) {
             final data = docs[idx].data() as Map<String, dynamic>;
-            print("Sent Message #$idx: $data"); // Debug each message
-            // Defensive null checks
             final toField = data['to'];
             final toList = (toField is List)
                 ? toField.join(', ')
@@ -73,9 +86,9 @@ class SentTab extends StatelessWidget {
                 color: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 child: ListTile(
-                  leading: CircleAvatar(
+                  leading: const CircleAvatar(
                     backgroundColor: Colors.blueAccent,
-                    child: const Icon(Icons.send, color: Colors.white),
+                    child: Icon(Icons.send, color: Colors.white),
                   ),
                   title: Text(
                     subject,

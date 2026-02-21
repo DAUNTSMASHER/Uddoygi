@@ -1,31 +1,47 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-const _brandBlue = Color(0xFF0D47A1);
+// Neutral indigo — works across all department contexts
+const _brandBlue = Color(0xFF3730A3);
 
-class NotificationPage extends StatelessWidget {
+class NotificationPage extends StatefulWidget {
   const NotificationPage({Key? key}) : super(key: key);
 
+  @override
+  State<NotificationPage> createState() => _NotificationPageState();
+}
+
+class _NotificationPageState extends State<NotificationPage> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   Stream<QuerySnapshot<Map<String, dynamic>>> _stream() {
+    if (_cid.isEmpty) return const Stream.empty();
     final mail = FirebaseAuth.instance.currentUser?.email ?? '';
-    // Adjust filters to your schema if needed
-    return FirebaseFirestore.instance
-        .collection('notifications')
-        .where('to', isEqualTo: mail) // or remove if global
+    return DB.colSync(_cid, C.notifications)
+        .where('to', isEqualTo: mail)
         .orderBy('timestamp', descending: true)
         .snapshots();
   }
 
   Future<void> _markAllRead(BuildContext context) async {
     final mail = FirebaseAuth.instance.currentUser?.email ?? '';
-    final q = await FirebaseFirestore.instance
-        .collection('notifications')
+    final q = await (await DB.col(C.notifications))
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .get();
 
-    final batch = FirebaseFirestore.instance.batch();
+    final batch = DB.firestore.batch();
     for (final d in q.docs) {
       batch.update(d.reference, {'read': true});
     }
@@ -52,8 +68,10 @@ class NotificationPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: const Text('Notifications', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _brandBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             tooltip: 'Mark all as read',

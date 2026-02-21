@@ -10,6 +10,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'banner_message.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// Attach this to MaterialApp.navigatorKey
 final GlobalKey<NavigatorState> messageNavigatorKey = GlobalKey<NavigatorState>();
@@ -35,7 +37,8 @@ class MessageNotificationService {
 
   Future<void> _attach(User user) async {
     final uid = user.uid;
-    final col = FirebaseFirestore.instance.collection('notifications');
+    final cid = await LocalStorageService.getSavedCompanyId() ?? '';
+    final col = DB.colSync(cid, C.notifications);
 
     _notifSub = col
         .where('toUserId', isEqualTo: uid)

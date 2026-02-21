@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +16,7 @@ class HRNoticeScreen extends StatefulWidget {
 }
 
 class _HRNoticeScreenState extends State<HRNoticeScreen> {
+  String _cid = '';
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   File? _selectedFile;
@@ -29,6 +31,9 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadSession();
   }
 
@@ -70,7 +75,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
       if (_selectedFile != null) {
         await _uploadFile();
       }
-      await FirebaseFirestore.instance.collection('notices').add({
+      await DB.colSync(_cid, C.notices).add({
         'title': title,
         'description': description,
         'fileUrl': _fileUrl ?? '',
@@ -161,8 +166,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo[700]),
             onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('notices')
+              await DB.colSync(_cid, C.notices)
                   .doc(notice.id)
                   .update({
                 'title': titleController.text,
@@ -196,8 +200,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
               Navigator.pop(context);
               try {
                 // Delete comments
-                final comments = await FirebaseFirestore.instance
-                    .collection('notices')
+                final comments = await DB.colSync(_cid, C.notices)
                     .doc(id)
                     .collection('comments')
                     .get();
@@ -210,8 +213,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
                     await FirebaseStorage.instance.refFromURL(fileUrl).delete();
                   } catch (_) {}
                 }
-                await FirebaseFirestore.instance
-                    .collection('notices')
+                await DB.colSync(_cid, C.notices)
                     .doc(id)
                     .delete();
               } catch (e) {
@@ -252,8 +254,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
             onPressed: () async {
-              await FirebaseFirestore.instance
-                  .collection('notices')
+              await DB.colSync(_cid, C.notices)
                   .doc(noticeId)
                   .collection('comments')
                   .doc(comment.id)
@@ -268,8 +269,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
   }
 
   void _deleteComment(String noticeId, String commentId) async {
-    await FirebaseFirestore.instance
-        .collection('notices')
+    await DB.colSync(_cid, C.notices)
         .doc(noticeId)
         .collection('comments')
         .doc(commentId)
@@ -309,8 +309,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
                   autofocus: true,
                   onSubmitted: (value) async {
                     if (value.trim().isNotEmpty) {
-                      await FirebaseFirestore.instance
-                          .collection('notices')
+                      await DB.colSync(_cid, C.notices)
                           .doc(noticeId)
                           .collection('comments')
                           .add({
@@ -327,8 +326,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
                 icon: const Icon(Icons.send, color: Colors.white),
                 onPressed: () async {
                   if (commentController.text.trim().isNotEmpty) {
-                    await FirebaseFirestore.instance
-                        .collection('notices')
+                    await DB.colSync(_cid, C.notices)
                         .doc(noticeId)
                         .collection('comments')
                         .add({
@@ -349,8 +347,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
 
   Widget _buildComments(String noticeId) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('notices')
+      stream: DB.colSync(_cid, C.notices)
           .doc(noticeId)
           .collection('comments')
           .orderBy('timestamp', descending: false)
@@ -450,9 +447,10 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
     return Scaffold(
       backgroundColor: Colors.indigo[900],
       appBar: AppBar(
-        title: const Text('Notices', style: TextStyle(color: Colors.white)),
+        title: const Text('Notices', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
-        iconTheme: const IconThemeData(color: Colors.white),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -540,8 +538,7 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
             // Notices List
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('notices')
+                stream: DB.colSync(_cid, C.notices)
                 // .where('publishedBy', isEqualTo: userName ?? 'hr') // Uncomment to show only HR notices
                     .orderBy('timestamp', descending: true)
                     .snapshots(),
@@ -624,14 +621,15 @@ class _HRNoticeScreenState extends State<HRNoticeScreen> {
                                           },
                                           child: Row(
                                             children: [
-                                              Icon(Icons.attach_file, color: Colors.blue[100]),
+                                              const Icon(Icons.attach_file, color: Colors.white70),
                                               const SizedBox(width: 8),
                                               Flexible(
                                                 child: Text(
                                                   "View Attached File",
                                                   style: const TextStyle(
-                                                      color: Colors.blueAccent,
-                                                      decoration: TextDecoration.underline),
+                                                      color: Colors.white,
+                                                      decoration: TextDecoration.underline,
+                                                      decorationColor: Colors.white70),
                                                 ),
                                               ),
                                             ],

@@ -2,6 +2,7 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +19,7 @@ import 'package:uddoygi/features/marketing/presentation/widgets/notice_4.dart'; 
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_5.dart'; // CommentsPanel (noticeId version)
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_6.dart';
 
-const _brandBlue = Color(0xFF0D47A1);
+const _brandBlue = Color(0xFF40062D);
 
 class FactoryNoticeScreen extends StatefulWidget {
   const FactoryNoticeScreen({super.key});
@@ -28,6 +29,7 @@ class FactoryNoticeScreen extends StatefulWidget {
 }
 
 class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
+  String _cid = '';
   // session
   String? userEmail;
   String? userName;
@@ -56,6 +58,9 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadSession();
   }
 
@@ -71,7 +76,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
 
   /// Map email -> profile from `users` (real photo + name, same style as AllEmployeesPage)
   Stream<Map<String, _Profile>> _profilesStream() {
-    return FirebaseFirestore.instance.collection(_usersColl).snapshots().map((s) {
+    return DB.firestore.collection(_usersColl).snapshots().map((s) {
       final map = <String, _Profile>{};
       for (final d in s.docs) {
         final m = d.data();
@@ -90,7 +95,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _noticesStream() {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection(_noticesColl);
+    Query<Map<String, dynamic>> q = DB.firestore.collection(_noticesColl);
     if (_dept != 'All') {
       q = q.where('department', isEqualTo: _dept);
     }
@@ -102,7 +107,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
 
   /// Employee dropdown source
   Stream<List<_Employee>> _employeesStream() {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection(_employeesColl);
+    Query<Map<String, dynamic>> q = DB.firestore.collection(_employeesColl);
     if (_dept != 'All') q = q.where('department', isEqualTo: _dept);
     return q.snapshots().map((s) {
       final list = s.docs
@@ -191,7 +196,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
           final deptForPost = category ?? (_dept == 'All' ? 'Marketing' : _dept);
           final now = Timestamp.now();
           final doc =
-          FirebaseFirestore.instance.collection(_noticesColl).doc();
+          DB.firestore.collection(_noticesColl).doc();
           final noticeData = {
             'title': _deriveTitle(text),
             'description': text,
@@ -230,12 +235,12 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
         foregroundColor: Colors.white,   // makes title & icons white
         elevation: 0,
         title: const Text(
-          'Notices',
+          'নোটিশ',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
           IconButton(
-            tooltip: 'Notice settings',
+            tooltip: 'নোটিশ সেটিংস',
             onPressed: _openPostSettings,
             icon: const Icon(Icons.tune_rounded),
           ),
@@ -261,7 +266,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
                 child: NoticeComposerBar(
                   displayName: meName,
                   photoUrl: meAvatar,
-                  hintText: 'Ask a question or start a notice',
+                  hintText: 'প্রশ্ন করুন বা নোটিশ লিখুন',
                   categories: _departments.where((d) => d != 'All').toList(),
                   selectedCategory: _dept == 'All' ? null : _dept,
                   onCategoryChanged: (v) => setState(() {
@@ -279,9 +284,19 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
                 child: Row(
                   children: [
                     _FilterDropdown<String>(
-                      label: 'Department',
+                      label: 'বিভাগ',
                       value: _dept,
                       items: _departments,
+                      displayBuilder: (v) {
+                        const map = {
+                          'All': 'সব',
+                          'Marketing': 'মার্কেটিং',
+                          'Sales': 'বিক্রয়',
+                          'HR': 'এইচআর',
+                          'Operations': 'অপারেশন',
+                        };
+                        return map[v] ?? v;
+                      },
                       onChanged: (v) => setState(() {
                         _dept = v!;
                         _employee = 'All';
@@ -301,11 +316,11 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
                                 .where((e) => e.isNotEmpty)
                           ];
                           return _FilterDropdown<String>(
-                            label: 'Employee',
+                            label: 'কর্মী',
                             value: _employee,
                             items: items,
                             displayBuilder: (v) {
-                              if (v == 'All') return 'All';
+                              if (v == 'All') return 'সবাই';
                               final match = employees.firstWhere(
                                     (e) =>
                                 e.email.toLowerCase() ==
@@ -337,7 +352,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
                     }
                     final docs = snap.data?.docs ?? [];
                     if (docs.isEmpty) {
-                      return const Center(child: Text('No notices found.'));
+                      return const Center(child: Text('কোনো নোটিশ পাওয়া যায়নি।'));
                     }
                     return ListView.separated(
                       padding:
@@ -382,7 +397,7 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open file')),
+          const SnackBar(content: Text('ফাইল খোলা যায়নি')),
         );
       }
     }
@@ -482,7 +497,7 @@ class _NoticeCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  'By $displayAuthor',
+                  'প্রকাশক: $displayAuthor',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
@@ -503,7 +518,7 @@ class _NoticeCard extends StatelessWidget {
             if (files.isNotEmpty) ...[
               const SizedBox(height: 10),
               const Divider(height: 20),
-              const Text('Attachments', style: TextStyle(fontWeight: FontWeight.w800)),
+              const Text('সংযুক্তি', style: TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
               ...files.map((m) {
                 final name = (m['name']?.toString() ?? 'file');
@@ -581,7 +596,8 @@ class _DeptChip extends StatelessWidget {
 
 /* ======================== Compact comments widget ======================== */
 
-class _CompactComments extends StatelessWidget {
+class _CompactComments extends StatefulWidget {
+
   final String noticeId;
   final String meAvatarUrl;
   final String meName;
@@ -593,12 +609,25 @@ class _CompactComments extends StatelessWidget {
     required this.meName,
     required this.meEmail,
   });
+  @override
+  State<_CompactComments> createState() => _CompactCommentsState();
+}
+
+class _CompactCommentsState extends State<_CompactComments> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final commentsRef = FirebaseFirestore.instance
-        .collection('notices')
-        .doc(noticeId)
+    final commentsRef = DB.colSync(_cid, C.notices)
+        .doc(widget.noticeId)
         .collection('comments');
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -611,7 +640,7 @@ class _CompactComments extends StatelessWidget {
             // Write a comment (opens full panel)
             Row(
               children: [
-                CircleAvatar(radius: 16, backgroundImage: NetworkImage(meAvatarUrl)),
+                CircleAvatar(radius: 16, backgroundImage: NetworkImage(widget.meAvatarUrl)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: InkWell(
@@ -627,7 +656,7 @@ class _CompactComments extends StatelessWidget {
                         border: Border.all(color: const Color(0xFFD5DBE7)),
                       ),
                       child: const Text(
-                        'Write a comment…',
+                        'মন্তব্য লিখুন…',
                         style: TextStyle(color: Color(0xFF98A2B3), fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -637,7 +666,7 @@ class _CompactComments extends StatelessWidget {
                 TextButton.icon(
                   onPressed: () => _openFullComments(context),
                   icon: const Icon(Icons.mode_comment_outlined),
-                  label: Text(count == 0 ? 'Comments' : 'Comments ($count)'),
+                  label: Text(count == 0 ? 'মন্তব্য' : 'মন্তব্য ($count)'),
                 ),
               ],
             ),
@@ -648,28 +677,28 @@ class _CompactComments extends StatelessWidget {
   }
 
   void _openFullComments(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => FractionallySizedBox(
-        heightFactor: 0.9,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: CommentsPanel(
-            noticeId: noticeId,
-            meAvatarUrl: meAvatarUrl,
-            meName: meName,
-            meEmail: meEmail,
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (_) => FractionallySizedBox(
+          heightFactor: 0.9,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: CommentsPanel(
+              noticeId: widget.noticeId,
+              meAvatarUrl: widget.meAvatarUrl,
+              meName: widget.meName,
+              meEmail: widget.meEmail,
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }
 
 /* ======================== small helpers ======================== */

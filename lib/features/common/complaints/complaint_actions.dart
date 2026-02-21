@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
@@ -20,6 +22,7 @@ class ComplaintActionsScreen extends StatefulWidget {
 }
 
 class _ComplaintActionsScreenState extends State<ComplaintActionsScreen> {
+  String _cid = '';
   final TextEditingController _actionController = TextEditingController();
   String? _actionType;
   bool _loading = false;
@@ -39,6 +42,9 @@ class _ComplaintActionsScreenState extends State<ComplaintActionsScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _actionType = _actionTypes.first['value'];
   }
 
@@ -46,7 +52,7 @@ class _ComplaintActionsScreenState extends State<ComplaintActionsScreen> {
     if (_actionController.text.trim().isEmpty || _actionType == null) return;
     setState(() => _loading = true);
 
-    final ref = FirebaseFirestore.instance.collection('complaints').doc(widget.complaintId);
+    final ref = DB.colSync(_cid, C.complaints).doc(widget.complaintId);
 
     try {
       final actionId = uuid.v4();
@@ -141,8 +147,10 @@ class _ComplaintActionsScreenState extends State<ComplaintActionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Complaint Actions'),
+        title: const Text('Complaint Actions', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),
@@ -150,8 +158,7 @@ class _ComplaintActionsScreenState extends State<ComplaintActionsScreen> {
           children: [
             Expanded(
               child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('complaints')
+                stream: DB.colSync(_cid, C.complaints)
                     .doc(widget.complaintId)
                     .snapshots(),
                 builder: (context, snapshot) {

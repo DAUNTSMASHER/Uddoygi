@@ -1,31 +1,51 @@
+// lib/features/admin/presentation/widgets/admin_dashboard_summary.dart
+//
+// Non-grid layout:
+//   • Period filter chips (horizontal scroll)
+//   • Hero radial card  — Profit (large) + Expense / Revenue / Budget sub-values
+//   • Insight orbit row — Top Agent · Top Buyer · Attendance · Top Product
+//     as compact floating pills in a single horizontal-scroll row
+// ─────────────────────────────────────────────────────────────────────────────
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
-import 'package:carousel_slider/carousel_slider.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../widgets/admin_allbuyer.dart';
 
-class AdminDashboardSummary extends StatefulWidget {
-  const AdminDashboardSummary({super.key});
+// ── Palette: premium purple/indigo only ───────────────────────────────────────
+const Color _ink     = Color(0xFF0F172A);
+const Color _sub     = Color(0xFF64748B);
+const Color _border  = Color(0xFFEAE4F4);
+const Color _card    = Color(0xFFFFFFFF);
+const Color _purple  = Color(0xFF2A0A4B);
+const Color _indigo  = Color(0xFF4F46E5);
+const Color _indigoLt = Color(0xFF818CF8);
+const Color _violet  = Color(0xFF6D28D9);
+const Color _accent  = Color(0xFF7C3AED); // single accent for sub-stats & orbit
 
-  @override
-  State<AdminDashboardSummary> createState() => _AdminDashboardSummaryState();
-}
-
-/* ─────────────────────────── Helpers ─────────────────────────── */
-
-String _money(num n) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+String _fmt(num n) {
+  if (n == 0) return '৳0';
   final s = n.toStringAsFixed(0);
-  final buf = StringBuffer();
+  final buf = StringBuffer('৳');
   for (int i = 0; i < s.length; i++) {
     final r = s.length - i;
     buf.write(s[i]);
     if (r > 1 && r % 3 == 1) buf.write(',');
   }
-  return '৳${buf.toString()}';
+  return buf.toString();
 }
 
-String _initialsFromKey(String s) {
+String _fmtShort(num n) {
+  if (n >= 10000000) return '৳${(n / 10000000).toStringAsFixed(1)}Cr';
+  if (n >= 100000)   return '৳${(n / 100000).toStringAsFixed(1)}L';
+  if (n >= 1000)     return '৳${(n / 1000).toStringAsFixed(1)}K';
+  return _fmt(n);
+}
+
+String _initials(String s) {
   if (s.isEmpty) return 'U';
   final at = s.indexOf('@');
   final base = (at > 0 ? s.substring(0, at) : s).trim();
@@ -36,654 +56,793 @@ String _initialsFromKey(String s) {
   return a + b;
 }
 
-/* ────────────────────────── Small UI parts ────────────────────────── */
-
-class _AvatarBubble extends StatelessWidget {
-  final String keyText;
-  final String? imageUrl;
-  final double size;
-  final Color fallbackColor;
-  const _AvatarBubble({
-    required this.keyText,
-    this.imageUrl,
-    this.size = 56,
-    this.fallbackColor = const Color(0xFF3C0765),
-  });
-
+// ── Public widget ─────────────────────────────────────────────────────────────
+class AdminDashboardSummary extends StatefulWidget {
+  const AdminDashboardSummary({super.key});
   @override
-  Widget build(BuildContext context) {
-    final initials = _initialsFromKey(keyText);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(size),
-      child: Container(
-        height: size,
-        width: size,
-        color: fallbackColor.withOpacity(0.12),
-        child: (imageUrl != null && imageUrl!.isNotEmpty)
-            ? Image.network(
-          imageUrl!,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _InitAvatar(initials: initials),
-        )
-            : _InitAvatar(initials: initials),
-      ),
-    );
-  }
+  State<AdminDashboardSummary> createState() => _AdminDashboardSummaryState();
 }
 
-class _InitAvatar extends StatelessWidget {
-  final String initials;
-  const _InitAvatar({required this.initials});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF263238),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18),
-      ),
-    );
-  }
-}
+class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
+    with SingleTickerProviderStateMixin {
+  String _cid     = '';
+  bool   _loading = true;
+  String _filter  = 'this_month';
 
-/* Unified card (photo/icon header → compact content). */
-class _ProfileCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String stat1Label;
-  final String stat1Value;
-  final String stat2Label;
-  final String stat2Value;
-  final String buttonText;
-  final VoidCallback? onPressed;
-  final String? imageUrl;               // optional header photo
-  final String initialsForFallback;     // for avatar fallback
-  final IconData? fallbackIcon;         // large icon if no image
-  final bool verified;
+  double _sales    = 0; // total revenue (invoices)
+  double _expenses = 0;
+  double _budget   = 0;
+  int    _buyers   = 0;
 
-  const _ProfileCard({
-    required this.title,
-    required this.subtitle,
-    required this.stat1Label,
-    required this.stat1Value,
-    required this.stat2Label,
-    required this.stat2Value,
-    required this.buttonText,
-    required this.initialsForFallback,
-    this.imageUrl,
-    this.fallbackIcon,
-    this.onPressed,
-    this.verified = false,
-  });
+  // Profit = revenue − expenses (can be negative)
+  double get _profit => _sales - _expenses;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1B1F),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 6))],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header (image or icon) — height trimmed to avoid overflow on small screens
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-            child: SizedBox(
-              height: 150, // ↓ from 160
-              width: double.infinity,
-              child: (imageUrl != null && imageUrl!.isNotEmpty)
-                  ? Image.network(
-                imageUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    _HeaderFallback(initials: initialsForFallback, icon: fallbackIcon),
-              )
-                  : _HeaderFallback(initials: initialsForFallback, icon: fallbackIcon),
-            ),
-          ),
+  String _topAgentEmail  = '';
+  double _topAgentSales  = 0;
+  String _topBuyerKey    = '';
+  double _topBuyerSales  = 0;
 
-          // Content (extra-tight; no wasted space)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10), // tighter
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    if (verified)
-                      Container(
-                        height: 18,
-                        width: 18,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF2ECC71),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check, size: 12, color: Colors.white),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _miniStat(icon: Icons.local_fire_department, label: stat1Label, value: stat1Value),
-                    const SizedBox(width: 14),
-                    _miniStat(icon: Icons.receipt_long, label: stat2Label, value: stat2Value),
-                    const Spacer(),
-                    if (buttonText.isNotEmpty)
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // tighter
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: onPressed,
-                        child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.w800)),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  String _topProduct    = '';
+  int    _topProductQty = 0;
 
-Widget _miniStat({required IconData icon, required String label, required String value}) {
-  return Row(
-    children: [
-      Icon(icon, size: 16, color: Colors.white70),
-      const SizedBox(width: 6),
-      Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-      const SizedBox(width: 4),
-      Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-    ],
-  );
-}
+  int _present = 0;
+  int _absent  = 0;
 
-class _HeaderFallback extends StatelessWidget {
-  final String? initials;
-  final IconData? icon;
-  const _HeaderFallback({this.initials, this.icon});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF263238),
-      alignment: Alignment.center,
-      child: icon != null
-          ? Icon(icon, color: Colors.white, size: 56)
-          : _AvatarBubble(keyText: (initials ?? 'U'), size: 64),
-    );
-  }
-}
+  final Map<String, String> _avatarCache = {};
 
-/* Perfect pie that auto-fits available space (height-bounded). */
-class _PieAutoFitCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final double percent; // 0..100
-  const _PieAutoFitCard({required this.title, required this.subtitle, required this.percent});
+  late final AnimationController _pulseCtrl;
+  late final Animation<double>   _pulseAnim;
 
-  @override
-  Widget build(BuildContext context) {
-    final pct = percent.clamp(0.0, 100.0);
-    final screenH = MediaQuery.of(context).size.height;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1B1F),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, 6))],
-      ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final w = c.maxWidth;
-          // Cap pie size to a fraction of screen height to avoid overflow inside carousel.
-          final maxByHeight = screenH * 0.28;
-          final double size = math.max(120, math.min(w, maxByHeight));
-          final rMain = size * 0.45;
-          final rRem = rMain * 0.85;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 2),
-              Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: size,
-                child: PieChart(
-                  PieChartData(
-                    centerSpaceRadius: 0,
-                    sectionsSpace: 2,
-                    startDegreeOffset: 270,
-                    pieTouchData: PieTouchData(enabled: false),
-                    sections: [
-                      PieChartSectionData(
-                        value: pct,
-                        color: Colors.white,
-                        title: '${pct.toStringAsFixed(0)}%',
-                        titleStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 14),
-                        radius: rMain,
-                        showTitle: true,
-                        titlePositionPercentageOffset: 0.52,
-                      ),
-                      PieChartSectionData(value: 100.0 - pct, color: Colors.white24, title: '', radius: rRem),
-                    ],
-                  ),
-                  swapAnimationDuration: const Duration(milliseconds: 600),
-                  swapAnimationCurve: Curves.easeInOut,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/* ────────────────────────────── State ────────────────────────────── */
-
-class _AdminDashboardSummaryState extends State<AdminDashboardSummary> {
-  bool isLoading = true;
-
-  // Filters
-  String filterType = 'this_month'; // this_month, prev_month, last_3_months, this_year
-
-  // KPIs
-  double totalSales = 0;
-  int totalBuyers = 0;
-  double budget = 0;
-  double totalExpenses = 0;
-
-  // Leaders
-  Map<String, double> agentSales = {};
-  Map<String, int> agentOrders = {};
-  Map<String, double> buyerSales = {};
-  Map<String, int> buyerOrders = {};
-
-  // Most sold product
-  String topProduct = '';
-  int topProductQty = 0;
-
-  // Attendance today
-  int presentCount = 0;
-  int absentCount = 0;
-
-  // Avatar cache
-  final Map<String, String> _avatarUrlCache = {};
+  static const _filters = [
+    ('this_month',    'This Month'),
+    ('prev_month',    'Prev Month'),
+    ('last_3_months', 'Last 3 Mo.'),
+    ('this_year',     'This Year'),
+  ];
 
   @override
   void initState() {
     super.initState();
-    fetchReportData();
+    _pulseCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 3))
+      ..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.97, end: 1.03)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (!mounted) return;
+      setState(() => _cid = id ?? '');
+      _fetch();
+    });
   }
 
-  ({DateTime start, DateTime end, String label}) _rangeForFilter() {
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  ({DateTime start, DateTime end}) _range() {
     final now = DateTime.now();
-    if (filterType == 'prev_month') {
-      final prev = DateTime(now.year, now.month - 1, 1);
-      return (start: DateTime(prev.year, prev.month, 1), end: DateTime(prev.year, prev.month + 1, 0), label: 'Previous Month');
+    switch (_filter) {
+      case 'prev_month':
+        final p = DateTime(now.year, now.month - 1, 1);
+        return (start: p, end: DateTime(p.year, p.month + 1, 0));
+      case 'last_3_months':
+        return (start: DateTime(now.year, now.month - 2, 1),
+                end:   DateTime(now.year, now.month + 1, 0));
+      case 'this_year':
+        return (start: DateTime(now.year, 1, 1),
+                end:   DateTime(now.year, 12, 31));
+      default:
+        return (start: DateTime(now.year, now.month, 1),
+                end:   DateTime(now.year, now.month + 1, 0));
     }
-    if (filterType == 'last_3_months') {
-      return (start: DateTime(now.year, now.month - 2, 1), end: DateTime(now.year, now.month + 1, 0), label: 'Last 3 Months');
-    }
-    if (filterType == 'this_year') {
-      return (start: DateTime(now.year, 1, 1), end: DateTime(now.year, 12, 31), label: 'This Year');
-    }
-    return (start: DateTime(now.year, now.month, 1), end: DateTime(now.year, now.month + 1, 0), label: 'This Month');
   }
 
-  Future<void> fetchReportData() async {
-    setState(() => isLoading = true);
+  Future<void> _fetch() async {
+    if (_cid.isEmpty) return;
+    setState(() => _loading = true);
     try {
-      final fs = FirebaseFirestore.instance;
-      final r = _rangeForFilter();
+      final r = _range();
+      Timestamp ts(DateTime d) => Timestamp.fromDate(d);
 
-      final invoicesSnap = await fs
-          .collection('invoices')
-          .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.start))
-          .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.end))
+      final invSnap = await DB.colSync(_cid, C.invoices)
+          .where('timestamp', isGreaterThanOrEqualTo: ts(r.start))
+          .where('timestamp', isLessThanOrEqualTo:    ts(r.end))
           .get();
 
-      final buyersSnap = await fs.collection('customers').get();
-      final budgetSnap = await fs.collection('budget').limit(1).get();
-      final expensesSnap = await fs.collection('expenses').get();
-
       double sales = 0;
-      final Map<String, double> byAgent = {};
-      final Map<String, int> ordersByAgent = {};
-      final Map<String, double> byBuyer = {};
-      final Map<String, int> ordersByBuyer = {};
-      final Map<String, int> productQty = {};
+      final Map<String, double> byAgent  = {};
+      final Map<String, int>    ordAgent = {};
+      final Map<String, double> byBuyer  = {};
+      final Map<String, int>    ordBuyer = {};
+      final Map<String, int>    prodQty  = {};
 
-      for (var doc in invoicesSnap.docs) {
-        final d = doc.data();
-        final agentEmail = (d['agentEmail'] ?? 'Unknown').toString();
-        final buyerKey = (d['customerEmail'] ?? d['customerName'] ?? 'Unknown').toString();
-        final val = d['grandTotal'];
-        final sale = (val is num) ? val.toDouble() : 0.0;
-
-        sales += sale;
-        byAgent[agentEmail] = (byAgent[agentEmail] ?? 0) + sale;
-        ordersByAgent[agentEmail] = (ordersByAgent[agentEmail] ?? 0) + 1;
-
-        byBuyer[buyerKey] = (byBuyer[buyerKey] ?? 0) + sale;
-        ordersByBuyer[buyerKey] = (ordersByBuyer[buyerKey] ?? 0) + 1;
-
+      for (final doc in invSnap.docs) {
+        final d   = doc.data();
+        final ag  = (d['agentEmail']    ?? 'Unknown').toString();
+        final bk  = (d['customerEmail'] ?? d['customerName'] ?? 'Unknown').toString();
+        final val = (d['grandTotal'] is num) ? (d['grandTotal'] as num).toDouble() : 0.0;
+        sales += val;
+        byAgent[ag]  = (byAgent[ag]  ?? 0) + val;
+        ordAgent[ag] = (ordAgent[ag] ?? 0) + 1;
+        byBuyer[bk]  = (byBuyer[bk]  ?? 0) + val;
+        ordBuyer[bk] = (ordBuyer[bk] ?? 0) + 1;
         final items = d['items'];
         if (items is List) {
           for (final it in items) {
             if (it is Map) {
-              final name = (it['name'] ?? it['productName'] ?? 'Unknown').toString();
-              final qraw = it['qty'] ?? it['quantity'] ?? 0;
-              final q = (qraw is num) ? qraw.toInt() : 0;
-              if (name.isNotEmpty && q > 0) {
-                productQty[name] = (productQty[name] ?? 0) + q;
-              }
+              final nm = (it['name'] ?? it['productName'] ?? '').toString();
+              final q  = ((it['qty'] ?? it['quantity'] ?? 0) as num).toInt();
+              if (nm.isNotEmpty && q > 0) prodQty[nm] = (prodQty[nm] ?? 0) + q;
             }
           }
         }
       }
 
-      double expense = 0;
-      for (var doc in expensesSnap.docs) {
-        final val = doc.data()['amount'];
-        if (val is num) expense += val.toDouble();
+      final buySnap = await DB.colSync(_cid, C.customers).get();
+      final budSnap = await DB.colSync(_cid, C.budget).limit(1).get();
+      final expSnap = await DB.colSync(_cid, C.expenses).get();
+      double exp = 0;
+      for (final d in expSnap.docs) {
+        final v = d.data()['amount'];
+        if (v is num) exp += v.toDouble();
       }
 
-      String pName = '';
-      int pQty = 0;
-      if (productQty.isNotEmpty) {
-        final list = productQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-        pName = list.first.key;
-        pQty = list.first.value;
+      String tProd = ''; int tQty = 0;
+      if (prodQty.isNotEmpty) {
+        final sorted = prodQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        tProd = sorted.first.key;
+        tQty  = sorted.first.value;
+      }
+
+      String? tAgentKey, tBuyerKey;
+      double  tAgentVal = 0, tBuyerVal = 0;
+      if (byAgent.isNotEmpty) {
+        final s = byAgent.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        tAgentKey = s.first.key; tAgentVal = s.first.value;
+      }
+      if (byBuyer.isNotEmpty) {
+        final s = byBuyer.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        tBuyerKey = s.first.key; tBuyerVal = s.first.value;
       }
 
       final todayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-      final todayEnd = todayStart.add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+      final todayEnd   = todayStart.add(const Duration(days: 1));
       int present = 0, absent = 0;
       try {
-        final attSnap = await fs
-            .collection('attendance')
-            .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(todayStart))
-            .where('date', isLessThanOrEqualTo: Timestamp.fromDate(todayEnd))
+        final attSnap = await DB.colSync(_cid, C.attendance)
+            .where('date', isGreaterThanOrEqualTo: ts(todayStart))
+            .where('date', isLessThan:             ts(todayEnd))
             .get();
-        for (var d in attSnap.docs) {
+        for (final d in attSnap.docs) {
           final s = (d.data()['status'] ?? '').toString().toLowerCase();
-          if (s == 'present') present++;
-          else if (s == 'absent') absent++;
+          if (s == 'present') {
+            present++;
+          } else if (s == 'absent') {
+            absent++;
+          }
         }
       } catch (_) {}
 
-      setState(() {
-        totalSales = sales;
-        totalBuyers = buyersSnap.docs.length;
-        budget = budgetSnap.docs.isNotEmpty ? ((budgetSnap.docs.first.data()['amount'] ?? 0) as num).toDouble() : 0.0;
-        totalExpenses = expense;
+      if (tAgentKey != null && !_avatarCache.containsKey(tAgentKey)) {
+        final q = await DB.colSync(_cid, C.users)
+            .where('officeEmail', isEqualTo: tAgentKey).limit(1).get();
+        final url = q.docs.isNotEmpty
+            ? (q.docs.first.data()['profilePhotoUrl'] ?? '').toString()
+            : '';
+        if (url.isNotEmpty) _avatarCache[tAgentKey] = url;
+      }
 
-        agentSales = byAgent;
-        agentOrders = ordersByAgent;
-        buyerSales = byBuyer;
-        buyerOrders = ordersByBuyer;
-
-        topProduct = pName;
-        topProductQty = pQty;
-
-        presentCount = present;
-        absentCount = absent;
-      });
-
-      await _prefetchTopAvatars(fs);
+      if (mounted) {
+        setState(() {
+          _sales          = sales;
+          _expenses       = exp;
+          _budget         = budSnap.docs.isNotEmpty
+              ? ((budSnap.docs.first.data()['amount'] ?? 0) as num).toDouble()
+              : 0;
+          _buyers         = buySnap.docs.length;
+          _topAgentEmail  = tAgentKey ?? '';
+          _topAgentSales  = tAgentVal;
+          _topBuyerKey    = tBuyerKey ?? '';
+          _topBuyerSales  = tBuyerVal;
+          _topProduct     = tProd;
+          _topProductQty  = tQty;
+          _present        = present;
+          _absent         = absent;
+        });
+      }
     } catch (_) {
-      // ignore
+      // silently ignore — UI shows placeholders
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _prefetchTopAvatars(FirebaseFirestore fs) async {
-    String? topAgent = _topKey(agentSales);
-    String? topBuyer = _topKey(buyerSales);
-
-    if (topAgent != null && !_avatarUrlCache.containsKey(topAgent)) {
-      final q = await fs.collection('users').where('officeEmail', isEqualTo: topAgent).limit(1).get();
-      if (q.docs.isNotEmpty) {
-        final m = q.docs.first.data();
-        final url = (m['profilePhotoUrl'] ?? m['photoUrl'] ?? m['avatarUrl'] ?? '').toString();
-        if (url.isNotEmpty) _avatarUrlCache[topAgent] = url;
-      } else {
-        final q2 = await fs.collection('users').where('email', isEqualTo: topAgent).limit(1).get();
-        if (q2.docs.isNotEmpty) {
-          final m = q2.docs.first.data();
-          final url = (m['profilePhotoUrl'] ?? m['photoUrl'] ?? m['avatarUrl'] ?? '').toString();
-          if (url.isNotEmpty) _avatarUrlCache[topAgent] = url;
-        }
-      }
-    }
-
-    if (topBuyer != null && !_avatarUrlCache.containsKey(topBuyer)) {
-      final qb = await fs.collection('customers').where('email', isEqualTo: topBuyer).limit(1).get();
-      if (qb.docs.isNotEmpty) {
-        final m = qb.docs.first.data();
-        final url = (m['logoUrl'] ?? m['photoUrl'] ?? m['avatarUrl'] ?? '').toString();
-        if (url.isNotEmpty) _avatarUrlCache[topBuyer] = url;
-      } else {
-        final qb2 = await fs.collection('customers').where('name', isEqualTo: topBuyer).limit(1).get();
-        if (qb2.docs.isNotEmpty) {
-          final m = qb2.docs.first.data();
-          final url = (m['logoUrl'] ?? m['photoUrl'] ?? m['avatarUrl'] ?? '').toString();
-          if (url.isNotEmpty) _avatarUrlCache[topBuyer] = url;
-        }
-      }
-    }
-
-    if (mounted) setState(() {});
-  }
-
-  String? _topKey(Map<String, double> map) {
-    if (map.isEmpty) return null;
-    final list = map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return list.first.key;
-  }
-
-  double _topVal(Map<String, double> map) {
-    if (map.isEmpty) return 0.0;
-    final list = map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return list.first.value;
-  }
-
-  void _openAllBuyers() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAllBuyersPage()));
-  }
-
-  String _periodLabel() => _rangeForFilter().label;
-
-  /* ─────────────────────────── Build ─────────────────────────── */
-
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final topAgentEmail = _topKey(agentSales) ?? '';
-    final topAgentAmount = _topVal(agentSales);
-    final topAgentOrderN = agentOrders[topAgentEmail] ?? 0;
+    final pct = _budget > 0
+        ? (_sales / _budget * 100).clamp(0, 100).toDouble()
+        : 0.0;
 
-    final topBuyerKey = _topKey(buyerSales) ?? '';
-    final topBuyerAmount = _topVal(buyerSales);
-    final topBuyerOrderN = buyerOrders[topBuyerKey] ?? 0;
+    final attTotal = _present + _absent;
+    final attPct   = attTotal > 0 ? (_present / attTotal * 100).round() : 0;
 
-    final percent = budget > 0 ? (totalSales / budget) * 100.0 : 0.0;
-    final safePercent = percent.clamp(0.0, 100.0).toDouble();
-
-    final cards = <Widget>[
-      _ProfileCard(
-        title: 'Total Sales',
-        subtitle: 'Overall revenue • ${_periodLabel()}',
-        stat1Label: 'amount',
-        stat1Value: _money(totalSales),
-        stat2Label: 'buyers',
-        stat2Value: '$totalBuyers',
-        buttonText: '',
-        initialsForFallback: 'S',
-        fallbackIcon: Icons.shopping_bag,
-      ),
-      _ProfileCard(
-        title: 'Expenses',
-        subtitle: 'Cost this period • ${_periodLabel()}',
-        stat1Label: 'cost',
-        stat1Value: _money(totalExpenses),
-        stat2Label: 'budget',
-        stat2Value: budget > 0 ? _money(budget) : '—',
-        buttonText: '',
-        initialsForFallback: 'E',
-        fallbackIcon: Icons.receipt_long,
-      ),
-      _ProfileCard(
-        title: topAgentEmail.isEmpty ? 'Top Agent' : topAgentEmail.split('@').first,
-        subtitle: topAgentEmail.isEmpty ? 'No data in this period' : 'Top performer • ${_periodLabel()}',
-        stat1Label: 'sales',
-        stat1Value: topAgentEmail.isEmpty ? '—' : _money(topAgentAmount),
-        stat2Label: 'orders',
-        stat2Value: '$topAgentOrderN',
-        buttonText: 'View',
-        onPressed: topAgentEmail.isEmpty ? null : () {},
-        imageUrl: _avatarUrlCache[topAgentEmail],
-        initialsForFallback: _initialsFromKey(topAgentEmail.isEmpty ? 'A' : topAgentEmail),
-        fallbackIcon: Icons.person,
-        verified: true,
-      ),
-      _ProfileCard(
-        title: topBuyerKey.isEmpty ? 'Top Buyer' : topBuyerKey.split('@').first,
-        subtitle: topBuyerKey.isEmpty ? 'No data in this period' : 'Most valuable customer • ${_periodLabel()}',
-        stat1Label: 'spent',
-        stat1Value: topBuyerKey.isEmpty ? '—' : _money(topBuyerAmount),
-        stat2Label: 'orders',
-        stat2Value: '$topBuyerOrderN',
-        buttonText: 'View',
-        onPressed: topBuyerKey.isEmpty ? null : () {},
-        imageUrl: _avatarUrlCache[topBuyerKey],
-        initialsForFallback: _initialsFromKey(topBuyerKey.isEmpty ? 'B' : topBuyerKey),
-        fallbackIcon: Icons.business,
-        verified: true,
-      ),
-      _ProfileCard(
-        title: topProduct.isEmpty ? 'Most Sold Product' : topProduct,
-        subtitle: 'Highest quantity sold • ${_periodLabel()}',
-        stat1Label: 'qty',
-        stat1Value: topProductQty > 0 ? '${topProductQty} pcs' : '—',
-        stat2Label: ' ',
-        stat2Value: ' ',
-        buttonText: '',
-        initialsForFallback: 'P',
-        fallbackIcon: Icons.inventory_2,
-      ),
-      _ProfileCard(
-        title: 'Attendance (Today)',
-        subtitle: 'Daily presence snapshot',
-        stat1Label: 'present',
-        stat1Value: '$presentCount',
-        stat2Label: 'absent',
-        stat2Value: '$absentCount',
-        buttonText: '',
-        initialsForFallback: 'T',
-        fallbackIcon: Icons.groups_2,
-      ),
-      _PieAutoFitCard(
-        title: 'Budget Achievement',
-        subtitle: _periodLabel(),
-        percent: safePercent,
-      ),
-    ];
-
-    // Auto height for carousel: scales with screen, capped to avoid overflow.
-    final screenH = MediaQuery.of(context).size.height;
-    final carouselHeight = math.min(360.0, screenH * 0.42);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-              DropdownButton<String>(
-                value: filterType,
-                underline: const SizedBox(),
-                items: const [
-                  DropdownMenuItem(value: 'this_month', child: Text('This Month')),
-                  DropdownMenuItem(value: 'prev_month', child: Text('Previous Month')),
-                  DropdownMenuItem(value: 'last_3_months', child: Text('Last 3 Months')),
-                  DropdownMenuItem(value: 'this_year', child: Text('This Year')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  setState(() => filterType = v);
-                  fetchReportData();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── Period filter chips ──────────────────────────────────────────
+        SizedBox(
+          height: 32,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            children: _filters.map((f) {
+              final active = _filter == f.$1;
+              return GestureDetector(
+                onTap: () {
+                  if (_filter == f.$1) return;
+                  setState(() => _filter = f.$1);
+                  _fetch();
                 },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          SizedBox(
-            height: carouselHeight,
-            child: CarouselSlider(
-              items: cards
-                  .map(
-                    (w) => Builder(
-                  builder: (context) => SizedBox(
-                    width: MediaQuery.of(context).size.width * 0.92,
-                    child: w,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: active ? _purple : _card,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                        color: active ? _purple : _border, width: 1.2),
+                    boxShadow: active
+                        ? [BoxShadow(
+                            color: _purple.withValues(alpha: 0.25),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2))]
+                        : [],
                   ),
+                  child: Text(f.$2,
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: active ? Colors.white : _sub)),
                 ),
-              )
-                  .toList(),
-              options: CarouselOptions(
-                height: carouselHeight,
-                autoPlay: true,
-                viewportFraction: 1.0,
-                enlargeCenterPage: false, // prevent scale-induced overflow
-                autoPlayInterval: const Duration(seconds: 4),
-              ),
+              );
+            }).toList(),
+          ),
+        ),
+
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(12, 4, 12, 0),
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              backgroundColor: Color(0xFFE8E0F4),
+              color: _purple,
             ),
           ),
 
-          if (isLoading) const SizedBox(height: 8),
-          if (isLoading) const LinearProgressIndicator(minHeight: 3),
-        ],
+        const SizedBox(height: 10),
+
+        // ── Hero radial card ─────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: _HeroCard(
+            loading:   _loading,
+            profit:    _profit,
+            revenue:   _sales,
+            expenses:  _expenses,
+            budgetPct: pct,
+            budgetSet: _budget > 0,
+            pulseAnim: _pulseAnim,
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        // ── Insight 2×2 grid cards ───────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 2.0,
+            children: [
+              _InsightCard(
+                icon: Icons.person_rounded,
+                label: 'Top Agent',
+                value: _topAgentEmail.isEmpty
+                    ? '—'
+                    : _topAgentEmail.split('@').first,
+                sub: _topAgentEmail.isEmpty
+                    ? 'No data yet'
+                    : _fmtShort(_topAgentSales),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E0040), Color(0xFF3B0764)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                accentColor: _indigoLt,
+                avatarUrl: _avatarCache[_topAgentEmail],
+                initials: _initials(_topAgentEmail.isEmpty ? 'A' : _topAgentEmail),
+              ),
+              _InsightCard(
+                icon: Icons.business_rounded,
+                label: 'Top Buyer',
+                value: _topBuyerKey.isEmpty
+                    ? '—'
+                    : (_topBuyerKey.contains('@')
+                        ? _topBuyerKey.split('@').first
+                        : _topBuyerKey),
+                sub: _topBuyerKey.isEmpty
+                    ? 'No data yet'
+                    : _fmtShort(_topBuyerSales),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2E1065), Color(0xFF4C1D95)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                accentColor: _violet,
+                initials: _initials(_topBuyerKey.isEmpty ? 'B' : _topBuyerKey),
+                onTap: _topBuyerKey.isEmpty
+                    ? null
+                    : () => Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => const AdminAllBuyersPage())),
+              ),
+              _InsightCard(
+                icon: Icons.how_to_reg_rounded,
+                label: 'Attendance',
+                value: _loading ? '—' : '$_present / $attTotal',
+                sub: attTotal == 0
+                    ? 'No records today'
+                    : '$attPct% present',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                accentColor: _accent,
+                initials: '✓',
+              ),
+              _InsightCard(
+                icon: Icons.inventory_2_rounded,
+                label: 'Top Product',
+                value: _loading
+                    ? '—'
+                    : (_topProduct.isEmpty ? 'None' : _topProduct),
+                sub: _topProductQty > 0
+                    ? '$_topProductQty units sold'
+                    : 'No sales yet',
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                accentColor: _indigoLt,
+                initials: '★',
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+}
+
+// ── Hero radial card ──────────────────────────────────────────────────────────
+class _HeroCard extends StatelessWidget {
+  final bool   loading;
+  final double profit;   // revenue − expenses (primary hero value)
+  final double revenue;  // total sales (shown as sub-stat)
+  final double expenses;
+  final double budgetPct;
+  final bool   budgetSet;
+  final Animation<double> pulseAnim;
+
+  const _HeroCard({
+    required this.loading,
+    required this.profit,
+    required this.revenue,
+    required this.expenses,
+    required this.budgetPct,
+    required this.budgetSet,
+    required this.pulseAnim,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sw = MediaQuery.of(context).size.width - 24; // full width minus padding
+    return AnimatedBuilder(
+      animation: pulseAnim,
+      builder: (context, child) {
+        return Container(
+          width: sw,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E0040), Color(0xFF2A0A4B), Color(0xFF4C1D95)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: _purple.withValues(alpha: 0.45),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Decorative radial rings
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _RingPainter(
+                    scale: pulseAnim.value,
+                    progress: budgetSet ? (budgetPct / 100).clamp(0, 1) : 0,
+                  ),
+                ),
+              ),
+
+              // Content
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // ── Left: Profit hero ────────────────────────────────
+                    Expanded(
+                      flex: 5,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(children: [
+                            Container(
+                              width: 20, height: 20,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                profit >= 0
+                                    ? Icons.trending_up_rounded
+                                    : Icons.trending_down_rounded,
+                                color: Colors.white, size: 12),
+                            ),
+                            const SizedBox(width: 5),
+                            Text('Profit',
+                                style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white54)),
+                          ]),
+                          const SizedBox(height: 4),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              loading ? '…' : _fmt(profit.abs()),
+                              style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            loading
+                                ? ''
+                                : profit < 0
+                                    ? 'Net loss'
+                                    : 'Net profit',
+                            style: GoogleFonts.inter(
+                                fontSize: 9,
+                                color: profit < 0
+                                    ? const Color(0xFFFCA5A5)
+                                    : Colors.white38,
+                                fontWeight: FontWeight.w400),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── Divider ──────────────────────────────────────────
+                    Container(
+                      width: 1,
+                      height: 52,
+                      margin: const EdgeInsets.symmetric(horizontal: 12),
+                      color: Colors.white12,
+                    ),
+
+                    // ── Right: Sub-values ────────────────────────────────
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _SubStat(
+                            icon: Icons.receipt_long_rounded,
+                            label: 'Expense',
+                            value: loading ? '…' : _fmtShort(expenses),
+                            accent: _accent,
+                          ),
+                          const SizedBox(height: 8),
+                          _SubStat(
+                            icon: Icons.trending_up_rounded,
+                            label: 'Revenue',
+                            value: loading ? '…' : _fmtShort(revenue),
+                            accent: _indigoLt,
+                          ),
+                          const SizedBox(height: 8),
+                          _SubStat(
+                            icon: Icons.donut_small_rounded,
+                            label: 'Budget',
+                            value: loading
+                                ? '…'
+                                : (budgetSet
+                                    ? '${budgetPct.toStringAsFixed(0)}%'
+                                    : 'Not set'),
+                            accent: _violet,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── Sub-stat row inside hero ──────────────────────────────────────────────────
+class _SubStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+
+  const _SubStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(
+        width: 18, height: 18,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.25),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(icon, color: accent, size: 10),
+      ),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: GoogleFonts.inter(
+                    fontSize: 8,
+                    color: Colors.white38,
+                    fontWeight: FontWeight.w500)),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.1)),
+          ],
+        ),
+      ),
+    ]);
+  }
+}
+
+// ── Insight card (2×2 grid, matches hero card style) ─────────────────────────
+class _InsightCard extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final String       value;
+  final String       sub;
+  final Gradient     gradient;
+  final Color        accentColor;
+  final String       initials;
+  final String?      avatarUrl;
+  final VoidCallback? onTap;
+
+  const _InsightCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.gradient,
+    required this.accentColor,
+    required this.initials,
+    this.avatarUrl,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: _purple.withValues(alpha: 0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // Decorative circle
+            Positioned(
+              right: -12, top: -12,
+              child: Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Icon / avatar
+                  Container(
+                    width: 34, height: 34,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: avatarUrl != null && avatarUrl!.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              avatarUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(initials,
+                                    style: GoogleFonts.inter(
+                                        color: accentColor,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 11)),
+                              ),
+                            ),
+                          )
+                        : Icon(icon, color: accentColor, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  // Text
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white54,
+                                letterSpacing: 0.3)),
+                        const SizedBox(height: 2),
+                        Text(value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.spaceGrotesk(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                height: 1.1)),
+                        const SizedBox(height: 2),
+                        Text(sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                                fontSize: 9,
+                                color: accentColor,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  if (onTap != null)
+                    Icon(Icons.chevron_right_rounded,
+                        size: 14, color: Colors.white38),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+// ── Ring painter (decorative radial arcs on hero) ─────────────────────────────
+class _RingPainter extends CustomPainter {
+  final double scale;
+  final double progress; // 0..1 for budget arc
+
+  const _RingPainter({required this.scale, required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width * 0.5;
+    final cy = size.height * 0.5;
+
+    // Outer decorative ring
+    final outerPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.04)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 40;
+    canvas.drawCircle(
+        Offset(cx * 1.6, cy * 0.3), size.width * 0.55 * scale, outerPaint);
+
+    // Inner decorative ring
+    final innerPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 20;
+    canvas.drawCircle(
+        Offset(cx * 1.7, cy * 0.2), size.width * 0.32 * scale, innerPaint);
+
+    // Budget progress arc (bottom-right corner)
+    if (progress > 0) {
+      final trackPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.08)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round;
+      final arcRect = Rect.fromCircle(
+          center: Offset(size.width - 28, size.height - 28), radius: 20);
+      canvas.drawArc(arcRect, -math.pi / 2, math.pi * 2, false, trackPaint);
+
+      final progressPaint = Paint()
+        ..color = _accent.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+          arcRect, -math.pi / 2, math.pi * 2 * progress, false, progressPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) =>
+      old.scale != scale || old.progress != progress;
 }

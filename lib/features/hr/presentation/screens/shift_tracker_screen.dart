@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -13,6 +15,7 @@ class ShiftTrackerScreen extends StatefulWidget {
 }
 
 class _ShiftTrackerScreenState extends State<ShiftTrackerScreen> {
+  String _cid = '';
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   String _filterEmployee = '';
@@ -53,9 +56,9 @@ class _ShiftTrackerScreenState extends State<ShiftTrackerScreen> {
                   'date': shiftDate,
                 };
                 if (isEdit) {
-                  await FirebaseFirestore.instance.collection('shifts').doc(doc.id).update(data);
+                  await DB.colSync(_cid, C.shifts).doc(doc.id).update(data);
                 } else {
-                  await FirebaseFirestore.instance.collection('shifts').add(data);
+                  await DB.colSync(_cid, C.shifts).add(data);
                 }
                 Navigator.pop(context);
               },
@@ -69,7 +72,7 @@ class _ShiftTrackerScreenState extends State<ShiftTrackerScreen> {
   }
 
   Future<void> _exportPDF(List<QueryDocumentSnapshot> shifts) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     pdf.addPage(
       pw.Page(
         build: (context) => pw.Column(
@@ -89,18 +92,28 @@ class _ShiftTrackerScreenState extends State<ShiftTrackerScreen> {
     );
     await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Shift Tracker'),
+        title: const Text('Shift Tracker', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: () async {
-              final snapshot = await FirebaseFirestore.instance.collection('shifts').get();
+              final snapshot = await DB.colSync(_cid, C.shifts).get();
               _exportPDF(snapshot.docs);
             },
           ),
@@ -142,8 +155,7 @@ class _ShiftTrackerScreenState extends State<ShiftTrackerScreen> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('shifts')
+              stream: DB.colSync(_cid, C.shifts)
                   .where('date', isEqualTo: DateFormat('yyyy-MM-dd').format(_selectedDay))
                   .snapshots(),
               builder: (context, snapshot) {

@@ -1,1897 +1,1869 @@
 // lib/features/admin/presentation/screens/reports_screen.dart
-import 'dart:async';
-import 'dart:math' as math;
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:shimmer/shimmer.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 
-import 'admin_ai_insights.dart';
-import 'admin_analytics_kpis.dart';
-import 'admin_customers_buyers.dart';
-import 'admin_export_logistics.dart';
-import 'admin_finance.dart';
-import 'admin_hr_payroll.dart';
-import 'admin_inventory.dart';
-import 'admin_manufacturing.dart';
-import 'admin_quick_actions.dart';
-import 'admin_risk_compliance.dart';
-import 'admin_sales_marketing.dart';
-import 'admin_security.dart';
-import 'admin_settings_admin.dart';
-import 'admin_suppliers.dart';
+// ─────────────────────────────────────────────────────────────
+// DESIGN TOKENS
+// ─────────────────────────────────────────────────────────────
+class _T {
+  static const bg          = Color(0xFFF6F7FB);
+  static const fg          = Color(0xFF0F1724);
+  static const card        = Colors.white;
+  static const border      = Color(0x14000000);
+  static const primary     = Color(0xFF5B00A1);
+  static const primaryFg   = Colors.white;
+  static const secondary   = Color(0xFFEEF2FF);
+  static const secondaryFg = Color(0xFF3B2766);
+  static const muted       = Color(0xFFF3F4F6);
+  static const mutedFg     = Color(0xFF6B7280);
+  static const success     = Color(0xFF1FA807);
+  static const successFg   = Colors.white;
+  static const accent      = Color(0xFF7C5CFF);
+  static const accentFg    = Colors.white;
+  static const destructive = Color(0xFFFF3838);
+  static const destructiveFg = Colors.white;
+  static const warning     = Color(0xFFF5E90A);
+  static const warningFg   = Color(0xFF111827);
 
-/// ===============================================
-/// SAAS PATH HELPER
-/// ===============================================
-class SaaSPath {
-  final String? orgId;
-  const SaaSPath({this.orgId});
-
-  CollectionReference<Map<String, dynamic>> col(String name) {
-    final db = FirebaseFirestore.instance;
-    if (orgId == null || orgId!.trim().isEmpty) return db.collection(name);
-    return db.collection('orgs').doc(orgId).collection(name);
-  }
+  static const rSm = 4.0;
+  static const rMd = 8.0;
+  static const rLg = 12.0;
+  static const rXl = 16.0;
 }
 
-/// ===============================================
-/// THEME COLORS (Deep Purple Gradient)
-/// ===============================================
-class AppColors {
-  static const p1 = Color(0xFF2E1065);
-  static const p2 = Color(0xFF5B21B6);
-  static const p3 = Color(0xFF7C3AED);
-
-  static const bg = Color(0xFFF7F7FB);
-  static const card = Colors.white;
-  static const text = Color(0xFF0F172A);
-  static const text2 = Color(0xFF64748B);
-  static const border = Color(0xFFE7E9F3);
-
-  static const success = Color(0xFF10B981);
-  static const warning = Color(0xFFF59E0B);
-  static const danger = Color(0xFFEF4444);
-  static const info = Color(0xFF06B6D4);
-}
-
-/// ===============================================
-/// HELPERS
-/// ===============================================
-double _asDouble(dynamic v) {
+// ─────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────
+double _n(dynamic v) {
   if (v is num) return v.toDouble();
-  if (v is String) return double.tryParse(v.replaceAll(',', '').trim()) ?? 0.0;
-  return 0.0;
+  if (v is String) return double.tryParse(v.replaceAll(',', '').trim()) ?? 0;
+  return 0;
 }
 
-/// Use "L" for Lakh (1 Lakh = 100,000)
-String _fmtLakh(double amount, {String prefix = '৳'}) {
-  final abs = amount.abs();
-  if (abs >= 100000) {
-    final l = amount / 100000.0;
-    final s = (l.abs() >= 100) ? l.toStringAsFixed(0) : l.toStringAsFixed(1);
-    return '$prefix $s L';
-  }
-  final n = NumberFormat.decimalPattern('en_BD').format(amount.round());
-  return '$prefix $n';
+String _taka(double v) {
+  final a = v.abs();
+  if (a >= 10000000) return '৳${(v / 10000000).toStringAsFixed(1)}Cr';
+  if (a >= 100000)   return '৳${(v / 100000).toStringAsFixed(1)}L';
+  if (a >= 1000)     return '৳${(v / 1000).toStringAsFixed(1)}k';
+  return '৳${v.round()}';
 }
 
-/// Compact axis labels: ৳ 2.5 L, ৳ 80k, ৳ 900
-String _fmtLakhShort(double amount, {String prefix = '৳'}) {
-  final abs = amount.abs();
-  if (abs >= 100000) {
-    final l = amount / 100000.0;
-    final s = (l.abs() >= 100) ? l.toStringAsFixed(0) : l.toStringAsFixed(1);
-    return '$prefix $s L';
-  }
-  if (abs >= 1000) {
-    final k = amount / 1000.0;
-    final s = (k.abs() >= 100) ? k.toStringAsFixed(0) : k.toStringAsFixed(1);
-    return '$prefix $s k';
-  }
-  return '$prefix ${amount.toStringAsFixed(0)}';
-}
+String _fmtFull(double v) =>
+    '৳${NumberFormat('#,##0', 'en_US').format(v.round())}';
 
-String _fmtInt(int n) => NumberFormat.decimalPattern('en_BD').format(n);
-
-DateTimeRange _monthRange(DateTime anchor) {
-  final start = DateTime(anchor.year, anchor.month, 1);
-  final end = DateTime(anchor.year, anchor.month + 1, 1);
-  return DateTimeRange(start: start, end: end);
-}
-
-String _fmtRange(DateTimeRange r) {
-  final f = DateFormat('dd MMM');
-  final y = DateFormat('yyyy');
-  return '${f.format(r.start)} - ${f.format(r.end.subtract(const Duration(days: 1)))} ${y.format(r.start)}';
-}
-
-DateTime? _extractAnyDate(Map<String, dynamic> m) {
-  final candidates = [
-    'date',
-    'createdAt',
-    'created_at',
-    'invoiceDate',
-    'invoice_date',
-    'timestamp',
-    'time',
-  ];
-
-  for (final k in candidates) {
-    final v = m[k];
-    if (v == null) continue;
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    if (v is String) {
-      final s = v.trim();
-      final d1 = DateTime.tryParse(s);
-      if (d1 != null) return d1;
-      for (final p in ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy']) {
-        try {
-          return DateFormat(p).parseStrict(s);
-        } catch (_) {}
-      }
-    }
-  }
+DateTime? _ts(dynamic v) {
+  if (v is Timestamp) return v.toDate();
+  if (v is DateTime)  return v;
+  if (v is String)    return DateTime.tryParse(v.trim());
   return null;
 }
 
-String _agentKey(Map<String, dynamic> m) {
-  final email = (m['agentEmail'] ?? m['createdBy'] ?? m['userEmail'] ?? m['salesEmail'] ?? '')
-      .toString()
-      .trim();
-  final name =
-  (m['agentName'] ?? m['salesPerson'] ?? m['createdByName'] ?? m['name'] ?? '').toString().trim();
-  if (email.isNotEmpty) return email;
-  if (name.isNotEmpty) return name;
-  return 'Unknown';
+
+bool _inRange(DateTime? d, DateTime from, DateTime to) =>
+    d != null && !d.isBefore(from) && d.isBefore(to);
+
+// ─────────────────────────────────────────────────────────────
+// PERIOD
+// ─────────────────────────────────────────────────────────────
+enum _Period { month, quarter, year, allTime }
+
+extension _PeriodX on _Period {
+  String get label {
+    switch (this) {
+      case _Period.month:   return 'Month';
+      case _Period.quarter: return 'Quarter';
+      case _Period.year:    return 'Year';
+      case _Period.allTime: return 'All Time';
+    }
+  }
+
+  String get fullLabel {
+    switch (this) {
+      case _Period.month:   return 'Current Month';
+      case _Period.quarter: return 'Last 3 Months';
+      case _Period.year:    return 'Last Year';
+      case _Period.allTime: return 'All Time';
+    }
+  }
+
+  DateTimeRange range(DateTime now) {
+    switch (this) {
+      case _Period.month:
+        return DateTimeRange(
+          start: DateTime(now.year, now.month, 1),
+          end:   DateTime(now.year, now.month + 1, 1),
+        );
+      case _Period.quarter:
+        return DateTimeRange(
+          start: DateTime(now.year, now.month - 2, 1),
+          end:   DateTime(now.year, now.month + 1, 1),
+        );
+      case _Period.year:
+        return DateTimeRange(
+          start: DateTime(now.year - 1, now.month, 1),
+          end:   DateTime(now.year, now.month + 1, 1),
+        );
+      case _Period.allTime:
+        return DateTimeRange(
+          start: DateTime(2000),
+          end:   now.add(const Duration(days: 1)),
+        );
+    }
+  }
 }
 
-String _agentName(Map<String, dynamic> m, String fallbackKey) {
-  final name = (m['agentName'] ?? m['salesPerson'] ?? m['createdByName'] ?? '').toString().trim();
-  if (name.isNotEmpty) return name;
-  return fallbackKey;
-}
-
-class TrendPoint {
-  final String label;
-  final double sales;
+// ─────────────────────────────────────────────────────────────
+// DATA MODEL
+// ─────────────────────────────────────────────────────────────
+class _ReportData {
+  final double cashIn;
+  final double expense;
   final double profit;
-  TrendPoint({required this.label, required this.sales, required this.profit});
-}
+  final double loan;
+  final double avgBudget;
+  final double avgRoi;
+  final int    production;
+  final int    stock;
+  final int    rndProjects;
+  final int    workOrders;
+  final int    employees;
+  final int    attendance;
+  final int    clients;
+  final int    campaigns;
 
-class TopSeller {
-  final String key;
-  final String name;
-  final double sales;
-  final int invoices;
-  TopSeller({required this.key, required this.name, required this.sales, required this.invoices});
-}
-
-class OwnerDashboardData {
-  final double sales;
-  final double profit; // Profit = sales - expenses
-  final double expenses;
-  final double moneyIn;
-
-  final int orders;
-  final int shipments;
-  final int workOrders;
-
-  final int buyers;
-  final int suppliers;
-  final int workers;
-
-  /// Last 6 months (including current month)
-  final List<TrendPoint> trend;
-
-  final List<TopSeller> topSellers;
-
-  OwnerDashboardData({
-    required this.sales,
-    required this.profit,
-    required this.expenses,
-    required this.moneyIn,
-    required this.orders,
-    required this.shipments,
-    required this.workOrders,
-    required this.buyers,
-    required this.suppliers,
-    required this.workers,
-    required this.trend,
-    required this.topSellers,
+  const _ReportData({
+    this.cashIn      = 0,
+    this.expense     = 0,
+    this.profit      = 0,
+    this.loan        = 0,
+    this.avgBudget   = 0,
+    this.avgRoi      = 0,
+    this.production  = 0,
+    this.stock       = 0,
+    this.rndProjects = 0,
+    this.workOrders  = 0,
+    this.employees   = 0,
+    this.attendance  = 0,
+    this.clients     = 0,
+    this.campaigns   = 0,
   });
+
+  double get profitMargin =>
+      cashIn > 0 ? (profit / cashIn) * 100 : 0;
 }
 
-/// ===============================================
-/// REPORTS SCREEN
-/// ===============================================
-class ReportsScreen extends StatefulWidget {
-  final String? orgId;
-  const ReportsScreen({super.key, this.orgId});
+// ─────────────────────────────────────────────────────────────
+// DATA LOADER (shared logic)
+// ─────────────────────────────────────────────────────────────
+Future<_ReportData> _loadData(_Period period) async {
+  final _cid = await LocalStorageService.getSavedCompanyId() ?? '';
+  final db   = DB.firestore;
+  final now  = DateTime.now();
+  final rng  = period.range(now);
+  final from = rng.start;
+  final to   = rng.end;
+  final all  = period == _Period.allTime;
 
+  final res = await Future.wait([
+    DB.colSync(_cid, C.expenses).get(),
+    DB.colSync(_cid, C.invoices).get(),
+    DB.colSync(_cid, C.loans).get(),
+    DB.colSync(_cid, C.attendance).get(),
+    DB.colSync(_cid, C.dailyProduction).get(),
+    DB.colSync(_cid, C.stocks).get(),
+    DB.colSync(_cid, C.rndProjects).get(),
+    DB.colSync(_cid, C.workOrders).get(),
+    DB.colSync(_cid, C.users).get(),
+    DB.colSync(_cid, C.campaigns).get(),
+    DB.colSync(_cid, C.customers).get(),
+  ]);
+
+  // Expenses
+  double expense = 0;
+  for (final d in res[0].docs) {
+    final m  = d.data();
+    final dt = _ts(m['dueDate']) ?? _ts(m['createdAt']) ?? _ts(m['timestamp']);
+    if (all || _inRange(dt, from, to)) expense += _n(m['amount'] ?? m['total'] ?? 0);
+  }
+
+  // Cash In
+  double cashIn = 0;
+  for (final d in res[1].docs) {
+    final m  = d.data();
+    final dt = _ts(m['timestamp']) ?? _ts(m['createdAt']) ?? _ts(m['invoiceDate']);
+    if (all || _inRange(dt, from, to)) {
+      cashIn += _n(m['grandTotal'] ?? m['received'] ?? m['paidAmount']
+                ?? m['paid'] ?? m['amount'] ?? m['total'] ?? 0);
+    }
+  }
+
+  // Loans — show outstanding (disbursed principal minus repaid amounts)
+  // Only count disbursed/approved loans; subtract repayments from subcollections.
+  double loan = 0;
+  for (final d in res[2].docs) {
+    final m      = d.data();
+    final status = (m['status'] ?? '').toString().toLowerCase();
+    // Only count active (approved/disbursed) loans — not pending/rejected/withdrawn/closed
+    if (!['approved', 'disbursed'].contains(status)) continue;
+    final dt = _ts(m['disbursedAt']) ?? _ts(m['decisionAt']) ?? _ts(m['requestedAt']) ?? _ts(m['createdAt']);
+    if (!all && !_inRange(dt, from, to)) continue;
+    final principal = _n(m['disbursedAmount'] ?? m['amount'] ?? 0);
+    // Fetch repayments for this loan to compute outstanding
+    final repaysSnap = await d.reference.collection('repayments').get();
+    final repaid = repaysSnap.docs.fold<double>(
+        0.0, (sum, r) => sum + _n(r.data()['amount'] ?? 0));
+    final outstanding = (principal - repaid).clamp(0.0, double.infinity);
+    loan += outstanding;
+  }
+
+  // Attendance
+  int attend = 0;
+  for (final d in res[3].docs) {
+    final m  = d.data();
+    final dt = _ts(m['date']) ?? _ts(m['timestamp']) ?? _ts(m['createdAt']);
+    if (all || _inRange(dt, from, to)) attend++;
+  }
+
+  // Production
+  int prod = 0;
+  for (final d in res[4].docs) {
+    final m  = d.data();
+    final dt = _ts(m['productionDate']) ?? _ts(m['timestamp']) ?? _ts(m['createdAt']);
+    if (all || _inRange(dt, from, to)) prod += _n(m['quantity'] ?? m['qty'] ?? 0).round();
+  }
+
+  // Stock (snapshot)
+  int stock = 0;
+  for (final d in res[5].docs) {
+          final m = d.data();
+    stock += _n(m['qty'] ?? m['quantity'] ?? m['stock'] ?? 0).round();
+  }
+
+  // R&D (running only)
+  int rnd = 0;
+  for (final d in res[6].docs) {
+    final m      = d.data();
+    final status = (m['status'] ?? '').toString();
+    if (status == 'Completed' || status == 'Cancelled') continue;
+    final dt = _ts(m['createdAt']) ?? _ts(m['timestamp']);
+    if (all || _inRange(dt, from, to)) rnd++;
+  }
+
+  // Work Orders
+  int wo = 0;
+  for (final d in res[7].docs) {
+    final m  = d.data();
+    final dt = _ts(m['timestamp']) ?? _ts(m['createdAt']) ?? _ts(m['lastUpdated']);
+    if (all || _inRange(dt, from, to)) wo++;
+  }
+
+  // Employees
+  int emp = 0;
+  for (final d in res[8].docs) {
+    final m    = d.data();
+    final dept = (m['department'] ?? m['role'] ?? '').toString().toLowerCase();
+    if (dept != 'admin') emp++;
+  }
+
+  // Campaigns + ROI + Budget
+  int    camps     = 0;
+  double budgetSum = 0, roiSum = 0;
+  int    budgetN   = 0, roiN   = 0;
+  for (final d in res[9].docs) {
+    final m  = d.data();
+    final dt = _ts(m['createdAt']) ?? _ts(m['startDate']);
+    if (!all && !_inRange(dt, from, to)) continue;
+    camps++;
+    final bud = _n(m['budget'] ?? 0);
+    if (bud > 0) { budgetSum += bud; budgetN++; }
+    double roi = _n(m['roi'] ?? m['ROI'] ?? 0);
+    if (roi == 0 && bud > 0) {
+      final totals = m['totals'];
+      if (totals is Map) {
+        final rev = _n(totals['revenue'] ?? 0);
+        if (rev > 0) roi = ((rev - bud) / bud) * 100;
+      }
+    }
+    if (roi != 0) { roiSum += roi; roiN++; }
+  }
+
+  // Clients
+  final clientCount = res[10].docs.length;
+
+  return _ReportData(
+    cashIn:      cashIn,
+    expense:     expense,
+    profit:      cashIn - expense,
+    loan:        loan,
+    avgBudget:   budgetN > 0 ? budgetSum / budgetN : 0,
+    avgRoi:      roiN    > 0 ? roiSum    / roiN    : 0,
+    production:  prod,
+    stock:       stock,
+    rndProjects: rnd,
+    workOrders:  wo,
+    employees:   emp,
+    attendance:  attend,
+    clients:     clientCount,
+    campaigns:   camps,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// PDF BUILDER
+// ─────────────────────────────────────────────────────────────
+Future<Uint8List> _buildPdf(_ReportData d, _Period period, String company) async {
+  final doc       = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
+  final now       = DateTime.now();
+  final generated = DateFormat('dd MMM yyyy, hh:mm a').format(now);
+  final period_   = period.fullLabel;
+
+  // Gazette-style PDF matching the design reference
+  doc.addPage(pw.MultiPage(
+    pageFormat: PdfPageFormat.a4,
+    margin: const pw.EdgeInsets.all(40),
+    build: (_) => [
+      // ── Decorative header ──
+      pw.Container(
+        padding: const pw.EdgeInsets.only(bottom: 16),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(bottom: pw.BorderSide(width: 2.5, color: PdfColors.black)),
+        ),
+        child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.center, children: [
+          pw.Text(company,
+              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold,
+                  letterSpacing: 1)),
+          pw.SizedBox(height: 4),
+          pw.Text('Executive Performance Report',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold,
+                  letterSpacing: 0.5)),
+          pw.SizedBox(height: 8),
+          pw.Text('Reporting Period: $period_   |   Date of Issue: $generated',
+              style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+        ]),
+      ),
+      pw.SizedBox(height: 20),
+
+      // ── Section 1: Executive Summary ──
+      _pSection('1. Executive Summary'),
+      pw.Text(
+        'This document serves as the official performance report for $company for the '
+        'referenced period. The organization recorded a total Cash In of ${_fmtFull(d.cashIn)} '
+        'against an Expense of ${_fmtFull(d.expense)}, resulting in a net Profit of '
+        '${_fmtFull(d.profit)}. Overall performance indicates a '
+        '${d.profit >= 0 ? 'stable growth trajectory' : 'period requiring cost review'} '
+        'with a Profit Margin of ${d.profitMargin.toStringAsFixed(1)}%. Key indicators '
+        'across Financials, Operations, HR and Sales '
+        '${d.profit >= 0 ? 'remain positive and aligned with corporate targets.' : 'require attention.'}',
+        style: pw.TextStyle(fontSize: 11, lineSpacing: 4),
+        textAlign: pw.TextAlign.justify,
+      ),
+      pw.SizedBox(height: 20),
+
+      // ── Section 2: Detailed Metrics ──
+      _pSection('2. Detailed Metrics'),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.75),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(3),
+          1: const pw.FlexColumnWidth(2),
+        },
+        children: [
+          // Header
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              _pCell('Indicator', bold: true),
+              _pCell('Value',     bold: true, right: true),
+            ],
+          ),
+          // Financials group
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              _pCell('Financials', bold: true, span: true),
+              _pCell('', span: true),
+            ],
+          ),
+          _pRow('Total Cash In',    _fmtFull(d.cashIn)),
+          _pRow('Total Expense',    _fmtFull(d.expense)),
+          _pRow('Net Profit',       _fmtFull(d.profit)),
+          _pRow('Profit Margin',    '${d.profitMargin.toStringAsFixed(1)}%'),
+          _pRow('Avg Campaign Budget', _fmtFull(d.avgBudget)),
+          _pRow('Loan Obligations', _fmtFull(d.loan)),
+          // Operations group
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                    children: [
+              _pCell('Operations & Factory', bold: true, span: true),
+              _pCell('', span: true),
+            ],
+          ),
+          _pRow('Total Production',  '${NumberFormat('#,##0').format(d.production)} units'),
+          _pRow('Current Stock',     '${NumberFormat('#,##0').format(d.stock)} units'),
+          _pRow('Work Orders',       '${d.workOrders}'),
+          _pRow('R&D Projects Running', '${d.rndProjects}'),
+          // HR group
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                        children: [
+              _pCell('HR & People', bold: true, span: true),
+              _pCell('', span: true),
+            ],
+          ),
+          _pRow('Total Employees', '${d.employees}'),
+          _pRow('Attendance Records', '${d.attendance}'),
+          // Sales group
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              _pCell('Sales & Marketing', bold: true, span: true),
+              _pCell('', span: true),
+            ],
+          ),
+          _pRow('Total Clients',    '${NumberFormat('#,##0').format(d.clients)}'),
+          _pRow('Active Campaigns', '${d.campaigns}'),
+          _pRow('Avg ROI',          '${d.avgRoi.toStringAsFixed(1)}%'),
+        ],
+      ),
+      pw.SizedBox(height: 20),
+
+      // ── Section 3: Conclusion ──
+      _pSection('3. Conclusion & Recommendations'),
+      pw.Text(
+        d.profit >= 0
+            ? 'The overall financial health remains robust. The positive trend in Cash In '
+              'and Profit Margin suggests effective operational controls and steady market demand.\n\n'
+              'Action Items: Future efforts should prioritize reducing Loan Obligations and '
+              'aggressively expanding the active client base. Special focus is required on '
+              'operational efficiency to maximize the Return on Investment (ROI) across '
+              'ongoing internal projects.'
+            : 'The period shows a net loss requiring immediate review of expense categories. '
+              'Priority actions include cost reduction initiatives, loan restructuring, and '
+              'accelerating revenue-generating activities across all departments.',
+        style: pw.TextStyle(fontSize: 11, lineSpacing: 4),
+        textAlign: pw.TextAlign.justify,
+      ),
+      pw.SizedBox(height: 48),
+
+      // ── Signature block ──
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+          pw.Column(children: [
+            pw.Container(
+              width: 140,
+              decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(style: pw.BorderStyle.dashed))),
+              child: pw.SizedBox(height: 24),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text('PREPARED BY',
+                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 0.5)),
+          ]),
+          pw.Column(children: [
+            pw.Container(
+              width: 140,
+              decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(style: pw.BorderStyle.dashed))),
+              child: pw.SizedBox(height: 24),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text('AUTHORIZED SIGNATORY',
+                style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 0.5)),
+          ]),
+        ],
+      ),
+      pw.SizedBox(height: 16),
+      pw.Divider(color: PdfColors.grey400),
+      pw.SizedBox(height: 4),
+      pw.Text('$company  —  Confidential  |  Generated by Uddyogi ERP  |  $generated',
+          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+    ],
+  ));
+
+  return doc.save();
+}
+
+pw.Widget _pSection(String title) => pw.Column(
+  crossAxisAlignment: pw.CrossAxisAlignment.start,
+  children: [
+    pw.Text(title,
+        style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold,
+            letterSpacing: 0.5)),
+    pw.Divider(color: PdfColors.black, thickness: 0.75),
+    pw.SizedBox(height: 8),
+  ],
+);
+
+pw.Widget _pCell(String t,
+    {bool bold = false, bool right = false, bool span = false}) {
+  return pw.Container(
+    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    alignment: right ? pw.Alignment.centerRight : pw.Alignment.centerLeft,
+    child: pw.Text(t,
+        style: pw.TextStyle(
+          fontSize: 10,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+        )),
+  );
+}
+
+pw.TableRow _pRow(String label, String value) => pw.TableRow(children: [
+  _pCell(label),
+  _pCell(value, right: true, bold: true),
+]);
+
+// ─────────────────────────────────────────────────────────────
+// SAVE PDF TO DEVICE
+// ─────────────────────────────────────────────────────────────
+Future<File> _savePdfToDevice(Uint8List bytes, String company) async {
+  final dir      = await getApplicationDocumentsDirectory();
+  final filename = '${company.replaceAll(' ', '_')}_Report_'
+      '${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+  final file = File('${dir.path}/$filename');
+  await file.writeAsBytes(bytes);
+  return file;
+}
+
+// ─────────────────────────────────────────────────────────────
+// MAIN REPORT SCREEN  (Dashboard)
+// ─────────────────────────────────────────────────────────────
+class ReportsScreen extends StatefulWidget {
+  const ReportsScreen({super.key});
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
-enum _GraphType { line, bar }
-enum _RangePreset { thisMonth, lastMonth, last3Months, custom }
-enum _GraphMetric { sales, profit }
-
 class _ReportsScreenState extends State<ReportsScreen> {
-  late final SaaSPath path;
+  String _cid = '';
+  static const _company = 'Wig Bangladesh';
 
-  _RangePreset _preset = _RangePreset.thisMonth;
-  _GraphType _graphType = _GraphType.line;
-
-  late DateTimeRange _range;
-  DateTimeRange? _custom;
+  _Period     _period  = _Period.month;
+  bool        _loading = false;
+  _ReportData _data    = const _ReportData();
 
   @override
   void initState() {
     super.initState();
-    path = SaaSPath(orgId: widget.orgId);
-    _range = _monthRange(DateTime.now());
-  }
-
-  DateTimeRange _computeRange() {
-    final now = DateTime.now();
-    if (_preset == _RangePreset.thisMonth) return _monthRange(now);
-    if (_preset == _RangePreset.lastMonth) return _monthRange(DateTime(now.year, now.month - 1, 1));
-    if (_preset == _RangePreset.last3Months) {
-      final start = DateTime(now.year, now.month - 2, 1);
-      final end = DateTime(now.year, now.month + 1, 1);
-      return DateTimeRange(start: start, end: end);
-    }
-    return _custom ?? _monthRange(now);
-  }
-
-  Future<void> _pickCustomRange() async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 3, 1, 1),
-      lastDate: DateTime(now.year + 1, 12, 31),
-      initialDateRange: _custom ?? _range,
-    );
-    if (picked == null) return;
-    setState(() {
-      _custom = picked;
-      _preset = _RangePreset.custom;
-      _range = _computeRange();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
     });
+    _load();
   }
 
-  void _applyPreset(_RangePreset p) {
-    setState(() {
-      _preset = p;
-      _range = _computeRange();
-    });
-  }
-
-  /// Profit logic: Profit = Sales - Expenses
-  Stream<OwnerDashboardData> _streamData(DateTimeRange range) {
-    final invoicesQ = path.col('invoices').orderBy('createdAt', descending: true).limit(1200);
-    final expensesQ = path.col('expenses').orderBy('createdAt', descending: true).limit(1200);
-
-    final usersQ = path.col('users').limit(3000);
-    final workOrdersQ = path.col('work_orders').orderBy('createdAt', descending: true).limit(1200);
-    final shipmentsQ = path.col('shipments').orderBy('createdAt', descending: true).limit(1200);
-
-    return CombineLatestStream.combine5<
-        QuerySnapshot<Map<String, dynamic>>,
-        QuerySnapshot<Map<String, dynamic>>,
-        QuerySnapshot<Map<String, dynamic>>,
-        QuerySnapshot<Map<String, dynamic>>,
-        QuerySnapshot<Map<String, dynamic>>,
-        OwnerDashboardData>(
-      invoicesQ.snapshots(),
-      expensesQ.snapshots(),
-      usersQ.snapshots(),
-      workOrdersQ.snapshots(),
-      shipmentsQ.snapshots(),
-          (invoicesSnap, expensesSnap, usersSnap, workOrdersSnap, shipmentsSnap) {
-        double sales = 0;
-        double moneyIn = 0;
-        int orders = 0;
-
-        final now = DateTime.now();
-        final start6 = DateTime(now.year, now.month - 5, 1);
-
-        final buckets = <String, _Bucket>{};
-
-        // top performers (highest sales)
-        final sellerSales = <String, double>{};
-        final sellerInvoices = <String, int>{};
-        final sellerName = <String, String>{};
-
-        // INVOICES
-        for (final d in invoicesSnap.docs) {
-          final m = d.data();
-          final dt = _extractAnyDate(m);
-          if (dt == null) continue;
-          if (dt.isBefore(range.start) || !dt.isBefore(range.end)) continue;
-
-          orders++;
-
-          final total = _asDouble(m['grandTotal'] ?? m['total'] ?? m['amount'] ?? 0);
-          sales += total;
-
-          final received =
-          _asDouble(m['received'] ?? m['paidAmount'] ?? m['paid'] ?? m['paymentReceived'] ?? 0);
-          moneyIn += received;
-
-          final key = _agentKey(m);
-          sellerSales[key] = (sellerSales[key] ?? 0) + total;
-          sellerInvoices[key] = (sellerInvoices[key] ?? 0) + 1;
-          sellerName[key] = _agentName(m, key);
-
-          if (!dt.isBefore(start6)) {
-            final k = '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
-            buckets.putIfAbsent(k, () => _Bucket());
-            buckets[k]!.sales += total;
-          }
-        }
-
-        // EXPENSES
-        double expenses = 0;
-        for (final d in expensesSnap.docs) {
-          final m = d.data();
-          final dt = _extractAnyDate(m);
-          if (dt == null) continue;
-
-          final amt = _asDouble(m['amount'] ?? m['total'] ?? m['expense'] ?? 0);
-
-          if (!dt.isBefore(range.start) && dt.isBefore(range.end)) {
-            expenses += amt;
-          }
-
-          if (!dt.isBefore(start6)) {
-            final k = '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
-            buckets.putIfAbsent(k, () => _Bucket());
-            buckets[k]!.expenses += amt;
-          }
-        }
-
-        final profit = sales - expenses;
-
-        // USERS
-        int buyers = 0, suppliers = 0, workers = 0;
-        for (final d in usersSnap.docs) {
-          final m = d.data();
-          final role = (m['role'] ?? m['type'] ?? '').toString().toLowerCase();
-          if (role.contains('buyer') || role.contains('customer')) buyers++;
-          if (role.contains('supplier') || role.contains('vendor')) suppliers++;
-          if (role.contains('worker') || role.contains('factory') || role.contains('staff')) workers++;
-        }
-
-        // WORK ORDERS
-        int workOrders = 0;
-        for (final d in workOrdersSnap.docs) {
-          final m = d.data();
-          final dt = _extractAnyDate(m);
-          if (dt == null) continue;
-          if (dt.isBefore(range.start) || !dt.isBefore(range.end)) continue;
-          workOrders++;
-        }
-
-        // SHIPMENTS
-        int shipments = 0;
-        for (final d in shipmentsSnap.docs) {
-          final m = d.data();
-          final dt = _extractAnyDate(m);
-          if (dt == null) continue;
-          if (dt.isBefore(range.start) || !dt.isBefore(range.end)) continue;
-          shipments++;
-        }
-
-        // Last 6 months trend
-        final points = <TrendPoint>[];
-        var cursor = start6;
-        for (int i = 0; i < 6; i++) {
-          final key = '${cursor.year}-${cursor.month.toString().padLeft(2, '0')}';
-          final b = buckets[key] ?? _Bucket();
-          points.add(
-            TrendPoint(
-              label: DateFormat('MMM').format(cursor),
-              sales: b.sales,
-              profit: b.profit,
-            ),
-          );
-          cursor = DateTime(cursor.year, cursor.month + 1, 1);
-        }
-
-        // Top sellers
-        final top = sellerSales.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-        final topSellers = top.take(5).map((e) {
-          final key = e.key;
-          return TopSeller(
-            key: key,
-            name: sellerName[key] ?? key,
-            sales: e.value,
-            invoices: sellerInvoices[key] ?? 0,
-          );
-        }).toList();
-
-        return OwnerDashboardData(
-          sales: sales,
-          profit: profit,
-          expenses: expenses,
-          moneyIn: moneyIn,
-          orders: orders,
-          shipments: shipments,
-          workOrders: workOrders,
-          buyers: buyers,
-          suppliers: suppliers,
-          workers: workers,
-          trend: points,
-          topSellers: topSellers,
-        );
-      },
-    );
-  }
-
-  void _openHead(String head) {
-    final range = _range;
-    late final Widget page;
-
-    switch (head) {
-      case 'FINANCE':
-        page = AdminFinancePage(orgId: widget.orgId, range: range);
-        break;
-      case 'MANUFACTURING':
-        page = AdminManufacturingPage(orgId: widget.orgId, range: range);
-        break;
-      case 'INVENTORY':
-        page = AdminInventoryPage(orgId: widget.orgId, range: range);
-        break;
-      case 'EXPORT & LOGISTICS':
-        page = AdminExportLogisticsPage(orgId: widget.orgId, range: range);
-        break;
-      case 'SALES & MARKETING':
-        page = AdminSalesMarketingPage(orgId: widget.orgId, range: range);
-        break;
-      case 'HR & PAYROLL':
-        page = AdminHrPayrollPage(orgId: widget.orgId, range: range);
-        break;
-      case 'CUSTOMERS & BUYERS':
-        page = AdminCustomersBuyersPage(orgId: widget.orgId, range: range);
-        break;
-      case 'SUPPLIERS':
-        page = AdminSuppliersPage(orgId: widget.orgId, range: range);
-        break;
-      case 'RISK & COMPLIANCE':
-        page = AdminRiskCompliancePage(orgId: widget.orgId, range: range);
-        break;
-      case 'ANALYTICS & KPIs':
-        page = AdminAnalyticsKpisPage(orgId: widget.orgId, range: range);
-        break;
-      case 'AI INSIGHTS':
-        page = AdminAiInsightsPage(orgId: widget.orgId, range: range);
-        break;
-      case 'SETTINGS & ADMIN':
-        page = AdminSettingsAdminPage(orgId: widget.orgId, range: range);
-        break;
-      case 'SECURITY':
-        page = AdminSecurityPage(orgId: widget.orgId, range: range);
-        break;
-      case 'QUICK ACTIONS':
-        page = AdminQuickActionsPage(orgId: widget.orgId, range: range);
-        break;
-      default:
-        page = AdminAnalyticsKpisPage(orgId: widget.orgId, range: range);
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+    try {
+      final data = await _loadData(_period);
+      if (!mounted) return;
+      setState(() { _data = data; _loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Data load failed: $e')),
+      );
     }
-
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
-
-  static const _heads = [
-    'FINANCE',
-    'MANUFACTURING',
-    'INVENTORY',
-    'EXPORT & LOGISTICS',
-    'SALES & MARKETING',
-    'HR & PAYROLL',
-    'CUSTOMERS & BUYERS',
-    'SUPPLIERS',
-    'RISK & COMPLIANCE',
-    'ANALYTICS & KPIs',
-    'AI INSIGHTS',
-    'SETTINGS & ADMIN',
-    'SECURITY',
-    'QUICK ACTIONS',
-  ];
 
   @override
   Widget build(BuildContext context) {
-    _range = _computeRange();
-
-    final titleStyle = GoogleFonts.manrope(fontWeight: FontWeight.w900);
-    final subStyle = GoogleFonts.manrope(fontWeight: FontWeight.w700, color: AppColors.text2);
-
     return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        elevation: 0,
-        title: Text('Reports', style: titleStyle.copyWith(color: Colors.white)),
-        foregroundColor: Colors.white,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.p1, AppColors.p2, AppColors.p3],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      backgroundColor: _T.bg,
+      body: SafeArea(
+      child: Column(
+        children: [
+            // ── Header ──
+            _DashHeader(company: _company, onBack: () => Navigator.maybePop(context)),
+            // ── Period Selector ──
+            _PeriodSelector(
+              selected: _period,
+              onChanged: (p) { setState(() => _period = p); _load(); },
             ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Custom range',
-            onPressed: _pickCustomRange,
-            icon: const Icon(Icons.date_range_rounded),
-          ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              setState(() {});
-            },
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
-      ),
-      body: StreamBuilder<OwnerDashboardData>(
-        stream: _streamData(_range),
-        builder: (context, snap) {
-          if (!snap.hasData && snap.connectionState == ConnectionState.waiting) {
-            return _ShimmerLoading();
-          }
-          if (snap.hasError) {
-            return _ErrorState(
-              message: 'Failed to load dashboard.\n${snap.error}',
-              onRetry: () => setState(() {}),
-            );
-          }
-          if (!snap.hasData) {
-            return _ErrorState(
-              message: 'No data found for this range.',
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final data = snap.data!;
-          final profit5 = data.trend.length <= 5 ? data.trend : data.trend.sublist(data.trend.length - 5);
-
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // TOP: Filter -> Key numbers -> BIG Graphs (Sales + Profit)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _FilterRow(
-                        preset: _preset,
-                        rangeText: _fmtRange(_range),
-                        graphType: _graphType,
-                        onPreset: (p) async {
-                          if (p == _RangePreset.custom) {
-                            await _pickCustomRange();
-                            return;
-                          }
-                          _applyPreset(p);
-                        },
-                        onToggleGraph: (t) => setState(() => _graphType = t),
+            // ── Scrollable body ──
+                    Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator(color: _T.primary))
+                  : RefreshIndicator(
+                      color: _T.primary,
+                      onRefresh: _load,
+                      child: _DashBody(
+                        data: _data,
+                        company: _company,
+                        period: _period,
+                        onViewFullReport: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => _FullReportScreen(
+                            data: _data, period: _period, company: _company))),
+                        onExportPdf: () => Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => _PdfPreviewScreen(
+                            data: _data, period: _period, company: _company))),
                       ),
-                      const SizedBox(height: 10),
-
-                      GridView.count(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        childAspectRatio: 1.55,
-                        children: [
-                          _KeyNumberCard(
-                            title: 'Revenue (Sales)',
-                            value: _fmtLakh(data.sales),
-                            icon: Icons.trending_up_rounded,
-                            glow: AppColors.info,
-                          ).animate().fadeIn(duration: 240.ms).slideY(begin: .08),
-                          _KeyNumberCard(
-                            title: 'Profit',
-                            value: _fmtLakh(data.profit),
-                            icon: Icons.auto_graph_rounded,
-                            glow: AppColors.success,
-                          ).animate().fadeIn(duration: 260.ms).slideY(begin: .08),
-                          _KeyNumberCard(
-                            title: 'Expense',
-                            value: _fmtLakh(data.expenses),
-                            icon: Icons.receipt_long_rounded,
-                            glow: AppColors.warning,
-                          ).animate().fadeIn(duration: 280.ms).slideY(begin: .08),
-                          _KeyNumberCard(
-                            title: 'Cash In',
-                            value: _fmtLakh(data.moneyIn),
-                            icon: Icons.account_balance_wallet_rounded,
-                            glow: AppColors.p3,
-                          ).animate().fadeIn(duration: 300.ms).slideY(begin: .08),
+                            ),
+                          ),
                         ],
                       ),
-
-                      const SizedBox(height: 12),
-
-                      // BIGGER SALES GRAPH
-                      SizedBox(
-                        height: 260,
-                        child: _GraphCard(
-                          title: 'Company Sales Trend',
-                          subtitle: 'Last 6 months',
-                          graphType: _graphType,
-                          metric: _GraphMetric.sales,
-                          points: data.trend,
-                        ).animate().fadeIn(duration: 220.ms),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // BIGGER PROFIT GRAPH
-                      SizedBox(
-                        height: 240,
-                        child: _GraphCard(
-                          title: 'Company Profit Trend',
-                          subtitle: 'Last 4 + current',
-                          graphType: _graphType,
-                          metric: _GraphMetric.profit,
-                          points: profit5,
-                        ).animate().fadeIn(duration: 240.ms),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // AFTER SCROLL: Modules -> KPIs -> Top Performers
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Modules', style: titleStyle.copyWith(fontSize: 16, color: AppColors.text)),
-                      const SizedBox(height: 10),
-
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _heads.length,
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 1.05,
-                        ),
-                        itemBuilder: (_, i) => _ModuleTile(
-                          title: _heads[i],
-                          onTap: () => _openHead(_heads[i]),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-                      Divider(height: 1, thickness: 1, color: AppColors.border),
-                      const SizedBox(height: 18),
-
-                      _KpiGridDark(data: data),
-                      const SizedBox(height: 22),
-
-                      Text('Top Performers', style: titleStyle.copyWith(fontSize: 16, color: AppColors.text)),
-                      const SizedBox(height: 6),
-                      Text('Highest sales by owner/agent in this range', style: subStyle),
-                      const SizedBox(height: 10),
-
-                      if (data.topSellers.isEmpty)
-                        Text('No sellers found in this range.', style: subStyle)
-                      else
-                        ...data.topSellers.asMap().entries.map((e) {
-                          final i = e.key + 1;
-                          final s = e.value;
-                          return _TopSellerTile(rank: i, seller: s)
-                              .animate()
-                              .fadeIn(duration: 220.ms)
-                              .slideX(begin: .04);
-                        }),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
       ),
     );
   }
 }
 
-/// ===============================================
-/// MINI COMBINE LATEST (no rxdart needed)
-/// ===============================================
-class CombineLatestStream {
-  static Stream<R> combine5<A, B, C, D, E, R>(
-      Stream<A> a,
-      Stream<B> b,
-      Stream<C> c,
-      Stream<D> d,
-      Stream<E> e,
-      R Function(A, B, C, D, E) combiner,
-      ) async* {
-    A? la;
-    B? lb;
-    C? lc;
-    D? ld;
-    E? le;
+// ── Dashboard Header ──────────────────────────────────────────
+class _DashHeader extends StatelessWidget {
+  final String company;
+  final VoidCallback onBack;
+  const _DashHeader({required this.company, required this.onBack});
 
-    final ctrl = StreamController<R>();
-    late final StreamSubscription sa;
-    late final StreamSubscription sb;
-    late final StreamSubscription sc;
-    late final StreamSubscription sd;
-    late final StreamSubscription se;
-
-    void emit() {
-      if (la != null && lb != null && lc != null && ld != null && le != null) {
-        ctrl.add(combiner(la as A, lb as B, lc as C, ld as D, le as E));
-      }
-    }
-
-    sa = a.listen((v) {
-      la = v;
-      emit();
-    }, onError: ctrl.addError);
-    sb = b.listen((v) {
-      lb = v;
-      emit();
-    }, onError: ctrl.addError);
-    sc = c.listen((v) {
-      lc = v;
-      emit();
-    }, onError: ctrl.addError);
-    sd = d.listen((v) {
-      ld = v;
-      emit();
-    }, onError: ctrl.addError);
-    se = e.listen((v) {
-      le = v;
-      emit();
-    }, onError: ctrl.addError);
-
-    ctrl.onCancel = () async {
-      await sa.cancel();
-      await sb.cancel();
-      await sc.cancel();
-      await sd.cancel();
-      await se.cancel();
-    };
-
-    yield* ctrl.stream;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          _CircleBtn(icon: Icons.arrow_back_rounded, onTap: onBack),
+          const Spacer(),
+          const Text('Report',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600,
+                  color: _T.fg)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _T.secondary,
+              borderRadius: BorderRadius.circular(_T.rXl),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.business_rounded, size: 14, color: _T.secondaryFg),
+              const SizedBox(width: 6),
+              Text(company,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                      color: _T.secondaryFg)),
+            ]),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class _Bucket {
-  double sales = 0;
-  double expenses = 0;
-  double get profit => sales - expenses;
+// ── Period Selector ───────────────────────────────────────────
+class _PeriodSelector extends StatelessWidget {
+  final _Period selected;
+  final ValueChanged<_Period> onChanged;
+  const _PeriodSelector({super.key, required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      child: Row(
+        children: [
+          Expanded(
+              child: Container(
+              padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                color: _T.secondary,
+                borderRadius: BorderRadius.circular(_T.rXl),
+              ),
+              child: Row(
+                children: _Period.values.map((p) {
+                  final active = p == selected;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => onChanged(p),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: active ? _T.card : Colors.transparent,
+                          borderRadius: BorderRadius.circular(_T.rXl),
+                          boxShadow: active
+                              ? [const BoxShadow(color: Color(0x0D000000),
+                                  blurRadius: 4, offset: Offset(0, 2))]
+                              : null,
+                        ),
+                        child: Text(p.label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                            color: active ? _T.fg : _T.mutedFg,
+                ),
+              ),
+            ),
+          ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: _T.secondary,
+              borderRadius: BorderRadius.circular(_T.rLg),
+            ),
+            child: const Icon(Icons.calendar_today_rounded,
+                size: 18, color: _T.fg),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// ===============================================
-/// UI WIDGETS
-/// ===============================================
-class _KpiGridDark extends StatelessWidget {
-  final OwnerDashboardData data;
-  const _KpiGridDark({required this.data});
+// ── Dashboard Body ────────────────────────────────────────────
+class _DashBody extends StatelessWidget {
+  final _ReportData    data;
+  final String         company;
+  final _Period        period;
+  final VoidCallback   onViewFullReport;
+  final VoidCallback   onExportPdf;
+
+  const _DashBody({
+    required this.data,
+    required this.company,
+    required this.period,
+    required this.onViewFullReport,
+    required this.onExportPdf,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        // Hero financial card
+        _HeroCard(data: data),
+        const SizedBox(height: 24),
+        // Quick KPI row (4 items)
+        _QuickKpiRow(data: data),
+        const SizedBox(height: 24),
+        // Category tabs + 2×2 grid
+        _CategorySection(data: data),
+        const SizedBox(height: 24),
+        // Bottom action bar
+        _BottomBar(onExport: onExportPdf, onViewFull: onViewFullReport),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
+// ── Hero Card ─────────────────────────────────────────────────
+class _HeroCard extends StatelessWidget {
+  final _ReportData data;
+  const _HeroCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _T.primary,
+        borderRadius: BorderRadius.circular(_T.rXl),
+        boxShadow: const [BoxShadow(color: Color(0x14000000),
+            blurRadius: 16, offset: Offset(0, 8))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Financial Summary',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+                        color: Colors.white)),
+                const SizedBox(height: 4),
+                Text('Updated just now',
+                    style: TextStyle(fontSize: 12,
+                        color: Colors.white.withOpacity(0.8))),
+              ]),
+              // Mini sparkline
+              CustomPaint(size: const Size(64, 24), painter: _SparkPainter()),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _HeroStat(label: 'Cash In',  value: _taka(data.cashIn),  up: true),
+              _Divider(),
+              _HeroStat(label: 'Expense',  value: _taka(data.expense), up: false),
+              _Divider(),
+              _HeroStat(label: 'Profit',   value: _taka(data.profit),
+                  up: data.profit >= 0),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  final String label, value;
+  final bool   up;
+  const _HeroStat({required this.label, required this.value, required this.up});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: TextStyle(fontSize: 13,
+          color: Colors.white.withOpacity(0.85))),
+      const SizedBox(height: 6),
+      Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+          color: Colors.white)),
+      const SizedBox(height: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(_T.rSm),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 12, color: Colors.white),
+        ]),
+      ),
+    ]);
+  }
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 1, height: 44, margin: const EdgeInsets.only(bottom: 6),
+    color: Colors.white.withOpacity(0.2),
+  );
+}
+
+class _SparkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.5)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final pts = [
+      Offset(0, size.height * 0.85),
+      Offset(size.width * 0.2, size.height * 0.6),
+      Offset(size.width * 0.4, size.height * 0.75),
+      Offset(size.width * 0.6, size.height * 0.25),
+      Offset(size.width * 0.8, size.height * 0.45),
+      Offset(size.width, size.height * 0.08),
+    ];
+    final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+    for (var i = 1; i < pts.length; i++) path.lineTo(pts[i].dx, pts[i].dy);
+    canvas.drawPath(path, paint);
+  }
+  @override
+  bool shouldRepaint(_) => false;
+}
+
+// ── Quick KPI Row (4 items) ───────────────────────────────────
+class _QuickKpiRow extends StatelessWidget {
+  final _ReportData data;
+  const _QuickKpiRow({required this.data});
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      _KpiItem('Orders', _fmtInt(data.orders), Icons.receipt_long_rounded),
-      _KpiItem('Shipments', _fmtInt(data.shipments), Icons.local_shipping_rounded),
-      _KpiItem('Work Orders', _fmtInt(data.workOrders), Icons.factory_rounded),
-      _KpiItem('Buyers', _fmtInt(data.buyers), Icons.people_alt_rounded),
-      _KpiItem('Suppliers', _fmtInt(data.suppliers), Icons.handshake_rounded),
-      _KpiItem('Workers', _fmtInt(data.workers), Icons.badge_rounded),
+      _QKpi(Icons.account_balance_rounded, _taka(data.loan),       'Loan'),
+      _QKpi(Icons.pie_chart_rounded,        '${data.avgRoi.toStringAsFixed(0)}%', 'ROI'),
+      _QKpi(Icons.how_to_reg_rounded,       '${data.attendance}',  'Attend'),
+      _QKpi(Icons.people_rounded,           '${data.clients}',     'Clients'),
     ];
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-          colors: [AppColors.p1, AppColors.p2],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.10), blurRadius: 18, offset: const Offset(0, 10)),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: items.map((k) => Expanded(child: Padding(
+          padding: EdgeInsets.only(
+              right: k == items.last ? 0 : 12),
+          child: _QuickKpiCard(kpi: k),
+        ))).toList(),
       ),
-      child: Column(
+    );
+  }
+}
+
+class _QKpi {
+  final IconData icon;
+  final String   value, label;
+  const _QKpi(this.icon, this.value, this.label);
+}
+
+class _QuickKpiCard extends StatelessWidget {
+  final _QKpi kpi;
+  const _QuickKpiCard({required this.kpi});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+      decoration: BoxDecoration(
+        color: _T.card,
+        border: Border.all(color: _T.border),
+        borderRadius: BorderRadius.circular(_T.rLg),
+      ),
+      child: Column(children: [
+        Icon(kpi.icon, size: 20, color: _T.primary),
+        const SizedBox(height: 6),
+        Text(kpi.value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                color: _T.fg),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(kpi.label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500,
+                color: _T.mutedFg)),
+      ]),
+    );
+  }
+}
+
+// ── Category Section ──────────────────────────────────────────
+enum _Cat { finance, operations, hr, sales }
+
+class _CategorySection extends StatefulWidget {
+  final _ReportData data;
+  const _CategorySection({required this.data});
+  @override
+  State<_CategorySection> createState() => _CategorySectionState();
+}
+
+class _CategorySectionState extends State<_CategorySection> {
+  _Cat _cat = _Cat.finance;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'KPIs',
-            style: GoogleFonts.manrope(
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 2.45,
-            ),
-            itemBuilder: (_, i) {
-              final it = items[i];
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        // Category tabs
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: _Cat.values.map((c) {
+              final active = c == _cat;
+              final labels = {
+                _Cat.finance:    'Finance',
+                _Cat.operations: 'Operations',
+                _Cat.hr:         'HR',
+                _Cat.sales:      'Sales',
+              };
+              return Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: GestureDetector(
+                  onTap: () => setState(() => _cat = c),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(.18)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      height: 34,
-                      width: 34,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withOpacity(.12),
-                      ),
-                      child: Icon(it.icon, color: Colors.white, size: 18),
+                      color: active ? _T.primary : _T.secondary,
+                      borderRadius: BorderRadius.circular(_T.rXl),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            it.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.manrope(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white.withOpacity(.85),
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            it.value,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.manrope(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    child: Text(labels[c]!,
+                        style: TextStyle(
+                    fontSize: 14,
+                          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                          color: active ? _T.primaryFg : _T.secondaryFg,
+                        )),
+                  ),
                 ),
-              ).animate().fadeIn(duration: 220.ms).slideY(begin: .06);
-            },
+              );
+            }).toList(),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 20),
+        // 2×2 grid for selected category
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _CatGrid(cat: _cat, data: widget.data),
+        ),
+      ],
     );
   }
 }
 
-class _FilterRow extends StatelessWidget {
-  final _RangePreset preset;
-  final String rangeText;
-  final _GraphType graphType;
-  final ValueChanged<_RangePreset> onPreset;
-  final ValueChanged<_GraphType> onToggleGraph;
+class _CatGrid extends StatelessWidget {
+  final _Cat        cat;
+  final _ReportData data;
+  const _CatGrid({required this.cat, required this.data});
 
-  const _FilterRow({
-    required this.preset,
-    required this.rangeText,
-    required this.graphType,
-    required this.onPreset,
-    required this.onToggleGraph,
-  });
+  List<_GridCard> _cards() {
+    switch (cat) {
+      case _Cat.finance:
+        return [
+          _GridCard(Icons.account_balance_wallet_rounded, 'Budget',
+              _taka(data.avgBudget), true),
+          _GridCard(Icons.credit_card_rounded, 'Loan',
+              _taka(data.loan), data.loan == 0),
+          _GridCard(Icons.percent_rounded, 'Profit Margin',
+              '${data.profitMargin.toStringAsFixed(1)}%', data.profit >= 0),
+          _GridCard(Icons.bar_chart_rounded, 'Avg ROI',
+              '${data.avgRoi.toStringAsFixed(1)}%', data.avgRoi >= 0),
+        ];
+      case _Cat.operations:
+        return [
+          _GridCard(Icons.factory_rounded, 'Production',
+              '${NumberFormat('#,##0').format(data.production)}', true),
+          _GridCard(Icons.inventory_2_rounded, 'Stock',
+              '${NumberFormat('#,##0').format(data.stock)}', data.stock > 0),
+          _GridCard(Icons.science_rounded, 'R&D Running',
+              '${data.rndProjects}', true),
+          _GridCard(Icons.assignment_rounded, 'Work Orders',
+              '${data.workOrders}', true),
+        ];
+      case _Cat.hr:
+        return [
+          _GridCard(Icons.people_rounded, 'Employees',
+              '${data.employees}', true),
+          _GridCard(Icons.how_to_reg_rounded, 'Attendance',
+              '${data.attendance}', data.attendance > 0),
+          _GridCard(Icons.trending_up_rounded, 'Avg ROI',
+              '${data.avgRoi.toStringAsFixed(1)}%', data.avgRoi >= 0),
+          _GridCard(Icons.account_balance_rounded, 'Loan',
+              _taka(data.loan), data.loan == 0),
+        ];
+      case _Cat.sales:
+        return [
+          _GridCard(Icons.business_center_rounded, 'Clients',
+              '${NumberFormat('#,##0').format(data.clients)}', true),
+          _GridCard(Icons.campaign_rounded, 'Campaigns',
+              '${data.campaigns}', true),
+          _GridCard(Icons.pie_chart_rounded, 'Avg Budget',
+              _taka(data.avgBudget), true),
+          _GridCard(Icons.bar_chart_rounded, 'Avg ROI',
+              '${data.avgRoi.toStringAsFixed(1)}%', data.avgRoi >= 0),
+        ];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final t = GoogleFonts.manrope(fontWeight: FontWeight.w900);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 10, offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<_RangePreset>(
-                value: preset,
-                isExpanded: true,
-                style: t.copyWith(color: AppColors.text, fontSize: 13),
-                items: const [
-                  DropdownMenuItem(value: _RangePreset.thisMonth, child: Text('This Month')),
-                  DropdownMenuItem(value: _RangePreset.lastMonth, child: Text('Last Month')),
-                  DropdownMenuItem(value: _RangePreset.last3Months, child: Text('Last 3 Months')),
-                  DropdownMenuItem(value: _RangePreset.custom, child: Text('Custom')),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  onPreset(v);
-                },
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              rangeText,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.manrope(fontWeight: FontWeight.w800, color: AppColors.text2, fontSize: 12),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 10),
-          _SegButton(
-            left: 'Line',
-            right: 'Bar',
-            value: graphType == _GraphType.line ? 0 : 1,
-            onChanged: (i) => onToggleGraph(i == 0 ? _GraphType.line : _GraphType.bar),
-          ),
-        ],
-      ),
+    final cards = _cards();
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 1.5,
+      children: cards.map((c) => _GridCardWidget(card: c)).toList(),
     );
   }
 }
 
-class _SegButton extends StatelessWidget {
-  final String left;
-  final String right;
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  const _SegButton({
-    required this.left,
-    required this.right,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 34,
-      width: 110,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
-        color: AppColors.bg,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () => onChanged(0),
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: value == 0 ? AppColors.p2 : Colors.transparent,
-                ),
-                child: Text(
-                  left,
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: value == 0 ? Colors.white : AppColors.text2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () => onChanged(1),
-              child: Container(
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: value == 1 ? AppColors.p2 : Colors.transparent,
-                ),
-                child: Text(
-                  right,
-                  style: GoogleFonts.manrope(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    color: value == 1 ? Colors.white : AppColors.text2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KeyNumberCard extends StatelessWidget {
-  final String title;
-  final String value;
+class _GridCard {
   final IconData icon;
-  final Color glow;
+  final String   label, value;
+  final bool     positive;
+  const _GridCard(this.icon, this.label, this.value, this.positive);
+}
 
-  const _KeyNumberCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.glow,
-  });
+class _GridCardWidget extends StatelessWidget {
+  final _GridCard card;
+  const _GridCardWidget({required this.card});
 
   @override
   Widget build(BuildContext context) {
+    final badge = card.positive ? _T.success : _T.destructive;
+    final badgeFg = card.positive ? _T.successFg : _T.destructiveFg;
+    final trendIcon = card.positive
+        ? Icons.trending_up_rounded
+        : Icons.trending_down_rounded;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: AppColors.card,
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(color: glow.withOpacity(.10), blurRadius: 22, offset: const Offset(0, 10)),
-          BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 10, offset: const Offset(0, 6)),
-        ],
+        color: _T.card,
+        border: Border.all(color: _T.border),
+        borderRadius: BorderRadius.circular(_T.rLg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                height: 34,
-                width: 34,
+                width: 36, height: 36,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  gradient: LinearGradient(
-                    colors: [AppColors.p2, glow.withOpacity(.9)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: _T.secondary,
+                  borderRadius: BorderRadius.circular(_T.rMd),
                 ),
-                child: Icon(icon, color: Colors.white, size: 18),
+                child: Icon(card.icon, size: 18, color: _T.fg),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.manrope(fontWeight: FontWeight.w900, color: AppColors.text2),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badge,
+                  borderRadius: BorderRadius.circular(_T.rSm),
                 ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(trendIcon, size: 12, color: badgeFg),
+                ]),
               ),
             ],
           ),
           const Spacer(),
-          Text(
-            value,
-            style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.text),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Realtime',
-            style: GoogleFonts.manrope(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text2),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KpiItem {
-  final String title;
-  final String value;
-  final IconData icon;
-  _KpiItem(this.title, this.value, this.icon);
-}
-
-/// ===============================================
-/// BIGGER + CLEARER GRAPH UI
-/// ===============================================
-class _GraphCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final _GraphType graphType;
-  final _GraphMetric metric;
-  final List<TrendPoint> points;
-
-  const _GraphCard({
-    required this.title,
-    required this.subtitle,
-    required this.graphType,
-    required this.metric,
-    required this.points,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isProfit = metric == _GraphMetric.profit;
-
-    double last = 0, avg = 0, peak = 0;
-    String peakMonth = '';
-    String lastMonth = '';
-
-    if (points.isNotEmpty) {
-      final vals = points.map((e) => isProfit ? e.profit : e.sales).toList();
-      last = vals.last;
-      avg = vals.reduce((a, b) => a + b) / vals.length;
-      peak = vals.reduce(math.max);
-
-      final peakIndex = vals.indexOf(peak);
-      peakMonth = points[peakIndex].label;
-      lastMonth = points.last.label;
-    }
-
-    final trendUp = last >= avg;
-    final trendIcon = trendUp ? Icons.trending_up_rounded : Icons.trending_down_rounded;
-    final trendColor = trendUp ? AppColors.success : AppColors.danger;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.05), blurRadius: 18, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Row(
-            children: [
-              Container(
-                height: 34,
-                width: 34,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: const LinearGradient(
-                    colors: [AppColors.p2, AppColors.p3],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Icon(
-                  isProfit ? Icons.auto_graph_rounded : Icons.show_chart_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.manrope(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.text,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              Text(
-                subtitle,
-                style: GoogleFonts.manrope(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.text2,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // Big business summary row (makes chart understandable)
-          Row(
-            children: [
-              Expanded(child: _MiniStat(label: 'Last ($lastMonth)', value: _fmtLakh(last))),
-              const SizedBox(width: 8),
-              Expanded(child: _MiniStat(label: 'Average', value: _fmtLakh(avg))),
-              const SizedBox(width: 8),
-              Expanded(child: _MiniStat(label: 'Peak ($peakMonth)', value: _fmtLakh(peak))),
-              const SizedBox(width: 8),
-              Container(
-                height: 46,
-                width: 46,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: trendColor.withOpacity(.10),
-                  border: Border.all(color: trendColor.withOpacity(.25)),
-                ),
-                child: Icon(trendIcon, color: trendColor),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          // Legend (simple)
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              _LegendChip(
-                color: AppColors.p2,
-                label: isProfit ? 'Profit (Sales − Expense)' : 'Sales (Revenue)',
-              ),
-              if (isProfit) _LegendChip(color: AppColors.text2, label: '0 = Break-even', outline: true),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          Expanded(
-            child: points.isEmpty
-                ? Center(
-              child: Text(
-                'No trend data',
-                style: GoogleFonts.manrope(color: AppColors.text2, fontWeight: FontWeight.w700),
-              ),
-            )
-                : (graphType == _GraphType.line
-                ? _LineChart(points: points, metric: metric)
-                : _BarChart(points: points, metric: metric)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final String label;
-  final String value;
-  const _MiniStat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.manrope(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.text2),
-          ),
+          Text(card.label,
+              style: const TextStyle(fontSize: 13, color: _T.mutedFg,
+                  fontWeight: FontWeight.w500),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.text),
-          ),
+          Text(card.value,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
+                  color: _T.fg),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
   }
 }
 
-class _LegendChip extends StatelessWidget {
-  final Color color;
-  final String label;
-  final bool outline;
+// ── Bottom Action Bar ─────────────────────────────────────────
+class _BottomBar extends StatelessWidget {
+  final VoidCallback onExport, onViewFull;
+  const _BottomBar({required this.onExport, required this.onViewFull});
 
-  const _LegendChip({
-    required this.color,
-    required this.label,
-    this.outline = false,
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _T.border)),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: _ActionBtn(
+            label: 'Export PDF',
+            bg: _T.secondary, fg: _T.secondaryFg,
+            onTap: onExport,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _ActionBtn(
+            label: 'View Full Report',
+            bg: _T.primary, fg: _T.primaryFg,
+            onTap: onViewFull,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final Color  bg, fg;
+  final VoidCallback onTap;
+  const _ActionBtn({required this.label, required this.bg,
+      required this.fg, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+      decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(_T.rMd),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg)),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// FULL REPORT SCREEN
+// ─────────────────────────────────────────────────────────────
+class _FullReportScreen extends StatelessWidget {
+  final _ReportData data;
+  final _Period     period;
+  final String      company;
+
+  const _FullReportScreen({
+    required this.data,
+    required this.period,
+    required this.company,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: outline ? Colors.transparent : color.withOpacity(.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: outline ? AppColors.border : color.withOpacity(.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            height: 8,
-            width: 8,
-            decoration: BoxDecoration(
-              color: outline ? AppColors.text2 : color,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: GoogleFonts.manrope(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.text2),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-double _niceStep(double range) {
-  // produces “nice” axis intervals (1,2,5 * 10^n)
-  if (range <= 0) return 1;
-  final exp = math.pow(10, (math.log(range) / math.ln10).floor()).toDouble();
-  final f = range / exp;
-  double nf;
-  if (f < 1.5) {
-    nf = 1;
-  } else if (f < 3) {
-    nf = 2;
-  } else if (f < 7) {
-    nf = 5;
-  } else {
-    nf = 10;
-  }
-  return nf * exp;
-}
-
-class _LineChart extends StatelessWidget {
-  final List<TrendPoint> points;
-  final _GraphMetric metric;
-  const _LineChart({required this.points, required this.metric});
-
-  @override
-  Widget build(BuildContext context) {
-    final isProfit = metric == _GraphMetric.profit;
-
-    final values = points.map((e) => isProfit ? e.profit : e.sales).toList();
-    double minY = values.reduce(math.min);
-    double maxY = values.reduce(math.max);
-
-    // Always show 0 line for business meaning
-    minY = math.min(minY, 0);
-    maxY = math.max(maxY, 0);
-
-    final span = (maxY - minY).abs();
-    final pad = span == 0 ? 1000.0 : span * 0.20;
-    final finalMin = minY - pad;
-    final finalMax = maxY + pad;
-
-    final interval = _niceStep((finalMax - finalMin) / 4);
-
-    return LineChart(
-      LineChartData(
-        lineTouchData: LineTouchData(
-          handleBuiltInTouches: true,
-          touchTooltipData: LineTouchTooltipData(
-            // Keep version-safe: no tooltipRoundedRadius / getTooltipColor
-            getTooltipItems: (touchedSpots) {
-              return touchedSpots.map((spot) {
-                final i = spot.x.toInt().clamp(0, points.length - 1);
-                return LineTooltipItem(
-                  '${points[i].label}\n${_fmtLakh(spot.y)}',
-                  GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-                );
-              }).toList();
-            },
-          ),
-        ),
-
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: interval,
-          getDrawingHorizontalLine: (v) => FlLine(color: AppColors.border.withOpacity(.85), strokeWidth: 1),
-        ),
-
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 52,
-              interval: interval,
-              getTitlesWidget: (v, meta) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text(
-                    _fmtLakhShort(v),
-                    style: GoogleFonts.manrope(fontSize: 10, color: AppColors.text2, fontWeight: FontWeight.w800),
-                    textAlign: TextAlign.right,
-                  ),
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              interval: 1,
-              getTitlesWidget: (v, meta) {
-                final i = v.round();
-                if (i < 0 || i >= points.length) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    points[i].label,
-                    style: GoogleFonts.manrope(fontSize: 10, color: AppColors.text2, fontWeight: FontWeight.w800),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-
-        borderData: FlBorderData(show: false),
-        minX: 0,
-        maxX: (points.length - 1).toDouble(),
-        minY: finalMin,
-        maxY: finalMax,
-
-        extraLinesData: ExtraLinesData(
-          horizontalLines: [
-            HorizontalLine(
-              y: 0,
-              color: AppColors.text2.withOpacity(.35),
-              strokeWidth: 1.2,
-              dashArray: isProfit ? [6, 6] : null,
-            ),
-          ],
-        ),
-
-        lineBarsData: [
-          LineChartBarData(
-            spots: [
-              for (int i = 0; i < points.length; i++)
-                FlSpot(i.toDouble(), isProfit ? points[i].profit : points[i].sales),
-            ],
-            isCurved: true,
-            curveSmoothness: 0.25,
-            barWidth: 5,
-            color: AppColors.p2,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (spot, percent, bar, index) {
-                return FlDotCirclePainter(
-                  radius: 3.6,
-                  color: Colors.white,
-                  strokeWidth: 2.2,
-                  strokeColor: AppColors.p2,
-                );
-              },
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.p2.withOpacity(.22),
-                  AppColors.p2.withOpacity(.02),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BarChart extends StatelessWidget {
-  final List<TrendPoint> points;
-  final _GraphMetric metric;
-  const _BarChart({required this.points, required this.metric});
-
-  @override
-  Widget build(BuildContext context) {
-    final isProfit = metric == _GraphMetric.profit;
-
-    final values = points.map((e) => isProfit ? e.profit : e.sales).toList();
-    double minY = values.reduce(math.min);
-    double maxY = values.reduce(math.max);
-
-    minY = math.min(minY, 0);
-    maxY = math.max(maxY, 0);
-
-    final span = (maxY - minY).abs();
-    final pad = span == 0 ? 1000.0 : span * 0.20;
-    final finalMin = minY - pad;
-    final finalMax = maxY + pad;
-
-    final interval = _niceStep((finalMax - finalMin) / 4);
-
-    return BarChart(
-      BarChartData(
-        barTouchData: BarTouchData(
-          enabled: true,
-          touchTooltipData: BarTouchTooltipData(
-            // Keep version-safe: no tooltipBgColor/getTooltipColor/roundedRadius
-            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final i = group.x.toInt().clamp(0, points.length - 1);
-              return BarTooltipItem(
-                '${points[i].label}\n${_fmtLakh(rod.toY)}',
-                GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
-              );
-            },
-          ),
-        ),
-
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: interval,
-          getDrawingHorizontalLine: (v) => FlLine(color: AppColors.border.withOpacity(.85), strokeWidth: 1),
-        ),
-
-        titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 52,
-              interval: interval,
-              getTitlesWidget: (v, meta) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text(
-                    _fmtLakhShort(v),
-                    style: GoogleFonts.manrope(fontSize: 10, color: AppColors.text2, fontWeight: FontWeight.w800),
-                    textAlign: TextAlign.right,
-                  ),
-                );
-              },
-            ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              interval: 1,
-              getTitlesWidget: (v, meta) {
-                final i = v.round();
-                if (i < 0 || i >= points.length) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    points[i].label,
-                    style: GoogleFonts.manrope(fontSize: 10, color: AppColors.text2, fontWeight: FontWeight.w800),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-
-        borderData: FlBorderData(show: false),
-        minY: finalMin,
-        maxY: finalMax,
-
-        extraLinesData: ExtraLinesData(
-          horizontalLines: [
-            HorizontalLine(
-              y: 0,
-              color: AppColors.text2.withOpacity(.35),
-              strokeWidth: 1.2,
-              dashArray: isProfit ? [6, 6] : null,
-            ),
-          ],
-        ),
-
-        barGroups: [
-          for (int i = 0; i < points.length; i++)
-            BarChartGroupData(
-              x: i,
-              barsSpace: 6,
-              barRods: [
-                BarChartRodData(
-                  fromY: 0,
-                  toY: (isProfit ? points[i].profit : points[i].sales).toDouble(),
-                  width: 18,
-                  borderRadius: BorderRadius.circular(10),
-                  gradient: const LinearGradient(
-                    colors: [AppColors.p2, AppColors.p3],
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModuleTile extends StatelessWidget {
-  final String title;
-  final VoidCallback onTap;
-  const _ModuleTile({required this.title, required this.onTap});
-
-  IconData _iconFor(String t) {
-    final s = t.toLowerCase();
-    if (s.contains('finance')) return Icons.account_balance_rounded;
-    if (s.contains('manufacturing')) return Icons.factory_rounded;
-    if (s.contains('inventory')) return Icons.inventory_2_rounded;
-    if (s.contains('export')) return Icons.local_shipping_rounded;
-    if (s.contains('sales')) return Icons.sell_rounded;
-    if (s.contains('hr')) return Icons.badge_rounded;
-    if (s.contains('customer')) return Icons.people_alt_rounded;
-    if (s.contains('supplier')) return Icons.handshake_rounded;
-    if (s.contains('risk')) return Icons.shield_rounded;
-    if (s.contains('analytics')) return Icons.query_stats_rounded;
-    if (s.contains('ai')) return Icons.auto_awesome_rounded;
-    if (s.contains('settings')) return Icons.settings_rounded;
-    if (s.contains('security')) return Icons.security_rounded;
-    return Icons.dashboard_rounded;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: AppColors.card,
-          border: Border.all(color: AppColors.border),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 10, offset: const Offset(0, 6)),
-          ],
-        ),
+    final now = DateTime.now();
+    return Scaffold(
+      backgroundColor: _T.bg,
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Container(
-              height: 28,
-              width: 34,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [AppColors.p2, AppColors.p3],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: _T.border))),
+              child: Row(children: [
+                _CircleBtn(icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.pop(context)),
+                const Spacer(),
+                const Text('Full Report',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600,
+                        color: _T.fg)),
+                const Spacer(),
+                _CircleBtn(
+                  icon: Icons.share_rounded,
+                  onTap: () async {
+                    final bytes = await _buildPdf(data, period, company);
+                    final file  = await _savePdfToDevice(bytes, company);
+                    await Share.shareXFiles([XFile(file.path)],
+                        text: '$company Report');
+                  },
                 ),
+              ]),
+            ),
+            // Scrollable content
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  // Context row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Wrap(spacing: 8, children: [
+                        _Badge(Icons.business_rounded, company, _T.secondary, _T.secondaryFg),
+                        _Badge(Icons.calendar_month_rounded, period.fullLabel,
+                            _T.card, _T.mutedFg, border: true),
+                      ]),
+                      Text('Updated just now',
+                          style: const TextStyle(fontSize: 11, color: _T.mutedFg)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  const Text('Executive Full Report',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
+                          color: _T.fg)),
+                  const SizedBox(height: 24),
+
+                  // Executive Summary card
+                  _InsightCard(
+                    icon: Icons.auto_awesome_rounded,
+                    title: 'Executive Summary',
+                    badge: data.profit >= 0 ? 'Overall: Healthy' : 'Needs Review',
+                    badgeColor: data.profit >= 0 ? _T.success : _T.destructive,
+                    badgeFg: data.profit >= 0 ? _T.successFg : _T.destructiveFg,
+                    bullets: [
+                      _Bullet(_T.success,
+                          'Profit for the period is ${_fmtFull(data.profit)}'
+                          '${data.profit >= 0 ? ', indicating positive performance.' : ', indicating a net loss.'}'),
+                      _Bullet(_T.primary,
+                          'Cash In reached ${_fmtFull(data.cashIn)} while Expense was '
+                          '${_fmtFull(data.expense)}, giving a margin of '
+                          '${data.profitMargin.toStringAsFixed(1)}%.'),
+                      _Bullet(_T.warning,
+                          'ROI sits at ${data.avgRoi.toStringAsFixed(1)}% and '
+                          'Attendance records at ${data.attendance}, supporting '
+                          'financial and HR performance.'),
+                      _Bullet(_T.accent,
+                          'Client base stands at '
+                          '${NumberFormat('#,##0').format(data.clients)} with '
+                          '${data.campaigns} active campaigns.'),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Growth & Trend
+                  _SectionCard(
+                    icon: Icons.trending_up_rounded,
+                    title: 'Growth & Trend Overview',
+                    subtitle: 'vs previous period',
+                    child: Column(children: [
+                      _TrendRow('Revenue & Cash In', _fmtFull(data.cashIn), true),
+                      const SizedBox(height: 8),
+                      _TrendRow('Profitability', '${_fmtFull(data.profit)} profit',
+                          data.profit >= 0),
+                      const SizedBox(height: 8),
+                      _TrendRow('Cost Efficiency', '${_fmtFull(data.expense)} expense',
+                          data.expense < data.cashIn),
+                    ]),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Key Focus Areas
+                  _FocusAreas(data: data),
+                  const SizedBox(height: 16),
+
+                  // Risks & Opportunities
+                  _RisksCard(data: data),
+                  const SizedBox(height: 24),
+                ],
               ),
-              child: Icon(_iconFor(title), color: Colors.white, size: 18),
             ),
-            const Spacer(),
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.manrope(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.text),
+            // Footer
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: _T.border))),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => _PdfPreviewScreen(
+                      data: data, period: period, company: company))),
+                  icon: const Icon(Icons.cloud_download_rounded, size: 20),
+                  label: const Text('Download PDF Document',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _T.primary, foregroundColor: _T.primaryFg,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(_T.rMd)),
+                    elevation: 2,
+                  ),
+              ),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );
   }
 }
 
-class _TopSellerTile extends StatelessWidget {
-  final int rank;
-  final TopSeller seller;
-  const _TopSellerTile({required this.rank, required this.seller});
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty) return 'U';
-    final a = parts.first.isNotEmpty ? parts.first[0] : 'U';
-    final b = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
-    return (a + b).toUpperCase();
-  }
+// ── Full Report sub-widgets ───────────────────────────────────
+class _Badge extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  final Color    bg, fg;
+  final bool     border;
+  const _Badge(this.icon, this.label, this.bg, this.fg, {this.border = false});
 
   @override
   Widget build(BuildContext context) {
-    final crown = rank == 1 ? Icons.emoji_events_rounded : Icons.military_tech_rounded;
-    final badgeColor = rank == 1 ? AppColors.warning : AppColors.p2;
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: AppColors.card,
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.03), blurRadius: 10, offset: const Offset(0, 6)),
-        ],
+        color: bg,
+        border: border ? Border.all(color: _T.border) : null,
+        borderRadius: BorderRadius.circular(_T.rSm),
       ),
-      child: Row(
-        children: [
-          Container(
-            height: 42,
-            width: 42,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              gradient: const LinearGradient(
-                colors: [AppColors.p1, AppColors.p2, AppColors.p3],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              _initials(seller.name),
-              style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  seller.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.manrope(fontWeight: FontWeight.w900, color: AppColors.text),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${_fmtInt(seller.invoices)} invoices',
-                  style: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.text2),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(crown, size: 16, color: badgeColor),
-                    const SizedBox(width: 6),
-                    Text(
-                      '#$rank',
-                      style: GoogleFonts.manrope(fontWeight: FontWeight.w900, color: badgeColor),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _fmtLakh(seller.sales),
-                style: GoogleFonts.manrope(fontWeight: FontWeight.w900, color: AppColors.text),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 12, color: fg),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+            color: fg)),
+      ]),
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  const _ErrorState({required this.message, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline_rounded, size: 44, color: AppColors.danger),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.manrope(color: AppColors.text2, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.p2,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              onPressed: onRetry,
-              child: Text('Retry', style: GoogleFonts.manrope(fontWeight: FontWeight.w900)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+class _Bullet {
+  final Color  dot;
+  final String text;
+  const _Bullet(this.dot, this.text);
 }
 
-class _ShimmerLoading extends StatelessWidget {
+class _InsightCard extends StatelessWidget {
+  final IconData   icon;
+  final String     title, badge;
+  final Color      badgeColor, badgeFg;
+  final List<_Bullet> bullets;
+  const _InsightCard({required this.icon, required this.title,
+      required this.badge, required this.badgeColor, required this.badgeFg,
+      required this.bullets});
+
   @override
   Widget build(BuildContext context) {
-    Widget box({double h = 60}) => Container(
-      height: h,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-    );
-
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(14),
-      child: Shimmer.fromColors(
-        baseColor: Colors.grey.shade300,
-        highlightColor: Colors.grey.shade100,
+      decoration: BoxDecoration(
+        color: _T.card,
+        border: Border.all(color: _T.border),
+        borderRadius: BorderRadius.circular(_T.rLg),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, size: 18, color: _T.primary),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(fontSize: 14,
+              fontWeight: FontWeight.w600, color: _T.fg)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: badgeColor,
+                borderRadius: BorderRadius.circular(_T.rSm)),
+            child: Text(badge, style: TextStyle(fontSize: 11,
+                fontWeight: FontWeight.w600, color: badgeFg)),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        ...bullets.map((b) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 6, right: 6),
+              child: Container(width: 6, height: 6,
+                  decoration: BoxDecoration(color: b.dot, shape: BoxShape.circle)),
+            ),
+            Expanded(child: Text(b.text,
+                style: const TextStyle(fontSize: 13, color: _T.mutedFg))),
+          ]),
+        )),
+      ]),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String   title, subtitle;
+  final Widget   child;
+  const _SectionCard({required this.icon, required this.title,
+      required this.subtitle, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+        color: _T.card,
+        border: Border.all(color: _T.border),
+        borderRadius: BorderRadius.circular(_T.rLg),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, size: 18, color: _T.primary),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(fontSize: 14,
+              fontWeight: FontWeight.w600, color: _T.fg)),
+          const Spacer(),
+          Text(subtitle, style: const TextStyle(fontSize: 11, color: _T.mutedFg)),
+        ]),
+        const SizedBox(height: 10),
+        child,
+      ]),
+    );
+  }
+}
+
+class _TrendRow extends StatelessWidget {
+  final String label, value;
+  final bool   positive;
+  const _TrendRow(this.label, this.value, this.positive);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: _T.mutedFg)),
+          Text(value, style: const TextStyle(fontSize: 13,
+              fontWeight: FontWeight.w600, color: _T.fg)),
+        ]),
+            Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+            color: positive ? _T.success : _T.destructive,
+            borderRadius: BorderRadius.circular(_T.rSm),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(positive ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                size: 12,
+                color: positive ? _T.successFg : _T.destructiveFg),
+            const SizedBox(width: 2),
+            Text(positive ? 'Growth' : 'Decline',
+                style: TextStyle(fontSize: 11,
+                    color: positive ? _T.successFg : _T.destructiveFg)),
+          ]),
+        ),
+      ],
+    );
+  }
+}
+
+class _FocusAreas extends StatelessWidget {
+  final _ReportData data;
+  const _FocusAreas({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.track_changes_rounded, size: 18, color: _T.primary),
+        const SizedBox(width: 8),
+        const Text('Key Focus Areas',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _T.fg)),
+        const Spacer(),
+        const Text('Finance · Ops · HR · Sales',
+            style: TextStyle(fontSize: 11, color: _T.mutedFg)),
+      ]),
+      const SizedBox(height: 12),
+      _FocusCard(
+        icon: Icons.account_balance_rounded,
+        title: 'Finance',
+        status: data.profit >= 0 ? 'On track' : 'Review needed',
+        statusOk: data.profit >= 0,
+        body: 'Budget avg ${_taka(data.avgBudget)}, loans ${_taka(data.loan)}, '
+            'profit margin ${data.profitMargin.toStringAsFixed(1)}%.',
+        suggestion: data.profit >= 0
+            ? 'Maintain spending discipline while increasing growth investments.'
+            : 'Review expense categories and reduce non-essential spending.',
+      ),
+      const SizedBox(height: 12),
+      _FocusCard(
+        icon: Icons.factory_rounded,
+        title: 'Operations',
+        status: data.stock > 0 ? 'Active' : 'Watch stock',
+        statusOk: data.stock > 0,
+        body: 'Production ${NumberFormat('#,##0').format(data.production)} units, '
+            '${data.workOrders} work orders, stock at '
+            '${NumberFormat('#,##0').format(data.stock)} units.',
+        suggestion: 'Prioritize replenishment planning and review lead times.',
+      ),
+      const SizedBox(height: 12),
+      _FocusCard(
+        icon: Icons.badge_rounded,
+        title: 'HR',
+        status: data.employees > 0 ? 'Strong' : 'No data',
+        statusOk: data.employees > 0,
+        body: 'Headcount ${data.employees}, attendance records ${data.attendance}, '
+            '${data.rndProjects} R&D projects running.',
+        suggestion: 'Focus HR programs on managing leave volumes and sustaining engagement.',
+      ),
+      const SizedBox(height: 12),
+      _FocusCard(
+        icon: Icons.shopping_bag_rounded,
+        title: 'Sales',
+        status: data.clients > 0 ? 'Growing' : 'Build pipeline',
+        statusOk: data.clients > 0,
+        body: '${NumberFormat('#,##0').format(data.clients)} clients, '
+            '${data.campaigns} active campaigns, '
+            'avg ROI ${data.avgRoi.toStringAsFixed(1)}%.',
+        suggestion: 'Intensify follow-up on open leads to convert momentum into revenue.',
+      ),
+    ]);
+  }
+}
+
+class _FocusCard extends StatelessWidget {
+  final IconData icon;
+  final String   title, status, body, suggestion;
+  final bool     statusOk;
+  const _FocusCard({required this.icon, required this.title,
+      required this.status, required this.statusOk,
+      required this.body, required this.suggestion});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _T.card,
+        border: Border.all(color: _T.border),
+        borderRadius: BorderRadius.circular(_T.rMd),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(color: _T.secondary,
+              borderRadius: BorderRadius.circular(_T.rMd)),
+          child: Icon(icon, size: 18, color: _T.secondaryFg),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text(title, style: const TextStyle(fontSize: 13,
+                fontWeight: FontWeight.w600, color: _T.fg)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+                color: statusOk ? _T.success : _T.warning,
+                borderRadius: BorderRadius.circular(_T.rSm),
+              ),
+              child: Text(status,
+                  style: TextStyle(fontSize: 11,
+                      color: statusOk ? _T.successFg : _T.warningFg)),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(body, style: const TextStyle(fontSize: 12, color: _T.mutedFg)),
+                const SizedBox(height: 2),
+          RichText(text: TextSpan(
+            style: const TextStyle(fontSize: 12, color: _T.mutedFg),
+            children: [
+              const TextSpan(text: 'Suggestion: ',
+                  style: TextStyle(fontWeight: FontWeight.w500, color: _T.fg)),
+              TextSpan(text: suggestion),
+            ],
+          )),
+        ])),
+      ]),
+    );
+  }
+}
+
+class _RisksCard extends StatelessWidget {
+  final _ReportData data;
+  const _RisksCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+        color: _T.card,
+        border: Border.all(color: _T.border),
+        borderRadius: BorderRadius.circular(_T.rLg),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.warning_amber_rounded, size: 18, color: _T.warning),
+          const SizedBox(width: 8),
+          const Text('Risks & Opportunities',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _T.fg)),
+        ]),
+        const SizedBox(height: 10),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.trending_down_rounded, size: 14, color: _T.warning),
+                    const SizedBox(width: 6),
+          Expanded(child: RichText(text: TextSpan(
+            style: const TextStyle(fontSize: 12, color: _T.mutedFg),
+            children: [
+              const TextSpan(text: 'Risk: ',
+                  style: TextStyle(fontWeight: FontWeight.w500, color: _T.fg)),
+              TextSpan(text: data.stock < 100
+                  ? 'Low stock levels and active loans could impact delivery if demand spikes.'
+                  : 'Monitor loan obligations and ensure stock replenishment stays on schedule.'),
+            ],
+          ))),
+        ]),
+              const SizedBox(height: 6),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.trending_up_rounded, size: 14, color: _T.success),
+          const SizedBox(width: 6),
+          Expanded(child: RichText(text: TextSpan(
+            style: const TextStyle(fontSize: 12, color: _T.mutedFg),
+            children: [
+              const TextSpan(text: 'Opportunity: ',
+                  style: TextStyle(fontWeight: FontWeight.w500, color: _T.fg)),
+              TextSpan(text: data.profit >= 0
+                  ? 'Strong profit and client growth create room to accelerate investments in Operations and Sales.'
+                  : 'Focus on converting existing leads and optimising campaign ROI to return to profitability.'),
+            ],
+          ))),
+        ]),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// PDF PREVIEW SCREEN
+// ─────────────────────────────────────────────────────────────
+class _PdfPreviewScreen extends StatefulWidget {
+  final _ReportData data;
+  final _Period     period;
+  final String      company;
+  const _PdfPreviewScreen({required this.data, required this.period,
+      required this.company});
+  @override
+  State<_PdfPreviewScreen> createState() => _PdfPreviewScreenState();
+}
+
+class _PdfPreviewScreenState extends State<_PdfPreviewScreen> {
+  Uint8List? _bytes;
+  bool       _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _generate();
+  }
+
+  Future<void> _generate() async {
+    setState(() => _busy = true);
+    try {
+      final b = await _buildPdf(widget.data, widget.period, widget.company);
+      if (mounted) setState(() { _bytes = b; _busy = false; });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF generation failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _savePdf() async {
+    if (_bytes == null) return;
+    setState(() => _busy = true);
+    try {
+      final file = await _savePdfToDevice(_bytes!, widget.company);
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved to ${file.path}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sharePdf() async {
+    if (_bytes == null) return;
+    setState(() => _busy = true);
+    try {
+      final file = await _savePdfToDevice(_bytes!, widget.company);
+      await Share.shareXFiles([XFile(file.path)],
+          text: '${widget.company} Report');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Share failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _T.bg,
+      body: SafeArea(
         child: Column(
           children: [
-            box(h: 52),
-            const SizedBox(height: 10),
-            Row(children: [Expanded(child: box()), const SizedBox(width: 10), Expanded(child: box())]),
-            const SizedBox(height: 10),
-            Row(children: [Expanded(child: box()), const SizedBox(width: 10), Expanded(child: box())]),
-            const SizedBox(height: 12),
-            box(h: 260),
-            const SizedBox(height: 12),
-            box(h: 240),
+            // Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: _T.border))),
+              child: Row(children: [
+                _CircleBtn(icon: Icons.arrow_back_rounded,
+                    onTap: () => Navigator.pop(context)),
+                const Spacer(),
+                const Text('Document Preview',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+                        color: _T.fg)),
+                const Spacer(),
+                const SizedBox(width: 36),
+              ]),
+            ),
+            // Preview area
+            Expanded(
+              child: _busy && _bytes == null
+                  ? const Center(child: CircularProgressIndicator(color: _T.primary))
+                  : _bytes != null
+                      ? PdfPreview(
+                          build: (_) async => _bytes!,
+                          allowPrinting: true,
+                          allowSharing: true,
+                          canChangePageFormat: false,
+                          canChangeOrientation: false,
+                          pdfFileName:
+                              '${widget.company.replaceAll(' ', '_')}_Report.pdf',
+                        )
+                      : const Center(child: Text('Failed to generate preview')),
+            ),
+            // Bottom bar
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: _T.border))),
+              child: Row(children: [
+                Expanded(
+                  child: _ActionBtn(
+                    label: 'Share',
+                    bg: _T.secondary, fg: _T.secondaryFg,
+                    onTap: _busy ? () {} : _sharePdf,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _busy
+                      ? Container(
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: _T.primary,
+                            borderRadius: BorderRadius.circular(_T.rMd),
+                          ),
+                          child: const Center(
+                            child: SizedBox(width: 22, height: 22,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white)),
+                          ),
+                        )
+                      : _ActionBtn(
+                          label: 'Save PDF',
+                          bg: _T.primary, fg: _T.primaryFg,
+                          onTap: _savePdf,
+                        ),
+                ),
+              ]),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SHARED UTILITY WIDGETS
+// ─────────────────────────────────────────────────────────────
+class _CircleBtn extends StatelessWidget {
+  final IconData     icon;
+  final VoidCallback onTap;
+  const _CircleBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36, height: 36,
+        decoration: const BoxDecoration(
+          color: _T.secondary, shape: BoxShape.circle),
+        child: Icon(icon, size: 20, color: _T.fg),
       ),
     );
   }

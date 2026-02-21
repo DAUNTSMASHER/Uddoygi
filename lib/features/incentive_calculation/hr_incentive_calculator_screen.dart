@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 class HRIncentiveCalculatorScreen extends StatefulWidget {
   const HRIncentiveCalculatorScreen({super.key});
 
@@ -10,6 +12,7 @@ class HRIncentiveCalculatorScreen extends StatefulWidget {
 }
 
 class _HRIncentiveCalculatorScreenState extends State<HRIncentiveCalculatorScreen> {
+  String _cid = '';
   String? _selectedReportId;
   List<DocumentSnapshot> _salesReports = [];
   List<_IncentiveRow> _rows = [];
@@ -18,12 +21,14 @@ class _HRIncentiveCalculatorScreenState extends State<HRIncentiveCalculatorScree
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadSalesReports();
   }
 
   Future<void> _loadSalesReports() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('marketing_incentives')
+    final snapshot = await DB.colSync(_cid, C.marketingIncentives)
         .get();
 
     setState(() {
@@ -36,8 +41,7 @@ class _HRIncentiveCalculatorScreenState extends State<HRIncentiveCalculatorScree
   void _onReportSelected(String? docId) async {
     if (docId == null) return;
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('marketing_incentives')
+    final snapshot = await DB.colSync(_cid, C.marketingIncentives)
         .doc(docId)
         .get();
 
@@ -82,8 +86,7 @@ class _HRIncentiveCalculatorScreenState extends State<HRIncentiveCalculatorScree
       };
     }).toList();
 
-    await FirebaseFirestore.instance
-        .collection('marketing_incentives')
+    await DB.colSync(_cid, C.marketingIncentives)
         .doc(_selectedReportId!)
         .update({
       'rows': updatedRows,
@@ -117,8 +120,10 @@ class _HRIncentiveCalculatorScreenState extends State<HRIncentiveCalculatorScree
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(('Incentive Calculator') , style: TextStyle(color: Colors.white)),
+        title: const Text('Incentive Calculator', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(12),

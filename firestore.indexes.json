@@ -1,4 +1,1179 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "role",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "fullName",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "fullName",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "employees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "fullName",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "employees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "role",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "attendance",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "attendance",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "period",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "officeEmail",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "officeEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "generatedAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "period",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leaves",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leaves",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leave_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "leave_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "loan_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "loan_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "agentEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "customerEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payment_slips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payment_slips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "agentEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cash_flow",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cash_flow",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        },
+        {
+          "fieldPath": "amount",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "dueDate",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "expenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "dueDate",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "agentEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "work_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "agentEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "lastUpdated",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "work_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "work_order_tracking",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "workOrderNo",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "lastUpdated",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "work_order_tracking",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "stage",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "lastUpdated",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "daily_production",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "stocks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "purchase_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "campaigns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "campaigns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "agentEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "assignedTo",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "dueDate",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "dueDate",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "complaints",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "submittedBy",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "complaints",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "againstEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "complaints",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "from",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "toEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "toEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "isRead",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        },
+        {
+          "fieldPath": "title",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "marketing_incentives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "marketing_incentives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "agentEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "requestingDept",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "assignedTo",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_updates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "projectId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_updates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "submittedBy",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_milestones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "projectId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "hr_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "hr_documents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "employeeEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "welfare_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "welfare_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "qc_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "workOrderNo",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "address_validations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "budgets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "year",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "department",
+          "order": "ASC"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASC"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESC"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }

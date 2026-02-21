@@ -1,6 +1,8 @@
 // lib/features/factory/presentation/screens/daily_production_screen.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -16,7 +18,7 @@ class DailyProductionScreen extends StatefulWidget {
 }
 
 class _DailyProductionScreenState extends State<DailyProductionScreen> {
-  final _firestore = FirebaseFirestore.instance;
+  String _cid = '';
   final _userEmail = FirebaseAuth.instance.currentUser?.email;
 
   // model dropdown
@@ -24,17 +26,20 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
   bool _loadingModels = true;
 
   // filters
-  static const List<String> _filters = ['Day', 'Week', 'Month', 'Year'];
+  static const List<String> _filters = ['দিন', 'সপ্তাহ', 'মাস', 'বছর'];
   String _selectedFilter = _filters.first;
 
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _fetchModels();
   }
 
   Future<void> _fetchModels() async {
-    final snap = await _firestore.collection('products').orderBy('model_name').get();
+    final snap = await DB.colSync(_cid, C.products).orderBy('model_name').get();
     setState(() {
       _models = snap.docs.map((d) => (d.data()['model_name'] as String?) ?? d.id).toList();
       _loadingModels = false;
@@ -44,14 +49,14 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
   DateTime _computeStart() {
     final now = DateTime.now();
     switch (_selectedFilter) {
-      case 'Week':
+      case 'সপ্তাহ':
         final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
         return DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-      case 'Month':
+      case 'মাস':
         return DateTime(now.year, now.month, 1);
-      case 'Year':
+      case 'বছর':
         return DateTime(now.year, 1, 1);
-      case 'Day':
+      case 'দিন':
       default:
         return DateTime(now.year, now.month, now.day);
     }
@@ -59,13 +64,13 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
 
   DateTime _computeEnd(DateTime start) {
     switch (_selectedFilter) {
-      case 'Week':
+      case 'সপ্তাহ':
         return start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
-      case 'Month':
+      case 'মাস':
         return DateTime(start.year, start.month + 1, 0, 23, 59, 59);
-      case 'Year':
+      case 'বছর':
         return DateTime(start.year, 12, 31, 23, 59, 59);
-      case 'Day':
+      case 'দিন':
       default:
         return start.add(const Duration(hours: 23, minutes: 59, seconds: 59));
     }
@@ -74,8 +79,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
   Stream<QuerySnapshot<Map<String, dynamic>>> _streamByRange() {
     final start = _computeStart();
     final end = _computeEnd(start);
-    return _firestore
-        .collection('daily_production')
+    return DB.colSync(_cid, C.dailyProduction)
         .where('managerEmail', isEqualTo: _userEmail)
         .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
@@ -84,8 +88,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
   }
 
   Stream<int> _sumQuantityInRange(DateTime start, DateTime end) =>
-      _firestore
-          .collection('daily_production')
+      DB.colSync(_cid, C.dailyProduction)
           .where('managerEmail', isEqualTo: _userEmail)
           .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
           .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
@@ -126,7 +129,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(existing == null ? 'Add Production' : 'Edit Production'),
+        title: Text(existing == null ? 'উৎপাদন যোগ করুন' : 'উৎপাদন সম্পাদনা'),
         content: _loadingModels
             ? SizedBox(
           height: 80,
@@ -141,66 +144,61 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
                 // Model
                 DropdownButtonFormField<String>(
                   value: model,
-                  decoration: _inputDecoration('Product Model'),
+                  decoration: _inputDecoration('পণ্যের মডেল'),
                   items: _models
                       .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                       .toList(),
                   onChanged: (v) => model = v,
-                  validator: (v) => v == null ? 'Required' : null,
+                  validator: (v) => v == null ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
                 // Base
                 TextFormField(
                   initialValue: base,
-                  decoration: _inputDecoration('Base'),
+                  decoration: _inputDecoration('বেস'),
                   onChanged: (v) => base = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
-                // Size
                 TextFormField(
                   initialValue: size,
-                  decoration: _inputDecoration('Size'),
+                  decoration: _inputDecoration('সাইজ'),
                   onChanged: (v) => size = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
-                // Colour
                 TextFormField(
                   initialValue: colour,
-                  decoration: _inputDecoration('Colour'),
+                  decoration: _inputDecoration('রঙ'),
                   onChanged: (v) => colour = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
-                // Curl
                 TextFormField(
                   initialValue: curl,
-                  decoration: _inputDecoration('Curl'),
+                  decoration: _inputDecoration('কার্ল'),
                   onChanged: (v) => curl = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
-                // Quantity
                 TextFormField(
                   controller: qtyCtrl,
-                  decoration: _inputDecoration('Quantity'),
+                  decoration: _inputDecoration('পরিমাণ'),
                   keyboardType: TextInputType.number,
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
-                // For Whom
                 TextFormField(
                   controller: whomCtrl,
-                  decoration: _inputDecoration('For Whom / What'),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                  decoration: _inputDecoration('কার জন্য / কী'),
+                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
                 ),
                 const SizedBox(height: 12),
                 // Date
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Date: ${DateFormat.yMd().format(date)}'),
+                      child: Text('তারিখ: ${DateFormat.yMd().format(date)}'),
                     ),
                     TextButton(
                       onPressed: () async {
@@ -212,7 +210,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
                         );
                         if (picked != null) setState(() => date = picked);
                       },
-                      child: const Text('Change'),
+                      child: const Text('পরিবর্তন'),
                     ),
                   ],
                 ),
@@ -221,7 +219,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('বাতিল')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: _darkBlue,
@@ -242,13 +240,13 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
                 'timestamp'   : FieldValue.serverTimestamp(),
               };
               if (existing == null) {
-                await _firestore.collection('daily_production').add(entry);
+                await DB.colSync(_cid, C.dailyProduction).add(entry);
               } else {
                 await existing.reference.update(entry);
               }
               Navigator.of(ctx).pop();
             },
-            child: Text(existing == null ? 'Add' : 'Save'),
+            child: Text(existing == null ? 'যোগ করুন' : 'সংরক্ষণ'),
           ),
         ],
       ),
@@ -277,14 +275,12 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
               children: [
                 Text(label,
                     style: const TextStyle(
-                      fontFamily: 'Times New Roman',
                       fontSize: 16,
                       color: Colors.white,
                     )),
                 const SizedBox(height: 8),
                 Text('$qty',
                     style: const TextStyle(
-                      fontFamily: 'Times New Roman',
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -300,7 +296,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
   @override
   Widget build(BuildContext context) {
     if (_userEmail == null) {
-      return const Scaffold(body: Center(child: Text('Please sign in to continue')));
+      return const Scaffold(body: Center(child: Text('অনুগ্রহ করে সাইন ইন করুন')));
     }
 
     // pre‑compute for dashboard
@@ -312,13 +308,14 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Production'),
+        title: const Text('উৎপাদন', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.dashboard),
-            tooltip: 'Full Dashboard',
+            tooltip: 'পূর্ণ ড্যাশবোর্ড',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ProductionDashboard()),
             ),
@@ -337,8 +334,8 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
               children: [
-                _buildDashboardCard('Today', _sumQuantityInRange(dayStart, dayEnd)),
-                _buildDashboardCard('This Month', _sumQuantityInRange(monthStart, monthEnd)),
+                _buildDashboardCard('আজ', _sumQuantityInRange(dayStart, dayEnd)),
+                _buildDashboardCard('এই মাস', _sumQuantityInRange(monthStart, monthEnd)),
               ],
             ),
           ),
@@ -363,7 +360,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
                   stream: _sumQuantityInRange(_computeStart(), _computeEnd(_computeStart())),
                   builder: (ctx, snap) {
                     final qty = snap.data ?? 0;
-                    return Text('Total Qty: $qty');
+                    return Text('মোট পরিমাণ: $qty');
                   },
                 ),
               ),
@@ -380,7 +377,7 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
                 }
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) {
-                  return const Center(child: Text('No entries'));
+                  return const Center(child: Text('কোনো এন্ট্রি নেই'));
                 }
                 return ListView.builder(
                   padding: const EdgeInsets.all(12),
@@ -408,10 +405,10 @@ class _DailyProductionScreenState extends State<DailyProductionScreen> {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Base: $base    Size: $size'),
-                            Text('Colour: $colour    Curl: $curl'),
-                            Text('For: $whom'),
-                            Text('On: $date'),
+                            Text('বেস: $base    সাইজ: $size'),
+                            Text('রঙ: $colour    কার্ল: $curl'),
+                            Text('জন্য: $whom'),
+                            Text('তারিখ: $date'),
                           ],
                         ),
                         isThreeLine: true,

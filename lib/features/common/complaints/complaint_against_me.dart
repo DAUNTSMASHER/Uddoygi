@@ -1,22 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 
-class ComplaintsAgainstMeScreen extends StatelessWidget {
+class ComplaintsAgainstMeScreen extends StatefulWidget {
   final String userEmail;
   const ComplaintsAgainstMeScreen({super.key, required this.userEmail});
+
+  @override
+  State<ComplaintsAgainstMeScreen> createState() => _ComplaintsAgainstMeScreenState();
+}
+
+class _ComplaintsAgainstMeScreenState extends State<ComplaintsAgainstMeScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Complaints Against Me'),
+        title: const Text('Complaints Against Me', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('complaints')
-            .where('againstEmail', isEqualTo: userEmail) // <-- updated for clarity
+        stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.complaints)
+            .where('againstEmail', isEqualTo: widget.userEmail)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {

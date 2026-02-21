@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// Brand palette
 const Color _brandBlue = Color(0xFF0D47A1);
@@ -16,6 +18,7 @@ class AdsManagerMobile extends StatefulWidget {
 }
 
 class _AdsManagerMobileState extends State<AdsManagerMobile> {
+  String _cid = '';
   int _index = 0;
 
   @override
@@ -101,22 +104,32 @@ class _AdsManagerMobileState extends State<AdsManagerMobile> {
 
 /* ============================== DASHBOARD =============================== */
 
-class _DashboardScreen extends StatelessWidget {
+class _DashboardScreen extends StatefulWidget {
   const _DashboardScreen();
 
+  @override
+  State<_DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<_DashboardScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   Stream<_DashSummary> _summaryStream() {
-    return FirebaseFirestore.instance
-        .collection('campaigns')
+    if (_cid.isEmpty) return const Stream.empty();
+    return DB.colSync(_cid, C.campaigns)
         .snapshots()
         .map((s) {
       int total = s.docs.length;
       int running = 0;
 
-      // Achievement: % of eligible campaigns whose KPI target met.
-      // Rule: if KPI with key 'revenue' exists -> compare totals.revenue >= target
-      // else if 'orders' KPI -> totals.orders >= target
-      // else if 'sessions' KPI -> totals.sessions >= target
-      // If no numeric target found, campaign is not counted in denominator.
       int eligible = 0;
       int achieved = 0;
 
@@ -136,8 +149,6 @@ class _DashboardScreen extends StatelessWidget {
             .map((e) => Map<String, dynamic>.from(e as Map))
             .toList();
 
-        // Choose the "best" campaign by highest totals.revenue,
-        // fallback to orders, then sessions if revenue missing.
         num score = 0;
         if (totals['revenue'] is num) score = totals['revenue'] as num;
         else if (totals['orders'] is num) score = (totals['orders'] as num) * 1.0;
@@ -148,24 +159,20 @@ class _DashboardScreen extends StatelessWidget {
           bestName = (data['title'] ?? data['name'] ?? '-').toString();
         }
 
-        // Achievement
         num? target;
         String? key;
-        // prefer revenue KPI
         for (final k in kpis) {
           final kKey = (k['key'] ?? '').toString().toLowerCase();
           if (k['target'] is num) {
             if (kKey == 'revenue') { key = 'revenue'; target = k['target'] as num; break; }
           }
         }
-        // fallback orders
         if (target == null) {
           for (final k in kpis) {
             final kKey = (k['key'] ?? '').toString().toLowerCase();
             if (k['target'] is num && kKey == 'orders') { key = 'orders'; target = k['target'] as num; break; }
           }
         }
-        // fallback sessions
         if (target == null) {
           for (final k in kpis) {
             final kKey = (k['key'] ?? '').toString().toLowerCase();
@@ -336,14 +343,28 @@ class _SectionCard extends StatelessWidget {
 
 /* ============================== PERFORMANCE ============================== */
 
-class _PerformanceScreen extends StatelessWidget {
+class _PerformanceScreen extends StatefulWidget {
+
   const _PerformanceScreen();
+  @override
+  State<_PerformanceScreen> createState() => _PerformanceScreenState();
+}
+
+class _PerformanceScreenState extends State<_PerformanceScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('campaigns')
+      stream: DB.colSync(_cid, C.campaigns)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (ctx, snap) {
@@ -432,24 +453,24 @@ class _PerformanceScreen extends StatelessWidget {
   }
 
   static String _dateRangeText(dynamic start, dynamic end) {
-    String fmt(dynamic ts) {
-      if (ts == null) return '-';
-      final d = (ts is Timestamp) ? ts.toDate() : DateTime.tryParse('$ts');
-      if (d == null) return '-';
-      return DateFormat('MMM d').format(d);
+      String fmt(dynamic ts) {
+        if (ts == null) return '-';
+        final d = (ts is Timestamp) ? ts.toDate() : DateTime.tryParse('$ts');
+        if (d == null) return '-';
+        return DateFormat('MMM d').format(d);
+      }
+      return '${fmt(start)} → ${fmt(end)}';
     }
-    return '${fmt(start)} → ${fmt(end)}';
-  }
-
-  static String _money(dynamic v) {
-    if (v is num) return '\$${NumberFormat.compact().format(v)}';
-    return '-';
-  }
-
-  static String _compact(dynamic v) {
-    if (v is num) return NumberFormat.compact().format(v);
-    return '-';
-  }
+  
+    static String _money(dynamic v) {
+      if (v is num) return '\$${NumberFormat.compact().format(v)}';
+      return '-';
+    }
+  
+    static String _compact(dynamic v) {
+      if (v is num) return NumberFormat.compact().format(v);
+      return '-';
+    }
 }
 
 class _MiniStat extends StatelessWidget {
@@ -533,13 +554,20 @@ class _CampaignScreen extends StatefulWidget {
 }
 
 class _CampaignScreenState extends State<_CampaignScreen> {
+  String _cid = '';
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('campaigns')
+          stream: DB.colSync(_cid, C.campaigns)
               .orderBy('createdAt', descending: true)
               .snapshots(),
           builder: (ctx, snap) {
@@ -636,6 +664,7 @@ class _NewCampaignPage extends StatefulWidget {
 }
 
 class _NewCampaignPageState extends State<_NewCampaignPage> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
   final _nameCtl  = TextEditingController();
   final _titleCtl = TextEditingController();
@@ -653,6 +682,9 @@ class _NewCampaignPageState extends State<_NewCampaignPage> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _applyKpiPreset('Marketing');
   }
 
@@ -751,7 +783,7 @@ class _NewCampaignPageState extends State<_NewCampaignPage> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final doc = FirebaseFirestore.instance.collection('campaigns').doc();
+    final doc = (await DB.col(C.campaigns)).doc();
     final now = DateTime.now();
 
     await doc.set({
@@ -1164,7 +1196,7 @@ class _CampaignDetailPage extends StatelessWidget {
       final orders  = int.tryParse(oCtl.text) ?? 0;
       final revenue = double.tryParse(rCtl.text) ?? 0;
 
-      await FirebaseFirestore.instance.runTransaction((tx) async {
+      await DB.firestore.runTransaction((tx) async {
         final snap = await tx.get(docRef);
         final data = snap.data() ?? {};
         final today  = Map<String, dynamic>.from(data['today']  ?? {});

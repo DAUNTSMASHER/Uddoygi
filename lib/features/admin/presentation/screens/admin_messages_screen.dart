@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class AdminMessagesScreen extends StatefulWidget {
   const AdminMessagesScreen({super.key});
@@ -10,14 +12,15 @@ class AdminMessagesScreen extends StatefulWidget {
 }
 
 class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
+  String _cid = '';
   final _messageController = TextEditingController();
   final _emailController = TextEditingController();
-  final _firestore = FirebaseFirestore.instance;
+
 
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty || _emailController.text.trim().isEmpty) return;
 
-    await _firestore.collection('messages').add({
+    await (await DB.col(C.messages)).add({
       'email': _emailController.text.trim(),
       'message': _messageController.text.trim(),
       'status': 'pending',
@@ -29,7 +32,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
   }
 
   Future<void> _approveMessage(String docId) async {
-    await _firestore.collection('messages').doc(docId).update({
+    await (await DB.col(C.messages)).doc(docId).update({
       'status': 'approved',
     });
   }
@@ -37,7 +40,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
   Future<void> _sendReply(String messageId, String replyText) async {
     if (replyText.trim().isEmpty) return;
 
-    await _firestore.collection('messages').doc(messageId).collection('replies').add({
+    await (await DB.col(C.messages)).doc(messageId).collection('replies').add({
       'sender': 'admin@company.com', // Customize as needed
       'text': replyText.trim(),
       'timestamp': Timestamp.now(),
@@ -84,8 +87,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
 
   Widget _buildReplies(String messageId) {
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('messages')
+      stream: DB.colSync(_cid, C.messages)
           .doc(messageId)
           .collection('replies')
           .orderBy('timestamp', descending: false)
@@ -111,6 +113,14 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
       },
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -146,8 +156,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
             const SizedBox(height: 10),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: _firestore
-                    .collection('messages')
+                stream: DB.colSync(_cid, C.messages)
                     .orderBy('timestamp', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {

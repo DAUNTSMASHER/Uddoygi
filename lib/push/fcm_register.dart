@@ -3,44 +3,27 @@ import 'dart:io' show Platform;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 Future<void> _claimTokenForUser(String uid, String token) async {
-  final db = FirebaseFirestore.instance;
+  // FCM tokens live at root users/{uid}/fcmTokens — NOT company-scoped.
+  // This allows push delivery even before company context is loaded.
 
-  // 1) Remove from any other user's top-level array
-  final qArr = await db.collection('users')
-      .where('fcmTokens', arrayContains: token)
-      .get();
-  for (final d in qArr.docs) {
-    if (d.id == uid) continue;
-    try {
-      await d.reference.update({
-        'fcmTokens': FieldValue.arrayRemove([token]),
-      });
-    } catch (_) {}
-  }
-
-  // 2) Remove from any other user's subcollection
-  final qSub = await db.collectionGroup('fcmTokens')
+  // 1) Remove from any other user's subcollection
+  final qSub = await DB.firestore.collectionGroup('fcmTokens')
       .where('token', isEqualTo: token)
       .get();
   for (final d in qSub.docs) {
-    final parent = d.reference.parent.parent; // users/{otherUid}
+    final parent = d.reference.parent.parent;
     if (parent == null || parent.id == uid) continue;
-    try {
-      await d.reference.delete();
-    } catch (_) {}
+    try { await d.reference.delete(); } catch (_) {}
   }
 
-  // 3) Ensure it is present for THIS user
-  final userRef = db.collection('users').doc(uid);
-  await userRef.set({
-    'fcmTokens': FieldValue.arrayUnion([token]),
-  }, SetOptions(merge: true));
-
-  await userRef.collection('fcmTokens').doc(token).set({
-    'token': token,
-    'platform': Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'other',
+  // 2) Ensure it is present for THIS user (root-level, not company-scoped)
+  await DB.fcmTokensCol(uid).doc(token).set({
+    'token':     token,
+    'platform':  Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'other',
     'updatedAt': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
 }

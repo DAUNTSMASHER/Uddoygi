@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 class NewMessageTab extends StatefulWidget {
   final String userEmail;
@@ -25,6 +27,7 @@ class _RecipientLite {
 }
 
 class _NewMessageTabState extends State<NewMessageTab> {
+  String _cid = '';
   final _subjectController = TextEditingController();
   final _bodyController = TextEditingController();
 
@@ -37,6 +40,9 @@ class _NewMessageTabState extends State<NewMessageTab> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadDepartments();
   }
 
@@ -48,7 +54,7 @@ class _NewMessageTabState extends State<NewMessageTab> {
   }
 
   Future<void> _loadDepartments() async {
-    final snap = await FirebaseFirestore.instance.collection('users').get();
+    final snap = await (await DB.col(C.users)).get();
     final depts = snap.docs
         .map((d) => (d.data()['department'] as String? ?? '').trim())
         .where((s) => s.isNotEmpty)
@@ -60,8 +66,7 @@ class _NewMessageTabState extends State<NewMessageTab> {
   }
 
   Future<void> _loadUsersForDept(String dept) async {
-    final q = await FirebaseFirestore.instance
-        .collection('users')
+    final q = await DB.colSync(_cid, C.users)
         .where('department', isEqualTo: dept)
         .get();
 
@@ -96,7 +101,7 @@ class _NewMessageTabState extends State<NewMessageTab> {
       final recipient = _departmentUsers.firstWhere((u) => u.uid == toUid);
 
       // 1) Save the message
-      final msgRef = await FirebaseFirestore.instance.collection('messages').add({
+      final msgRef = await (await DB.col(C.messages)).add({
         'from'      : widget.userEmail.toLowerCase(),
         'fromName'  : widget.userName ?? widget.userEmail,
         'to'        : [recipient.email],      // keep array format
@@ -109,7 +114,7 @@ class _NewMessageTabState extends State<NewMessageTab> {
 
       // 2) In-app notification document (write both timestamp & createdAt for compatibility)
       final now = DateTime.now();
-      await FirebaseFirestore.instance.collection('notifications').add({
+      await (await DB.col(C.notifications)).add({
         'to'         : recipient.email,
         'toUserId'   : recipient.uid,
         'title'      : 'New message',
@@ -122,7 +127,7 @@ class _NewMessageTabState extends State<NewMessageTab> {
       });
 
       // 3) Queue push for the background worker (Firestore->FCM)
-      await FirebaseFirestore.instance.collection('alert_dispatch').add({
+      await (await DB.col(C.alertDispatch)).add({
         'alertId'    : msgRef.id,
         'uids'       : [recipient.uid], // worker resolves tokens
         'title'      : 'New message',

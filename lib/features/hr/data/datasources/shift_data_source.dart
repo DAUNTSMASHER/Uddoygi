@@ -1,31 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class ShiftDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Stream all shift assignments
-  Stream<QuerySnapshot> getAllShifts() {
-    return _firestore.collection('shifts').snapshots();
+  Stream<QuerySnapshot> getAllShifts() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.shifts).snapshots();
   }
 
-  // Stream shifts by user ID
-  Stream<QuerySnapshot> getUserShifts(String userId) {
-    return _firestore
-        .collection('shifts')
-        .where('userId', isEqualTo: userId)
-        .orderBy('shiftDate', descending: true)
-        .snapshots();
-  }
+  Stream<QuerySnapshot> getUserShifts(String userId) =>
+      DB.stream(C.shifts,
+          query: (c) => c
+              .where('userId', isEqualTo: userId)
+              .orderBy('shiftDate', descending: true));
 
-  // Add a shift entry
   Future<void> addShift({
     required String userId,
-    required String shiftDate, // YYYY-MM-DD
-    required String startTime, // e.g., 09:00
-    required String endTime,   // e.g., 17:00
-    required String shiftType, // Morning, Night, etc.
+    required String shiftDate,
+    required String startTime,
+    required String endTime,
+    required String shiftType,
   }) async {
-    await _firestore.collection('shifts').add({
+    final _cid = await _getCid();
+    final col = DB.colSync(_cid, C.shifts);
+    await col.add({
       'userId': userId,
       'shiftDate': shiftDate,
       'startTime': startTime,
@@ -35,13 +35,13 @@ class ShiftDataSource {
     });
   }
 
-  // Update a shift record
-  Future<void> updateShift(String docId, Map<String, dynamic> updatedData) async {
-    await _firestore.collection('shifts').doc(docId).update(updatedData);
+  Future<void> updateShift(String docId, Map<String, dynamic> data) async {
+    final ref = await DB.doc(C.shifts, docId);
+    await ref.update(data);
   }
 
-  // Delete a shift record
   Future<void> deleteShift(String docId) async {
-    await _firestore.collection('shifts').doc(docId).delete();
+    final ref = await DB.doc(C.shifts, docId);
+    await ref.delete();
   }
 }

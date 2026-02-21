@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:uddoygi/main.dart'; // ✅ Make sure LoginScreenWrapper is in main.dart
+import 'package:uddoygi/main.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -10,46 +11,65 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
+    _initVideo();
+    // Fallback: always navigate after 4 seconds regardless of video state
+    Timer(const Duration(seconds: 4), _goToLogin);
+  }
 
-    _controller = VideoPlayerController.asset('assets/videos/app_loader.mp4')
-      ..initialize().then((_) {
-        setState(() {});
-        _controller.play();
-      });
-
-    // Navigate after video ends
-    _controller.addListener(() {
-      if (_controller.value.position >= _controller.value.duration && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreenWrapper()),
-        );
+  Future<void> _initVideo() async {
+    final ctrl = VideoPlayerController.asset('assets/videos/app_loader.mp4');
+    try {
+      await ctrl.initialize();
+      if (!mounted) {
+        ctrl.dispose();
+        return;
       }
-    });
+      setState(() => _controller = ctrl);
+      ctrl.play();
+      ctrl.addListener(() {
+        if (ctrl.value.position >= ctrl.value.duration) {
+          _goToLogin();
+        }
+      });
+    } catch (_) {
+      ctrl.dispose();
+      // Video unavailable — fallback timer will handle navigation
+    }
+  }
+
+  void _goToLogin() {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const LoginScreenWrapper()),
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ctrl = _controller;
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _controller.value.isInitialized
+      body: (ctrl != null && ctrl.value.isInitialized)
           ? SizedBox.expand(
               child: FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: _controller.value.size.width,
-                  height: _controller.value.size.height,
-                  child: VideoPlayer(_controller),
+                  width: ctrl.value.size.width,
+                  height: ctrl.value.size.height,
+                  child: VideoPlayer(ctrl),
                 ),
               ),
             )

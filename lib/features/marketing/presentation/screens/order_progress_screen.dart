@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
 /* ---------- Inline Marketing palette (no external theme import) ---------- */
@@ -27,6 +28,7 @@ class OrderProgressScreen extends StatefulWidget {
 }
 
 class _OrderProgressScreenState extends State<OrderProgressScreen> {
+  String _cid = '';
   Map<String, dynamic>? _session;
   String _search = '';
   String _statusFilter = 'all';
@@ -39,6 +41,9 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadSession();
   }
 
@@ -54,8 +59,7 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
     }
     // NOTE: where('agentEmail') + optional where('status') + orderBy('timestamp')
     // may require a composite index. Firestore will suggest it if missing.
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('invoices')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.invoices)
         .where('agentEmail', isEqualTo: _session!['email'])
         .orderBy('timestamp', descending: true);
 

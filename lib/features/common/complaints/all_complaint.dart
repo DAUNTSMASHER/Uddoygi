@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class AllComplaintScreen extends StatefulWidget {
   final String userEmail;
@@ -19,6 +21,7 @@ class AllComplaintScreen extends StatefulWidget {
 }
 
 class _AllComplaintScreenState extends State<AllComplaintScreen> {
+  String _cid = '';
   // Filters & UI state
   String _statusFilter = 'all';
   String _searchText = '';
@@ -46,8 +49,7 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
   /* ====================== Data / Streams ====================== */
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _complaintsStream() {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('complaints')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.complaints)
         .orderBy('timestamp', descending: true);
 
     if (_statusFilter != 'all') {
@@ -350,7 +352,7 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
             onPressed: () async {
               history[index]['note'] = controller.text.trim();
               history[index]['editedAt'] = Timestamp.now();
-              await FirebaseFirestore.instance.collection('complaints').doc(docId).update({
+              await (await DB.col(C.complaints)).doc(docId).update({
                 'resolutionHistory': history,
               });
               if (mounted) {
@@ -368,6 +370,14 @@ class _AllComplaintScreenState extends State<AllComplaintScreen> {
   }
 
   /* ====================== UI ====================== */
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {

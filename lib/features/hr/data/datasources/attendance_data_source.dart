@@ -1,29 +1,29 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class AttendanceDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Stream all attendance records
-  Stream<QuerySnapshot> getAllAttendance() {
-    return _firestore.collection('attendance').snapshots();
+  Stream<QuerySnapshot> getAllAttendance() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.attendance).snapshots();
   }
 
-  // Get attendance by user
-  Stream<QuerySnapshot> getUserAttendance(String userId) {
-    return _firestore
-        .collection('attendance')
-        .where('userId', isEqualTo: userId)
-        .orderBy('date', descending: true)
-        .snapshots();
-  }
+  Stream<QuerySnapshot> getUserAttendance(String userId) =>
+      DB.stream(C.attendance,
+          query: (c) => c
+              .where('userId', isEqualTo: userId)
+              .orderBy('date', descending: true));
 
-  // Add a new attendance record
   Future<void> addAttendance({
     required String userId,
-    required String date, // format: YYYY-MM-DD
-    required String status, // 'present', 'absent', 'leave'
+    required String date,
+    required String status,
   }) async {
-    await _firestore.collection('attendance').add({
+    final _cid = await _getCid();
+    final col = DB.colSync(_cid, C.attendance);
+    await col.add({
       'userId': userId,
       'date': date,
       'status': status,
@@ -31,13 +31,13 @@ class AttendanceDataSource {
     });
   }
 
-  // Update an attendance record
   Future<void> updateAttendance(String docId, Map<String, dynamic> data) async {
-    await _firestore.collection('attendance').doc(docId).update(data);
+    final ref = await DB.doc(C.attendance, docId);
+    await ref.update(data);
   }
 
-  // Delete an attendance record
   Future<void> deleteAttendance(String docId) async {
-    await _firestore.collection('attendance').doc(docId).delete();
+    final ref = await DB.doc(C.attendance, docId);
+    await ref.delete();
   }
 }

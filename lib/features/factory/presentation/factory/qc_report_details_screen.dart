@@ -1,7 +1,9 @@
-// lib/features/factory/presentation/screens/qc_report_details_screen.dart
+﻿// lib/features/factory/presentation/screens/qc_report_details_screen.dart
 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:cross_file/cross_file.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF40062D);
 
 class QCReportDetailsScreen extends StatefulWidget {
   /// If null => show *all* QC reports.
@@ -25,6 +27,7 @@ class QCReportDetailsScreen extends StatefulWidget {
 
 class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
     with SingleTickerProviderStateMixin {
+  String _cid = '';
   late TabController _tabs;
   DateTime _dailyDate = DateTime.now();
   DateTime _monthDate = DateTime.now();
@@ -33,6 +36,9 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _tabs = TabController(length: 3, vsync: this);
   }
 
@@ -58,7 +64,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
       initialDate: _monthDate,
       firstDate: DateTime.now().subtract(const Duration(days: 365 * 5)),
       lastDate: DateTime.now(),
-      helpText: 'Select Month',
+      helpText: 'মাস নির্বাচন করুন',
     );
     if (pick != null) setState(() => _monthDate = pick);
   }
@@ -69,8 +75,8 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
       initialDate: DateTime(_year),
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
-      helpText: 'Select Year',
-      fieldLabelText: 'Year',
+      helpText: 'বছর নির্বাচন করুন',
+      fieldLabelText: 'বছর',
     );
     if (pick != null) setState(() => _year = pick.year);
   }
@@ -80,7 +86,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
     final sTs = Timestamp.fromDate(start);
     final eTs = Timestamp.fromDate(end);
 
-    var query = FirebaseFirestore.instance.collection('qc_reports')
+    var query = DB.colSync(_cid, C.qcReports)
         .where('qcDate', isGreaterThanOrEqualTo: sTs)
         .where('qcDate', isLessThanOrEqualTo: eTs)
         .orderBy('qcDate', descending: true);
@@ -111,7 +117,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
 
     final snap = await _streamFor(start, end).first;
 
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -169,20 +175,22 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QC Report Details'),
+        title: const Text('QC রিপোর্ট বিস্তারিত', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
         bottom: TabBar(
           controller: _tabs,
           tabs: const [
-            Tab(text: 'Daily'),
-            Tab(text: 'Monthly'),
-            Tab(text: 'Yearly'),
+            Tab(text: 'দৈনিক'),
+            Tab(text: 'মাসিক'),
+            Tab(text: 'বার্ষিক'),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
-            tooltip: 'Download PDF',
+            tooltip: 'PDF ডাউনলোড',
             onPressed: _exportPdf,
           ),
         ],
@@ -237,7 +245,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
               }
               final docs = snap.data?.docs ?? [];
               if (docs.isEmpty) {
-                return const Center(child: Text('No entries'));
+                return const Center(child: Text('কোনো এন্ট্রি নেই'));
               }
               return ListView.builder(
                 itemCount: docs.length,
@@ -255,14 +263,14 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
                           Text(d['modelName'] ?? '—',
                               style: const TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text('Base: ${d['base'] ?? '—'}'),
-                          Text('Colour: ${d['colour'] ?? '—'}'),
-                          Text('Curl: ${d['curl'] ?? '—'}'),
-                          Text('Density: ${d['density'] ?? '—'}'),
-                          Text('Qty: ${d['quantity'] ?? '—'}'),
-                          Text('Remarks: ${d['remarks'] ?? '—'}'),
-                          Text('On: $date'),
-                          Text('By: ${d['agentEmail'] ?? '—'}',
+                          Text('বেস: ${d['base'] ?? '—'}'),
+                          Text('রঙ: ${d['colour'] ?? '—'}'),
+                          Text('কার্ল: ${d['curl'] ?? '—'}'),
+                          Text('ঘনত্ব: ${d['density'] ?? '—'}'),
+                          Text('পরিমাণ: ${d['quantity'] ?? '—'}'),
+                          Text('মন্তব্য: ${d['remarks'] ?? '—'}'),
+                          Text('তারিখ: $date'),
+                          Text('দ্বারা: ${d['agentEmail'] ?? '—'}',
                               style: const TextStyle(fontStyle: FontStyle.italic)),
                         ],
                       ),

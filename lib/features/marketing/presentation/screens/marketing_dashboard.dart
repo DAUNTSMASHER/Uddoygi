@@ -1,12 +1,10 @@
-// lib/features/marketing/presentation/screens/marketing_dashboard.dart
 import 'package:uddoygi/features/common/salary_screen.dart';
-
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/sales_screen.dart';
-
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/products.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/renumeration_dashboard.dart';
@@ -15,17 +13,20 @@ import 'package:uddoygi/features/common/notification.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/campaign_screen.dart';
 import 'package:uddoygi/features/common/stock/stockhistory.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
-// ✅ Import the loan request screen
-import 'package:uddoygi/features/marketing/presentation/screens/loan_request_screen.dart';
+import 'package:uddoygi/features/factory/presentation/screens/loan_request_screen.dart';
 
-/// ===== Palette (blue + white only) =====
-const Color _brandBlue  = Color(0xFF0D47A1); // dark
-const Color _blueMid    = Color(0xFF1D5DF1); // accent
-const Color _surface    = Color(0xFFF6F8FF); // near-white surface
-const Color _cardBorder = Color(0x1A0D47A1); // 10% blue
-const Color _shadowLite = Color(0x14000000);
-// Running stages (compare in lowercase; supports both `status` and `currentStage`)
-const Set<String> _runningStagesLower = {
+// ── Palette — Blue & White only ───────────────────────────────────────────────
+const Color _bg        = Color(0xFFF0F4FF);
+const Color _primary   = Color(0xFF2563EB);
+const Color _primaryDk = Color(0xFF1E3A8A);
+const Color _primaryLt = Color(0xFFEFF6FF);
+const Color _card      = Color(0xFFFFFFFF);
+const Color _border    = Color(0x1A2563EB);
+const Color _fg        = Color(0xFF0F172A);
+const Color _muted     = Color(0xFF94A3B8);
+const Color _badgeRed  = Color(0xFFDC2626);
+
+const Set<String> _runningStages = {
   'submitted to factory',
   'factory update 1 (base is done)',
   'hair is ready',
@@ -34,76 +35,112 @@ const Set<String> _runningStagesLower = {
   'molding',
 };
 
-String _asLower(dynamic v) => (v ?? '').toString().trim().toLowerCase();
-
-bool _isRunningWorkOrder(Map<String, dynamic> m) {
-  final s  = _asLower(m['status']);        // some docs use `status`
-  final cs = _asLower(m['currentStage']);  // some docs use `currentStage`
-  return _runningStagesLower.contains(s) || _runningStagesLower.contains(cs);
+bool _isRunning(Map<String, dynamic> m) {
+  final s  = (m['status']       ?? '').toString().trim().toLowerCase();
+  final cs = (m['currentStage'] ?? '').toString().trim().toLowerCase();
+  return _runningStages.contains(s) || _runningStages.contains(cs);
 }
 
 class MarketingDashboard extends StatefulWidget {
-  const MarketingDashboard({Key? key}) : super(key: key);
+  const MarketingDashboard({super.key});
 
   @override
   State<MarketingDashboard> createState() => _MarketingDashboardState();
 }
 
 class _MarketingDashboardState extends State<MarketingDashboard> {
+  String _cid = '';
   String? email;
   String? uid;
+  String? name;
+  String? photoUrl;
   String _search = '';
   int _currentTab = 0;
 
-  final List<_DashboardItem> _allItems = const [
-    _DashboardItem('Notices', Icons.notifications_active, '/marketing/notices'),
-    _DashboardItem('Clients', Icons.people_alt, '/marketing/clients'),
-    _DashboardItem('Sales', Icons.point_of_sale, '/marketing/sales'),
-    _DashboardItem('Welfare', Icons.volunteer_activism, '/common/welfare'),
-    _DashboardItem('Complaints', Icons.warning_amber, '/common/complaints'),
-    _DashboardItem('Messages', Icons.message, '/common/messages'),
-    _DashboardItem('Tasks', Icons.task, '/marketing/task_assignment'),
-    _DashboardItem('Campaigns', Icons.campaign, ''), // manual: AdsManagerMobile
-    _DashboardItem('Orders', Icons.shopping_bag, '/marketing/orders'),
-    _DashboardItem('Loans', Icons.request_page, ''), // manual: LoanRequestScreen
-    _DashboardItem('Products', Icons.inventory, ''), // manual: ProductsPage
-    _DashboardItem('Renumeration', Icons.paid, ''),  // manual: RenumerationDashboard
-    _DashboardItem('Stock Update', Icons.sync, ''),  // manual: StockHistoryScreen
-    _DashboardItem('Salary', Icons.account_balance_wallet_rounded, ''),
+  Stream<int> _notifStream = Stream.value(0);
+  Stream<int> _msgStream   = Stream.value(0);
 
+  final List<_DashItem> _allItems = const [
+    _DashItem('Notices',     Icons.notifications_active_rounded, '/marketing/notices'),
+    _DashItem('Clients',     Icons.people_alt_rounded,           '/marketing/clients'),
+    _DashItem('Sales',       Icons.point_of_sale_rounded,        ''),
+    _DashItem('Welfare',     Icons.volunteer_activism_rounded,   '/common/welfare'),
+    _DashItem('Complaints',  Icons.report_problem_rounded,       '/common/complaints'),
+    _DashItem('Messages',    Icons.chat_bubble_outline_rounded,  '/common/messages'),
+    _DashItem('Tasks',       Icons.task_alt_rounded,             '/marketing/task_assignment'),
+    _DashItem('Campaigns',   Icons.campaign_rounded,             ''),
+    _DashItem('Orders',      Icons.shopping_bag_rounded,         '/marketing/orders'),
+    _DashItem('Loans',       Icons.account_balance_rounded,      ''),
+    _DashItem('Products',    Icons.inventory_2_rounded,          ''),
+    _DashItem('Renumeration',Icons.paid_rounded,                 ''),
+    _DashItem('Stock',       Icons.sync_alt_rounded,             ''),
+    _DashItem('Salary',      Icons.account_balance_wallet_rounded, ''),
+    _DashItem('R&D Request', Icons.science_rounded,              '/rnd/request'),
+    _DashItem('Attendance',  Icons.event_available_rounded,      '/marketing/attendance'),
   ];
 
   @override
   void initState() {
     super.initState();
-    _loadSession();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final id = await LocalStorageService.getSavedCompanyId();
+    if (!mounted) return;
+    setState(() {
+      _cid = id ?? '';
+      if (_cid.isNotEmpty) {
+        _notifStream = _unreadNotifStream();
+        _msgStream   = _unreadMsgStream();
+      }
+    });
+    await _loadSession();
   }
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
+    final current = FirebaseAuth.instance.currentUser;
     if (!mounted) return;
     setState(() {
-      email = session?['email'] as String?;
-      uid   = session?['uid'] as String?;
+      email    = session?['email'] as String? ?? current?.email;
+      uid      = session?['uid']   as String? ?? current?.uid;
+      name     = (session?['name'] as String?) ?? current?.displayName ?? current?.email ?? 'Marketing';
+      photoUrl = current?.photoURL;
     });
+    if (uid != null && _cid.isNotEmpty) {
+      try {
+        final s = await DB.colSync(_cid, C.users).doc(uid).get();
+        if (s.exists && mounted) {
+          final d = s.data()!;
+          final n = (d['fullName'] as String?)?.trim();
+          final p = (d['profilePhotoUrl'] as String?)?.trim();
+          setState(() {
+            if (n != null && n.isNotEmpty) name = n;
+            if (p != null && p.isNotEmpty) photoUrl = p;
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  String _niceName(String s) {
+    if (!s.contains('@')) return s;
+    return s.split('@').first.replaceAll('.', ' ').replaceAll('_', ' ');
   }
 
   Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-    await LocalStorageService.clearSession();
+    await LocalStorageService.performLogout();
     if (mounted) Navigator.pushReplacementNamed(context, '/login');
   }
 
-  void _onItemTap(_DashboardItem item) {
+  void _onTap(_DashItem item) {
     switch (item.title) {
       case 'Salary':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const SalaryScreen()));
         return;
-
       case 'Products':
-        if (email != null) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: email!)));
-        }
+        if (email != null) Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: email!)));
         return;
       case 'Renumeration':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const RenumerationDashboard()));
@@ -111,111 +148,79 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
       case 'Campaigns':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const AdsManagerMobile()));
         return;
-      case 'Stock Update':
+      case 'Stock':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const StockHistoryScreen()));
         return;
       case 'Sales':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesScreen()));
         return;
       case 'Loans':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const LoanRequestScreen()));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => LoanRequestScreen()));
         return;
       default:
         Navigator.pushNamed(context, item.route);
     }
   }
 
-  /// ---------- LIVE BADGES: per-tile counts from Firestore ----------
-  Stream<int> _badgeStreamFor(String title) {
+  Stream<int> _badgeFor(String title) {
     final mail = email ?? FirebaseAuth.instance.currentUser?.email ?? '';
-    final fs = FirebaseFirestore.instance;
-
     switch (title) {
       case 'Notices':
-        return fs
-            .collection('notifications')
-            .where('to', isEqualTo: mail)
-            .where('read', isEqualTo: false)
-            .snapshots()
-            .map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.notifications)
+            .where('to', isEqualTo: mail).where('read', isEqualTo: false)
+            .snapshots().map((s) => s.docs.length);
       case 'Messages':
-        return _unreadMessagesStream();
-
+        return _unreadMsgStream();
       case 'Sales':
-        return fs
-            .collection('invoices')
+        return DB.colSync(_cid, C.invoices)
             .where('ownerEmail', isEqualTo: mail)
-            .snapshots()
-            .map((s) => s.docs.length);
-
+            .snapshots().map((s) => s.docs.length);
       case 'Orders':
-        return fs.collection('work_orders')
-            .snapshots()
-            .map((s) => s.docs.where((d) => _isRunningWorkOrder(d.data())).length);
-
-
-
+        return DB.colSync(_cid, C.workOrders)
+            .snapshots().map((s) => s.docs.where((d) => _isRunning(d.data())).length);
       case 'Loans':
-        return fs
-            .collection('loans')
+        return DB.colSync(_cid, C.loans)
             .where('userEmail', isEqualTo: mail)
-            .snapshots()
-            .map((s) => s.docs.length);
-
+            .snapshots().map((s) => s.docs.length);
       case 'Renumeration':
-        return fs
-            .collection('marketing_incentives')
+        return DB.colSync(_cid, C.marketingIncentives)
             .where('userEmail', isEqualTo: mail)
-            .snapshots()
-            .map((s) => s.docs.length);
-
+            .snapshots().map((s) => s.docs.length);
       case 'Clients':
-        return fs.collection('customers').snapshots().map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.customers).snapshots().map((s) => s.docs.length);
       case 'Campaigns':
-        return fs.collection('campaigns').snapshots().map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.campaigns)
+            .where('status', isEqualTo: 'active')
+            .snapshots().map((s) => s.docs.length);
       case 'Welfare':
-        return fs.collection('welfare').snapshots().map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.welfare).snapshots().map((s) => s.docs.length);
       case 'Complaints':
-        return fs.collection('complaints').snapshots().map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.complaints).snapshots().map((s) => s.docs.length);
       case 'Products':
-        return fs.collection('products').snapshots().map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.products).snapshots().map((s) => s.docs.length);
       case 'Tasks':
-        return fs.collection('tasks').snapshots().map((s) => s.docs.length);
-
+        return DB.colSync(_cid, C.tasks).snapshots().map((s) => s.docs.length);
       default:
         return const Stream<int>.empty();
     }
   }
 
-  /// Unread messages badge stream
-  Stream<int> _unreadMessagesStream() {
+  Stream<int> _unreadMsgStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream<int>.value(0);
-    final mail = user.email ?? '';
-    return FirebaseFirestore.instance
-        .collection('messages')
-        .where('to', isEqualTo: mail)
+    if (user == null || _cid.isEmpty) return Stream.value(0);
+    return DB.colSync(_cid, C.messages)
+        .where('to', isEqualTo: user.email ?? '')
         .where('read', isEqualTo: false)
-        .snapshots()
-        .map((s) => s.docs.length);
+        .snapshots().map((s) => s.docs.length);
   }
 
-  Stream<int> _unreadNotificationsStream() {
+  Stream<int> _unreadNotifStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream<int>.value(0);
-    final mail = user.email ?? '';
-    return FirebaseFirestore.instance
-        .collection('notifications')
-        .where('to', isEqualTo: mail)
+    if (user == null || _cid.isEmpty) return Stream.value(0);
+    return DB.colSync(_cid, C.notifications)
+        .where('to', isEqualTo: user.email ?? '')
         .where('read', isEqualTo: false)
-        .snapshots()
-        .map((s) => s.docs.length);
+        .snapshots().map((s) => s.docs.length);
   }
 
   @override
@@ -225,248 +230,188 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
         .toList();
 
     final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1000 ? 6 : width >= 780 ? 5 : width >= 560 ? 4 : 3;
+    final cols  = width >= 1000 ? 6 : width >= 780 ? 5 : width >= 560 ? 4 : 3;
+    final displayName = _niceName(name ?? email ?? 'Marketing');
 
     return Scaffold(
-      backgroundColor: _surface,
+      backgroundColor: _bg,
+      drawer: const MarketingDrawer(),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: _brandBlue,
+        backgroundColor: _primaryDk,
         foregroundColor: Colors.white,
-        title: Text(
-          'Welcome back, ${_niceName(email ?? FirebaseAuth.instance.currentUser?.email ?? 'Marketing')}',
-          style: const TextStyle(fontWeight: FontWeight.w800),
+        title: Row(
+          children: [
+            _Avatar(name: displayName, photoUrl: photoUrl),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Hi, $displayName',
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ),
+          ],
         ),
         actions: [
           StreamBuilder<int>(
-            stream: _unreadNotificationsStream(),
-            builder: (_, s) {
-              final count = s.data ?? 0;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications),
-                    tooltip: 'Notifications',
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const NotificationPage()),
-                    ),
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: _Badge(count: count, small: true),
-                    ),
-                ],
-              );
-            },
+            stream: _notifStream,
+            builder: (_, s) => _AppBarBadge(
+              icon: Icons.notifications_outlined,
+              count: s.data ?? 0,
+              onTap: () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const NotificationPage())),
+            ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
+            icon: const Icon(Icons.logout_rounded, size: 20),
+            tooltip: 'Sign out',
             onPressed: _logout,
           ),
         ],
       ),
 
-      drawer: const MarketingDrawer(),
+      bottomNavigationBar: _BottomBar(
+        currentTab: _currentTab,
+        msgStream: _msgStream,
+        onTabChanged: (i) => setState(() => _currentTab = i),
+        onClients: () => Navigator.pushNamed(context, '/marketing/clients'),
+        onSales: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
+        onMessages: () => Navigator.pushNamed(context, '/common/messages'),
+      ),
 
-      bottomNavigationBar: _buildBottomNav(),
-
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          _OverviewHeader(userEmail: email, userUid: uid),
-          const SizedBox(height: 16),
-
-          TextField(
-            onChanged: (v) => setState(() => _search = v),
-            decoration: InputDecoration(
-              hintText: 'Search…',
-              prefixIcon: const Icon(Icons.search, color: _brandBlue),
-              hintStyle: const TextStyle(color: _brandBlue),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _cardBorder),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _cardBorder),
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      body: CustomScrollView(
+        slivers: [
+          // ── Hero overview card ───────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _OverviewHeader(userEmail: email, userUid: uid),
             ),
-            style: const TextStyle(color: _brandBlue),
           ),
-          const SizedBox(height: 16),
 
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filtered.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cols,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.02,
+          // ── Section label + search ───────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 4, height: 18,
+                      decoration: BoxDecoration(
+                        color: _primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('Quick Actions',
+                        style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: _fg)),
+                  ]),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _card,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _border),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: TextField(
+                      onChanged: (v) => setState(() => _search = v),
+                      style: GoogleFonts.inter(fontSize: 14, color: _fg),
+                      decoration: InputDecoration(
+                        hintText: 'Search features…',
+                        hintStyle: GoogleFonts.inter(color: _muted, fontSize: 14),
+                        prefixIcon: const Icon(Icons.search_rounded, color: _muted, size: 20),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            itemBuilder: (_, i) {
-              final it = filtered[i];
-              final stream = _badgeStreamFor(it.title);
-              return StreamBuilder<int>(
-                stream: stream,
-                builder: (_, snap) {
-                  final count = snap.data ?? 0;
-                  return _DashTile(
-                    title: it.title,
-                    icon: it.icon,
-                    badgeCount: count,
-                    onTap: () => _onItemTap(it),
+          ),
+
+          // ── Feature grid ─────────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (_, i) {
+                  final it = filtered[i];
+                  return StreamBuilder<int>(
+                    stream: _badgeFor(it.title),
+                    builder: (_, snap) => _DashTile(
+                      title: it.title,
+                      icon: it.icon,
+                      badge: snap.data ?? 0,
+                      onTap: () => _onTap(it),
+                    ),
                   );
                 },
-              );
-            },
+                childCount: filtered.length,
+              ),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: cols,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.0,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildBottomNav() {
-    final items = <_NavItem>[
-      _NavItem('Home', Icons.home_rounded, onTap: () => setState(() => _currentTab = 0)),
-      _NavItem('Clients', Icons.people_alt_rounded, onTap: () => Navigator.pushNamed(context, '/marketing/clients')),
-      _NavItem(
-        'Sales',
-        Icons.point_of_sale_rounded,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
-      ),
-      _NavItem('Products', Icons.inventory_2_rounded, onTap: () {
-        final mail = email ?? FirebaseAuth.instance.currentUser?.email;
-        if (mail != null) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => ProductsPage(userEmail: mail)));
-        }
-      }),
-      _NavItem(
-        'Stock Update',
-        Icons.sync,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StockHistoryScreen())),
-      ),
-      _NavItem(
-        'Notifications',
-        Icons.notifications,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
-        badgeStream: _unreadNotificationsStream(),
-      ),
-      _NavItem(
-        'Messages',
-        Icons.message_rounded,
-        onTap: () => Navigator.pushNamed(context, '/common/messages'),
-        badgeStream: _unreadMessagesStream(),
-      ),
-    ];
-
-    return SafeArea(
-      child: Container(
-        decoration: const BoxDecoration(color: _brandBlue),
-        child: Row(
-          children: items.map((it) {
-            final isSelected = items.indexOf(it) == _currentTab;
-            final color = isSelected ? Colors.white : Colors.white70;
-
-            final iconWidget = it.badgeStream == null
-                ? Icon(it.icon, color: color)
-                : StreamBuilder<int>(
-              stream: it.badgeStream,
-              builder: (_, s) => _BadgeIcon(
-                icon: it.icon,
-                color: color,
-                count: s.data ?? 0,
-              ),
-            );
-
-            return Expanded(
-              child: InkWell(
-                onTap: () {
-                  setState(() => _currentTab = items.indexOf(it));
-                  it.onTap();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      iconWidget,
-                      const SizedBox(height: 4),
-                      SizedBox(
-                        height: 14,
-                        child: AutoSizeText(
-                          it.label,
-                          maxLines: 1,
-                          minFontSize: 8,
-                          stepGranularity: 0.5,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  String _niceName(String s) {
-    if (!s.contains('@')) return s;
-    final core = s.split('@').first;
-    return core.replaceAll('.', ' ').replaceAll('_', ' ');
-  }
 }
 
-/* ========================= Overview & helpers ========================= */
-
+// ── Overview header ───────────────────────────────────────────────────────────
 enum _Range { thisMonth, prevMonth, last3, last12 }
-// Running stages (lowercase)
-
 
 class _OverviewHeader extends StatefulWidget {
-  final String? userEmail; // optional user scoping if needed
+  final String? userEmail;
   final String? userUid;
-  const _OverviewHeader({Key? key, this.userEmail, this.userUid}) : super(key: key);
+  const _OverviewHeader({this.userEmail, this.userUid});
 
   @override
   State<_OverviewHeader> createState() => _OverviewHeaderState();
 }
 
 class _OverviewHeaderState extends State<_OverviewHeader> {
+  String _cid = '';
   _Range _range = _Range.thisMonth;
 
-  ({DateTime a, DateTime b}) _rangeDates(_Range r) {
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId()
+        .then((id) { if (mounted) setState(() => _cid = id ?? ''); });
+  }
+
+  ({DateTime a, DateTime b}) _dates(_Range r) {
     final now = DateTime.now();
     switch (r) {
       case _Range.thisMonth:
-        final a = DateTime(now.year, now.month, 1);
-        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month, 1),
+                b: DateTime(now.year, now.month + 1, 0, 23, 59, 59));
       case _Range.prevMonth:
-        final a = DateTime(now.year, now.month - 1, 1);
-        final b = DateTime(now.year, now.month, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month - 1, 1),
+                b: DateTime(now.year, now.month, 0, 23, 59, 59));
       case _Range.last3:
-        final a = DateTime(now.year, now.month - 2, 1);
-        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month - 2, 1),
+                b: DateTime(now.year, now.month + 1, 0, 23, 59, 59));
       case _Range.last12:
-        final a = DateTime(now.year, now.month - 11, 1);
-        final b = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-        return (a: a, b: b);
+        return (a: DateTime(now.year, now.month - 11, 1),
+                b: DateTime(now.year, now.month + 1, 0, 23, 59, 59));
     }
   }
 
@@ -481,61 +426,42 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
     return '৳${b.toString()}';
   }
 
-  // 1) Total sale (paid invoices only)
-  // inside _OverviewHeaderState
   Stream<String> _totalSales() {
-    final r = _rangeDates(_range);
-
-    // prefer the email passed from the parent; fall back to FirebaseAuth user
+    final r  = _dates(_range);
     final me = (widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '').trim();
-
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('invoices')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.invoices)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo:   Timestamp.fromDate(r.b));
-
-    if (me.isNotEmpty) {
-      q = q.where('agentEmail', isEqualTo: me); // ← per-agent filter
-    }
-
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b));
+    if (me.isNotEmpty) q = q.where('agentEmail', isEqualTo: me);
     return q.snapshots().map((s) {
       num sum = 0;
       for (final d in s.docs) {
-        final m = d.data();
+        final m      = d.data();
         final status = (m['status'] ?? '').toString().toLowerCase();
-        final pay = (m['payment'] is Map) ? Map<String, dynamic>.from(m['payment']) : const {};
-        final paid = (pay['taken'] == true) || status.contains('payment taken') || status.contains('paid');
+        final pay    = (m['payment'] is Map) ? Map<String, dynamic>.from(m['payment']) : const <String, dynamic>{};
+        final paid   = (pay['taken'] == true) || status.contains('payment taken') || status.contains('paid');
         if (!paid) continue;
-
         final v = m['grandTotal'];
         if (v is num) sum += v;
       }
-      // money() from parent
       return _money(sum);
     });
   }
 
-
-  // 2) Total campaign (count created this period)
   Stream<String> _totalCampaigns() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('campaigns')
+    final r = _dates(_range);
+    return DB.colSync(_cid, C.campaigns)
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) => '${s.docs.length}');
+        .snapshots().map((s) => s.docs.length.toString());
   }
 
-  // 3) Pending payment = invoices whose status contains "Invoice Created"
   Stream<String> _pendingPayments() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('invoices')
+    final r = _dates(_range);
+    return DB.colSync(_cid, C.invoices)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) {
+        .snapshots().map((s) {
       int count = 0;
       for (final d in s.docs) {
         final status = (d.data()['status'] ?? '').toString().toLowerCase();
@@ -545,39 +471,30 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
     });
   }
 
-  // 4) Running work orders = your 7 ongoing stages (case-insensitive)
-  Stream<String> _workOrdersRunning() {
-    final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('work_orders')
-        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
-        .where('timestamp', isLessThanOrEqualTo:   Timestamp.fromDate(r.b))
-        .snapshots()
-        .map((s) => '${s.docs.where((d) => _isRunningWorkOrder(d.data())).length}');
-  }
-
-
-
-  // 5) Incentive amount (sum totalIncentive from marketing_incentives)
-  Stream<String> _incentiveAmount() {
-    final r = _rangeDates(_range);
-    final me = (widget.userEmail ?? '').trim();
-
-    return FirebaseFirestore.instance
-        .collection('marketing_incentives')
+  Stream<String> _runningOrders() {
+    final r = _dates(_range);
+    return DB.colSync(_cid, C.workOrders)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
         .snapshots()
-        .map((s) {
+        .map((s) => '${s.docs.where((d) => _isRunning(d.data())).length}');
+  }
+
+  Stream<String> _incentiveAmount() {
+    final r  = _dates(_range);
+    final me = (widget.userEmail ?? '').trim();
+    return DB.colSync(_cid, C.marketingIncentives)
+        .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
+        .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
+        .snapshots().map((s) {
       num sum = 0;
       for (final d in s.docs) {
-        final m = d.data() as Map<String, dynamic>;
-        final isMine = me.isEmpty
+        final m     = d.data();
+        final mine  = me.isEmpty
             ? true
-            : (m['userEmail'] == me) || (m['agentEmail'] == me) || d.id.startsWith('$me');
-        if (!isMine) continue;
-        final v = (m['totalIncentive'] as num?) ?? 0;
-        sum += v;
+            : (m['userEmail'] == me) || (m['agentEmail'] == me) || d.id.startsWith(me);
+        if (!mine) continue;
+        sum += (m['totalIncentive'] as num?) ?? 0;
       }
       return _money(sum);
     });
@@ -586,44 +503,52 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [_brandBlue, _blueMid],
+          colors: [_primary, _primaryDk],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 14, offset: Offset(0, 6))],
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+              color: _primary.withValues(alpha: 0.25),
+              blurRadius: 14,
+              offset: const Offset(0, 6)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Icon(Icons.insights, color: Colors.white),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text('Overview',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-            ),
-            _RangeFilter(value: _range, onChanged: (r) => setState(() => _range = r)),
-          ]),
+          Row(
+            children: [
+              const Icon(Icons.insights_rounded, color: Colors.white70, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Overview',
+                    style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15)),
+              ),
+              _RangeDropdown(value: _range, onChanged: (r) => setState(() => _range = r)),
+            ],
+          ),
           const SizedBox(height: 14),
-          LayoutBuilder(builder: (ctx, c) {
-            final spacing = 10.0;
-            final cardW = (c.maxWidth - spacing) / 2; // two columns
+          LayoutBuilder(builder: (_, c) {
+            final w = (c.maxWidth - 10) / 2;
             return Wrap(
-              spacing: spacing,
-              runSpacing: spacing,
+              spacing: 10,
+              runSpacing: 10,
               children: [
-                _StatCard(width: cardW, label: 'Total sale',          streamText: _totalSales()),
-                _StatCard(width: cardW, label: 'Total campaign',      streamText: _totalCampaigns()),
-                _StatCard(width: cardW, label: 'Pending payment',     streamText: _pendingPayments()),
-                _StatCard(width: cardW, label: 'Running Work orders', streamText: _workOrdersRunning()),
-                _StatCard(width: cardW, label: 'Incentive amount',    streamText: _incentiveAmount()),
-                _DueLoanStatCard(
-                  width: cardW,
-                  label: 'Current Due loan',
+                _StatCard(width: w, label: 'Total Sales',      icon: Icons.payments_rounded,       stream: _totalSales()),
+                _StatCard(width: w, label: 'Campaigns',        icon: Icons.campaign_rounded,        stream: _totalCampaigns()),
+                _StatCard(width: w, label: 'Pending Payments', icon: Icons.pending_actions_rounded, stream: _pendingPayments()),
+                _StatCard(width: w, label: 'Running Orders',   icon: Icons.work_history_rounded,    stream: _runningOrders()),
+                _StatCard(width: w, label: 'Incentives',       icon: Icons.star_rounded,            stream: _incentiveAmount()),
+                _DueLoanCard(
+                  width: w,
                   money: _money,
                   userEmail: widget.userEmail,
                   userUid: widget.userUid,
@@ -637,106 +562,108 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
   }
 }
 
-/* ---------- Filter (dropdown) ---------- */
-class _RangeFilter extends StatelessWidget {
+// ── Range dropdown ────────────────────────────────────────────────────────────
+class _RangeDropdown extends StatelessWidget {
   final _Range value;
   final ValueChanged<_Range> onChanged;
-  const _RangeFilter({required this.value, required this.onChanged});
+  const _RangeDropdown({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white70),
+        border: Border.all(color: Colors.white30),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<_Range>(
           value: value,
           isDense: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: _brandBlue),
-          dropdownColor: Colors.white,
-          style: const TextStyle(
-            color: _brandBlue,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
+          dropdownColor: _primaryDk,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
           items: const [
             DropdownMenuItem(value: _Range.thisMonth, child: Text('This month')),
-            DropdownMenuItem(value: _Range.prevMonth, child: Text('Previous month')),
+            DropdownMenuItem(value: _Range.prevMonth, child: Text('Prev month')),
             DropdownMenuItem(value: _Range.last3,     child: Text('Last 3 months')),
             DropdownMenuItem(value: _Range.last12,    child: Text('One year')),
           ],
-          onChanged: (r) {
-            if (r != null) onChanged(r);
-          },
+          onChanged: (r) { if (r != null) onChanged(r); },
         ),
       ),
     );
   }
 }
 
-/* ========================= Stat card ========================= */
+// ── Stat card ─────────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
   final double width;
   final String label;
-  final Stream<String> streamText;
-  const _StatCard({required this.width, required this.label, required this.streamText, Key? key}) : super(key: key);
+  final IconData icon;
+  final Stream<String> stream;
+
+  const _StatCard({
+    required this.width,
+    required this.label,
+    required this.icon,
+    required this.stream,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: 96,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _cardBorder),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+        color: _card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: _brandBlue.withOpacity(.08), shape: BoxShape.circle),
-            child: const Icon(Icons.assessment, color: _brandBlue, size: 18),
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _primaryLt,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: _primary, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: StreamBuilder<String>(
-              stream: streamText,
+              stream: stream,
               builder: (_, snap) {
-                final v = snap.hasData ? snap.data! : '—';
+                final loading = snap.connectionState == ConnectionState.waiting && !snap.hasData;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      v,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _brandBlue,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
+                    loading
+                        ? SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: _primary.withValues(alpha: 0.5)),
+                          )
+                        : Text(
+                            snap.data ?? '—',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                                color: _fg,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18),
+                          ),
                     const SizedBox(height: 2),
-                    Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _brandBlue,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
+                    Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                            color: _muted, fontSize: 11, fontWeight: FontWeight.w500)),
                   ],
                 );
               },
@@ -748,207 +675,181 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-/* ========================= Due Loan Stat Card (STABLE) ========================= */
-class _DueLoanStatCard extends StatefulWidget {
+// ── Due loan card ─────────────────────────────────────────────────────────────
+class _DueLoanCard extends StatefulWidget {
   final double width;
-  final String label;
   final String Function(num) money;
   final String? userEmail;
   final String? userUid;
 
-  const _DueLoanStatCard({
-    Key? key,
+  const _DueLoanCard({
     required this.width,
-    required this.label,
     required this.money,
     this.userEmail,
     this.userUid,
-  }) : super(key: key);
+  });
 
   @override
-  State<_DueLoanStatCard> createState() => _DueLoanStatCardState();
+  State<_DueLoanCard> createState() => _DueLoanCardState();
 }
 
-class _DueLoanStatCardState extends State<_DueLoanStatCard> {
-  double? _lastStableDue; // cache to avoid flicker
+class _DueLoanCardState extends State<_DueLoanCard> {
+  String _cid = '';
+  double? _cached;
 
-  // Robust number parser: handles "৳20,000", "20,000.50", etc.
-  static double _asDouble(dynamic v) {
+  static double _num(dynamic v) {
     if (v is num) return v.toDouble();
-    if (v is String) {
-      final cleaned = v.replaceAll(RegExp(r'[^0-9.\-]'), '');
-      return double.tryParse(cleaned) ?? 0.0;
-    }
+    if (v is String) return double.tryParse(v.replaceAll(RegExp(r'[^0-9.\-]'), '')) ?? 0.0;
     return 0.0;
   }
 
-  static double _firstAmount(Map<String, dynamic> m, List<String> keys) {
+  static double _firstAmt(Map<String, dynamic> m, List<String> keys) {
     for (final k in keys) {
-      final v = _asDouble(m[k]);
+      final v = _num(m[k]);
       if (v > 0) return v;
     }
     return 0.0;
   }
 
-  static const List<String> _repayKeys = ['amount', 'paid', 'value', 'payAmount'];
-  static const Set<String> _outstandingKeys = {
+  static const _repayKeys = ['amount', 'paid', 'value', 'payAmount'];
+  static const _dueKeys   = {
     'due', 'dueAmount', 'amountDue', 'currentDue', 'totalDue',
     'outstanding', 'outstandingAmount', 'remaining', 'remainingAmount',
     'balance', 'leftToPay', 'pendingAmount',
   };
 
   @override
-  Widget build(BuildContext context) {
-    final fs = FirebaseFirestore.instance;
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId()
+        .then((id) { if (mounted) setState(() => _cid = id ?? ''); });
+  }
 
-    // Prefer identifiers from parent; fall back to FirebaseAuth.
+  @override
+  Widget build(BuildContext context) {
     final mail = (widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '').trim();
     final uid  = (widget.userUid   ?? FirebaseAuth.instance.currentUser?.uid   ?? '').trim();
 
-    Query<Map<String, dynamic>> loansQ = fs.collection('loans');
+    Query<Map<String, dynamic>> loansQ = DB.colSync(_cid, C.loans);
     if (mail.isNotEmpty && uid.isNotEmpty) {
-      loansQ = loansQ.where(
-        Filter.or(
-          Filter('userEmail', isEqualTo: mail),
-          Filter('userId',   isEqualTo: uid),
-        ),
-      );
+      loansQ = loansQ.where(Filter.or(
+        Filter('userEmail', isEqualTo: mail),
+        Filter('userId',    isEqualTo: uid),
+      ));
     } else if (mail.isNotEmpty) {
       loansQ = loansQ.where('userEmail', isEqualTo: mail);
     } else if (uid.isNotEmpty) {
       loansQ = loansQ.where('userId', isEqualTo: uid);
     } else {
-      // No identity yet → show cache or placeholder
-      return _DueText(
-        label: widget.label,
-        text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
-      );
+      return _dueLoanCard(_cached != null ? widget.money(_cached!) : '—');
     }
 
-    // Single repayments query (OR when both ids exist)
-    Query<Map<String, dynamic>>? repaymentsQ;
+    Query<Map<String, dynamic>>? repayQ;
     if (mail.isNotEmpty && uid.isNotEmpty) {
-      repaymentsQ = fs.collectionGroup('repayments').where(
-        Filter.or(
-          Filter('userEmail', isEqualTo: mail),
-          Filter('userId',   isEqualTo: uid),
-        ),
-      );
+      repayQ = DB.firestore.collectionGroup('repayments').where(Filter.or(
+        Filter('userEmail', isEqualTo: mail),
+        Filter('userId',    isEqualTo: uid),
+      ));
     } else if (mail.isNotEmpty) {
-      repaymentsQ = fs.collectionGroup('repayments').where('userEmail', isEqualTo: mail);
+      repayQ = DB.firestore.collectionGroup('repayments').where('userEmail', isEqualTo: mail);
     } else if (uid.isNotEmpty) {
-      repaymentsQ = fs.collectionGroup('repayments').where('userId', isEqualTo: uid);
+      repayQ = DB.firestore.collectionGroup('repayments').where('userId', isEqualTo: uid);
     }
 
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: loansQ.snapshots(),
+      builder: (_, loansSnap) {
+        if (loansSnap.connectionState == ConnectionState.waiting) {
+          return _dueLoanCard(_cached != null ? widget.money(_cached!) : '—');
+        }
+
+        double explicitSum = 0;
+        bool hasExplicit   = false;
+        double principal   = 0;
+
+        for (final d in loansSnap.data?.docs ?? []) {
+          final m = d.data();
+          for (final k in _dueKeys) {
+            if (m.containsKey(k)) {
+              hasExplicit = true;
+              final v = _num(m[k]);
+              if (v > 0) explicitSum += v;
+              break;
+            }
+          }
+          final status = (m['status'] ?? '').toString().toLowerCase();
+          if (['approved', 'disbursed', 'closed'].contains(status)) {
+            principal += _num(m['amount']);
+          }
+        }
+
+        if (hasExplicit) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _cached = explicitSum;
+          });
+          return _dueLoanCard(widget.money(explicitSum));
+        }
+
+        if (repayQ == null) return _dueLoanCard(_cached != null ? widget.money(_cached!) : '—');
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: repayQ.snapshots(),
+          builder: (_, repaySnap) {
+            if (repaySnap.connectionState == ConnectionState.waiting) {
+              return _dueLoanCard(_cached != null ? widget.money(_cached!) : '—');
+            }
+            double repaid = 0;
+            for (final d in repaySnap.data?.docs ?? []) {
+              repaid += _firstAmt(d.data(), _repayKeys);
+            }
+            if (repaid == 0 && _cached != null) return _dueLoanCard(widget.money(_cached!));
+            final due = (principal - repaid).clamp(0.0, double.infinity);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _cached = due;
+            });
+            return _dueLoanCard(widget.money(due));
+          },
+        );
+      },
+    );
+  }
+
+  Widget _dueLoanCard(String text) {
     return Container(
       width: widget.width,
-      height: 96,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _cardBorder),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+        color: _card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: _brandBlue.withOpacity(.08), shape: BoxShape.circle),
-            child: const Icon(Icons.assessment, color: _brandBlue, size: 18),
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.account_balance_rounded, color: _primary, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: loansQ.snapshots(),
-              builder: (_, loansSnap) {
-                if (loansSnap.connectionState == ConnectionState.waiting) {
-                  return _DueText(
-                    label: widget.label,
-                    text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
-                  );
-                }
-
-                double explicitSum = 0.0;
-                bool foundExplicitFieldAnywhere = false;
-                double principalSum = 0.0;
-
-                if (loansSnap.hasData) {
-                  for (final d in loansSnap.data!.docs) {
-                    final m = d.data();
-
-                    // Look for any explicit outstanding key; treat presence as authoritative (even if 0).
-                    for (final k in _outstandingKeys) {
-                      if (m.containsKey(k)) {
-                        foundExplicitFieldAnywhere = true;
-                        final v = _asDouble(m[k]);
-                        if (v > 0) explicitSum += v;
-                        break; // one key per doc is enough
-                      }
-                    }
-
-                    // Track principal for fallback path
-                    final status = (m['status'] ?? '').toString().toLowerCase();
-                    if (status == 'approved' || status == 'disbursed' || status == 'closed') {
-                      principalSum += _asDouble(m['amount']);
-                    }
-                  }
-                }
-
-                // If any explicit field was present on any doc, always use its sum (even if zero).
-                if (foundExplicitFieldAnywhere) {
-                  if (_lastStableDue != explicitSum) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) _lastStableDue = explicitSum;
-                    });
-                  }
-                  return _DueText(label: widget.label, text: widget.money(explicitSum));
-                }
-
-                // No explicit due in loans → need repayments. If we cannot query them, keep cache.
-                if (repaymentsQ == null) {
-                  return _DueText(
-                    label: widget.label,
-                    text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
-                  );
-                }
-
-                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: repaymentsQ.snapshots(),
-                  builder: (_, repaySnap) {
-                    if (repaySnap.connectionState == ConnectionState.waiting) {
-                      return _DueText(
-                        label: widget.label,
-                        text: _lastStableDue != null ? widget.money(_lastStableDue!) : '—',
-                      );
-                    }
-
-                    double repaid = 0.0;
-                    if (repaySnap.hasData) {
-                      for (final d in repaySnap.data!.docs) {
-                        repaid += _firstAmount(d.data(), _repayKeys);
-                      }
-                    }
-
-                    // If repayments are empty, don't snap to "total principal" — keep the last stable value.
-                    if (repaid == 0.0 && _lastStableDue != null) {
-                      return _DueText(label: widget.label, text: widget.money(_lastStableDue!));
-                    }
-
-                    final dueRaw = principalSum - repaid;
-                    final due = dueRaw <= 0 ? 0.0 : dueRaw;
-
-                    if (_lastStableDue != due) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) _lastStableDue = due;
-                      });
-                    }
-
-                    return _DueText(label: widget.label, text: widget.money(due));
-                  },
-                );
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                        color: _fg, fontWeight: FontWeight.w800, fontSize: 18)),
+                const SizedBox(height: 2),
+                Text('Due Loan',
+                    style: GoogleFonts.inter(
+                        color: _muted, fontSize: 11, fontWeight: FontWeight.w500)),
+              ],
             ),
           ),
         ],
@@ -957,108 +858,86 @@ class _DueLoanStatCardState extends State<_DueLoanStatCard> {
   }
 }
 
-
-
-class _DueText extends StatelessWidget {
-  final String label;
-  final String text;
-  const _DueText({required this.label, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _brandBlue,
-            fontWeight: FontWeight.w900,
-            fontSize: 20,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: _brandBlue,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/* ========================= Tiles & bottom nav helpers ========================= */
+// ── Dashboard tile ────────────────────────────────────────────────────────────
 class _DashTile extends StatelessWidget {
   final String title;
   final IconData icon;
+  final int badge;
   final VoidCallback onTap;
-  final int badgeCount;
+
   const _DashTile({
     required this.title,
     required this.icon,
     required this.onTap,
-    this.badgeCount = 0,
+    this.badge = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
-      elevation: 0,
+      color: _card,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        child: Ink(
+        splashColor: _primary.withValues(alpha: 0.06),
+        child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _cardBorder),
-            boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 8, offset: Offset(0, 3))],
+            border: Border.all(color: _border),
           ),
           child: Stack(
             children: [
+              // Blue top stripe
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    color: _primary,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+                  ),
+                ),
+              ),
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(icon, color: _brandBlue, size: 28),
-                      const SizedBox(height: 8),
-                      LayoutBuilder(
-                        builder: (ctx, c) {
-                          final base = 12.0;
-                          double fs = base;
-                          if (title.length > 12 || c.maxWidth < 90) fs = 11;
-                          if (title.length > 16 || c.maxWidth < 76) fs = 10;
-                          if (title.length > 20 || c.maxWidth < 68) fs = 9;
-                          return Text(
-                            title,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: _brandBlue, fontSize: fs, fontWeight: FontWeight.w700),
-                          );
-                        },
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: _primaryLt,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(icon, color: _primary, size: 20),
                       ),
+                      const SizedBox(height: 7),
+                      LayoutBuilder(builder: (_, c) {
+                        double fs = 11.5;
+                        if (title.length > 12 || c.maxWidth < 90) fs = 10.5;
+                        if (title.length > 16 || c.maxWidth < 76) fs = 9.5;
+                        return Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              color: _fg,
+                              fontSize: fs,
+                              fontWeight: FontWeight.w600),
+                        );
+                      }),
                     ],
                   ),
                 ),
               ),
-              if (badgeCount > 0)
+              if (badge > 0)
                 Positioned(
-                  right: 8,
-                  top: 8,
-                  child: _Badge(count: badgeCount),
+                  right: 8, top: 8,
+                  child: _Badge(count: badge, small: true),
                 ),
             ],
           ),
@@ -1068,30 +947,144 @@ class _DashTile extends StatelessWidget {
   }
 }
 
-class _NavItem {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final Stream<int>? badgeStream;
-  _NavItem(this.label, this.icon, {required this.onTap, this.badgeStream});
+// ── Bottom navigation bar — 4 items only ─────────────────────────────────────
+class _BottomBar extends StatelessWidget {
+  final int currentTab;
+  final Stream<int> msgStream;
+  final ValueChanged<int> onTabChanged;
+  final VoidCallback onClients;
+  final VoidCallback onSales;
+  final VoidCallback onMessages;
+
+  const _BottomBar({
+    required this.currentTab,
+    required this.msgStream,
+    required this.onTabChanged,
+    required this.onClients,
+    required this.onSales,
+    required this.onMessages,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <_NavItem>[
+      _NavItem('Home',     Icons.home_rounded,          onTap: () => onTabChanged(0)),
+      _NavItem('Clients',  Icons.people_alt_rounded,    onTap: onClients),
+      _NavItem('Sales',    Icons.point_of_sale_rounded, onTap: onSales),
+      _NavItem('Messages', Icons.chat_bubble_rounded,   onTap: onMessages, badge: msgStream),
+    ];
+
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: _primaryDk,
+          border: Border(top: BorderSide(color: Color(0x22FFFFFF))),
+        ),
+        child: Row(
+          children: items.asMap().entries.map((e) {
+            final idx      = e.key;
+            final it       = e.value;
+            final selected = idx == currentTab;
+            final color    = selected ? Colors.white : Colors.white54;
+
+            final iconWidget = it.badge == null
+                ? Icon(it.icon, color: color, size: 22)
+                : StreamBuilder<int>(
+                    stream: it.badge,
+                    builder: (_, s) => _BadgeIcon(
+                        icon: it.icon, color: color, count: s.data ?? 0),
+                  );
+
+            return Expanded(
+              child: InkWell(
+                onTap: () {
+                  onTabChanged(idx);
+                  it.onTap();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (selected)
+                        Container(
+                          width: 32, height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(child: iconWidget),
+                        )
+                      else
+                        iconWidget,
+                      const SizedBox(height: 4),
+                      Text(
+                        it.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: color,
+                            fontWeight: selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
 }
 
-class _BadgeIcon extends StatelessWidget {
+// ── Small helpers ─────────────────────────────────────────────────────────────
+class _Avatar extends StatelessWidget {
+  final String name;
+  final String? photoUrl;
+  const _Avatar({required this.name, this.photoUrl});
+
+  String get _initials {
+    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty) return 'M';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CircleAvatar(
+      radius: 16,
+      backgroundColor: Colors.white24,
+      backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty) ? NetworkImage(photoUrl!) : null,
+      child: (photoUrl == null || photoUrl!.isEmpty)
+          ? Text(_initials,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12))
+          : null,
+    );
+  }
+}
+
+class _AppBarBadge extends StatelessWidget {
   final IconData icon;
-  final Color color;
   final int count;
-  const _BadgeIcon({required this.icon, required this.color, required this.count});
+  final VoidCallback onTap;
+  const _AppBarBadge({required this.icon, required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Icon(icon, color: color),
+        IconButton(icon: Icon(icon, size: 22), onPressed: onTap),
         if (count > 0)
           Positioned(
-            right: -6,
-            top: -6,
+            right: 8, top: 8,
             child: _Badge(count: count, small: true),
           ),
       ],
@@ -1106,268 +1099,58 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = count > 99 ? '99+' : '$count';
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: small ? 5 : 6, vertical: small ? 2 : 3),
+      padding: EdgeInsets.symmetric(horizontal: small ? 4 : 6, vertical: small ? 2 : 3),
       decoration: BoxDecoration(
-        color: _brandBlue,
+        color: _badgeRed,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white, width: 1),
+        border: Border.all(color: Colors.white, width: 1.5),
       ),
       child: Text(
-        text,
+        count > 99 ? '99+' : '$count',
         style: TextStyle(
-          color: Colors.white,
-          fontSize: small ? 9 : 10,
-          fontWeight: FontWeight.w800,
-          height: 1.0,
-        ),
+            color: Colors.white,
+            fontSize: small ? 9 : 10,
+            fontWeight: FontWeight.w800,
+            height: 1.0),
       ),
     );
   }
 }
 
-/* ======================= (Optional reference UI kept) ======================= */
-
-class _StableRepaidHeader extends StatelessWidget {
-  final FirebaseFirestore db;
-  final String name;
-  final double creditLimit;
-  final Color brand, brandDark, accent;
-  final String Function(num) money;
-  final DateTime? selectedMonth;
-  final String? email;
-  final String? uid;
-
-  final double totalPrincipal;
-  final double Function() cachedTotalGetter;
-  final double Function() cachedRepaidGetter;
-  final void Function(double) cachedRepaidSetter;
-
-  const _StableRepaidHeader({
-    required this.db,
-    required this.name,
-    required this.creditLimit,
-    required this.brand,
-    required this.brandDark,
-    required this.accent,
-    required this.money,
-    required this.selectedMonth,
-    required this.email,
-    required this.uid,
-    required this.totalPrincipal,
-    required this.cachedTotalGetter,
-    required this.cachedRepaidGetter,
-    required this.cachedRepaidSetter,
-  });
-
-  DateTime _monthStart(DateTime d) => DateTime(d.year, d.month, 1);
-  DateTime _monthEndExclusive(DateTime d) => DateTime(d.year, d.month + 1, 1);
-  bool _isInSelectedMonth(DateTime? when) {
-    if (selectedMonth == null || when == null) return true;
-    final s = _monthStart(selectedMonth!);
-    final e = _monthEndExclusive(selectedMonth!);
-    return (when.isAtSameMomentAs(s) || when.isAfter(s)) && when.isBefore(e);
-  }
-
-  DateTime? _repaymentWhen(Map<String, dynamic> m) {
-    final dynamic v = m['paidAt'] ?? m['timestamp'] ?? m['createdAt'] ?? m['date'];
-    if (v is Timestamp) return v.toDate();
-    if (v is DateTime) return v;
-    return null;
-  }
+class _BadgeIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+  const _BadgeIcon({required this.icon, required this.color, required this.count});
 
   @override
   Widget build(BuildContext context) {
-    final emailStream = (email == null)
-        ? const Stream<QuerySnapshot<Map<String, dynamic>>>.empty()
-        : db.collectionGroup('repayments').where('userEmail', isEqualTo: email).snapshots();
-
-    final uidStream = (uid == null)
-        ? const Stream<QuerySnapshot<Map<String, dynamic>>>.empty()
-        : db.collectionGroup('repayments').where('userId', isEqualTo: uid).snapshots();
-
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: emailStream,
-      builder: (context, emailSnap) {
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: uidStream,
-          builder: (context, uidSnap) {
-            if (emailSnap.hasError || uidSnap.hasError) {
-              final total = totalPrincipal != 0 ? totalPrincipal : cachedTotalGetter();
-              final repaid = cachedRepaidGetter();
-              final double due = (total - repaid) < 0 ? 0 : (total - repaid);
-              final progress = (creditLimit <= 0) ? 0.0 : (due / creditLimit).clamp(0.0, 1.0);
-              return _HeaderCard(
-                name: name,
-                total: total,
-                repaid: repaid,
-                due: due,
-                limit: creditLimit,
-                progress: progress,
-                brand: brand,
-                brandDark: brandDark,
-                accent: accent,
-                money: money,
-              );
-            }
-
-            final hasAnyData = (emailSnap.hasData && emailSnap.data != null) ||
-                (uidSnap.hasData && uidSnap.data != null);
-
-            double unionRepaid;
-            if (hasAnyData) {
-              final seen = <String>{};
-              double sum = 0;
-
-              if (emailSnap.hasData && emailSnap.data != null) {
-                for (final d in emailSnap.data!.docs) {
-                  final m = d.data();
-                  final dt = _repaymentWhen(m);
-                  if (!_isInSelectedMonth(dt)) continue;
-                  final path = d.reference.path;
-                  if (seen.add(path)) sum += (m['amount'] as num? ?? 0).toDouble();
-                }
-              }
-              if (uidSnap.hasData && uidSnap.data != null) {
-                for (final d in uidSnap.data!.docs) {
-                  final m = d.data();
-                  final dt = _repaymentWhen(m);
-                  if (!_isInSelectedMonth(dt)) continue;
-                  final path = d.reference.path;
-                  if (seen.add(path)) sum += (m['amount'] as num? ?? 0).toDouble();
-                }
-              }
-
-              unionRepaid = sum;
-              cachedRepaidSetter(unionRepaid);
-            } else {
-              unionRepaid = cachedRepaidGetter();
-            }
-
-            final total = totalPrincipal != 0 ? totalPrincipal : cachedTotalGetter();
-            final double due = (total - unionRepaid) < 0 ? 0 : (total - unionRepaid);
-            final progress = (creditLimit <= 0) ? 0.0 : (due / creditLimit).clamp(0.0, 1.0);
-
-            return _HeaderCard(
-              name: name,
-              total: total,
-              repaid: unionRepaid,
-              due: due,
-              limit: creditLimit,
-              progress: progress,
-              brand: brand,
-              brandDark: brandDark,
-              accent: accent,
-              money: money,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _HeaderCard extends StatelessWidget {
-  final String name;
-  final double total;
-  final double repaid;
-  final double due;
-  final double limit;
-  final double progress;
-  final Color brand, brandDark, accent;
-  final String Function(num) money;
-
-  const _HeaderCard({
-    required this.name,
-    required this.total,
-    required this.repaid,
-    required this.due,
-    required this.limit,
-    required this.progress,
-    required this.brand,
-    required this.brandDark,
-    required this.accent,
-    required this.money,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget stat(String label, num value) => Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        Text(money(value),
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18)),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Icon(icon, color: color, size: 22),
+        if (count > 0)
+          Positioned(
+            right: -5, top: -5,
+            child: _Badge(count: count, small: true),
+          ),
       ],
     );
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-            colors: [brand, brandDark],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x30000000), blurRadius: 12, offset: Offset(0, 6))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Hi, $name', style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 16,
-                runSpacing: 10,
-                children: [
-                  stat('Total Loan', total),
-                  stat('Repaid', repaid),
-                  stat('Due', due),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text('Limit: ${money(limit)}',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            ]),
-          ),
-          SizedBox(
-            width: 84,
-            height: 84,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 84,
-                  height: 84,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 10,
-                    backgroundColor: Colors.white24,
-                    valueColor: AlwaysStoppedAnimation(accent),
-                  ),
-                ),
-                Text('${(progress * 100).round()}%',
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w900)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
-class _DashboardItem {
+class _NavItem {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Stream<int>? badge;
+  _NavItem(this.label, this.icon, {required this.onTap, this.badge});
+}
+
+class _DashItem {
   final String title;
   final IconData icon;
   final String route;
-  const _DashboardItem(this.title, this.icon, this.route);
+  const _DashItem(this.title, this.icon, this.route);
 }

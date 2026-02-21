@@ -1,6 +1,8 @@
 // lib/features/marketing/presentation/screens/products_page.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -55,6 +57,7 @@ class ProductsPage extends StatefulWidget {
 }
 
 class _ProductsPageState extends State<ProductsPage> {
+  String _cid = '';
   // ------- form state -------
   final _formKey = GlobalKey<FormState>();
   final _editFormKey = GlobalKey<FormState>();
@@ -166,7 +169,7 @@ class _ProductsPageState extends State<ProductsPage> {
       if (imageUrl != null) 'imageUrl': imageUrl,
     };
 
-    await FirebaseFirestore.instance.collection('products').add(data);
+    await DB.colSync(_cid, C.products).add(data);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('✅ Product added')),
@@ -380,8 +383,7 @@ class _ProductsPageState extends State<ProductsPage> {
                   'production_cost': double.tryParse(_cost.text) ?? 0,
                   if (imageUrl != null) 'imageUrl': imageUrl,
                 };
-                await FirebaseFirestore.instance
-                    .collection('products')
+                await DB.colSync(_cid, C.products)
                     .doc(doc.id)
                     .update(data);
                 if (!mounted) return;
@@ -434,8 +436,8 @@ class _ProductsPageState extends State<ProductsPage> {
     final prevQty = (existing['qty'] as int?) ?? 0;
     final newQty = prevQty + delta;
 
-    final ref = FirebaseFirestore.instance.collection('stocks').doc(docId);
-    await FirebaseFirestore.instance.runTransaction((tx) async {
+    final ref = DB.colSync(_cid, C.stocks).doc(docId);
+    await DB.firestore.runTransaction((tx) async {
       tx.update(ref, {
         'qty': newQty,
         'lastUpdated': FieldValue.serverTimestamp(),
@@ -468,7 +470,7 @@ class _ProductsPageState extends State<ProductsPage> {
   }) async {
     try {
       // 1) create product (minimal fields)
-      final products = FirebaseFirestore.instance.collection('products');
+      final products = DB.colSync(_cid, C.products);
       await products.add({
         'model_name': name,
         'unit_price': unitPrice ?? 0.0,
@@ -486,7 +488,7 @@ class _ProductsPageState extends State<ProductsPage> {
       });
 
       // 2) create stock
-      final stocks = FirebaseFirestore.instance.collection('stocks');
+      final stocks = DB.colSync(_cid, C.stocks);
       final ref = await stocks.add({
         'name': name,
         'sku': sku,
@@ -509,6 +511,14 @@ class _ProductsPageState extends State<ProductsPage> {
 
   // ——— Build ———
   @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 480;
@@ -516,7 +526,9 @@ class _ProductsPageState extends State<ProductsPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: _darkBlue,
-        title: const Text('Products', style: TextStyle(color: Colors.white)),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Products', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             tooltip: 'Stock In',
@@ -925,7 +937,7 @@ class _ProductsPageState extends State<ProductsPage> {
   // ——— Query builder ———
   Query<Map<String, dynamic>> _query() {
     Query<Map<String, dynamic>> q =
-    FirebaseFirestore.instance.collection('products');
+    DB.colSync(_cid, C.products);
 
     if (_hideArchived) q = q.where('archived', isEqualTo: false);
     if (_genderFilter != 'All') {
@@ -1048,15 +1060,30 @@ class _ProductsPageState extends State<ProductsPage> {
 
 /* ========================= Header stats (responsive GRID — min 2 cols) ========================= */
 
-class _HeaderStats extends StatelessWidget {
+class _HeaderStats extends StatefulWidget {
+
   final bool hideArchived;
   const _HeaderStats({required this.hideArchived});
+  @override
+  State<_HeaderStats> createState() => _HeaderStatsState();
+}
+
+class _HeaderStatsState extends State<_HeaderStats> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     Query<Map<String, dynamic>> q =
-    FirebaseFirestore.instance.collection('products');
-    if (hideArchived) q = q.where('archived', isEqualTo: false);
+    DB.colSync(_cid, C.products);
+    if (widget.hideArchived) q = q.where('archived', isEqualTo: false);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: q.snapshots(),
@@ -1696,6 +1723,14 @@ class _StockMovementSheet extends StatefulWidget {
 }
 
 class _StockMovementSheetState extends State<_StockMovementSheet> {
+  String _cid = '';
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
   final _formKey = GlobalKey<FormState>();
   String? _selectedStockId;
   Map<String, dynamic>? _selectedData;
@@ -1749,8 +1784,7 @@ class _StockMovementSheetState extends State<_StockMovementSheet> {
               children: [
                 // Products dropdown (from stocks) + "Add new…"
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('stocks')
+                  stream: DB.colSync(_cid, C.stocks)
                       .orderBy('name')
                       .snapshots(),
                   builder: (ctx, snap) {
@@ -1801,16 +1835,14 @@ class _StockMovementSheetState extends State<_StockMovementSheet> {
                           await _showAddNewProductDialog(context);
                           if (createdId != null) {
                             setState(() => _selectedStockId = createdId);
-                            final doc = await FirebaseFirestore.instance
-                                .collection('stocks')
+                            final doc = await DB.colSync(_cid, C.stocks)
                                 .doc(createdId)
                                 .get();
                             _selectedData = doc.data();
                           }
                         } else if (v != null) {
                           setState(() => _selectedStockId = v);
-                          final doc = await FirebaseFirestore.instance
-                              .collection('stocks')
+                          final doc = await DB.colSync(_cid, C.stocks)
                               .doc(v)
                               .get();
                           _selectedData = doc.data();

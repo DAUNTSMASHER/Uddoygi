@@ -2,13 +2,30 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
-class IncomingProductsScreen extends StatelessWidget {
+class IncomingProductsScreen extends StatefulWidget {
   const IncomingProductsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<IncomingProductsScreen> createState() => _IncomingProductsScreenState();
+}
+
+class _IncomingProductsScreenState extends State<IncomingProductsScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,16 +33,17 @@ class IncomingProductsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Incoming Products'),
+        title: const Text('Incoming Products', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: userEmail == null
           ? const Center(
         child: Text('Please sign in to view incoming products'),
       )
           : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('work_orders')
+        stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.workOrders)
             .where('invoiceData.agentEmail', isEqualTo: userEmail)
             .orderBy('timestamp', descending: true)
             .snapshots(),

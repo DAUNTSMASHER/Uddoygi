@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// =================== CONFIG / HELPERS ===================
 const _kPrimary = Colors.indigo;
@@ -34,12 +36,16 @@ class GeneralLedgerScreen extends StatefulWidget {
 }
 
 class _GeneralLedgerCreditsScreenState extends State<GeneralLedgerScreen> {
+  String _cid = '';
   late DateTime _periodStart;
   late DateTime _periodEnd;
 
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     final now = DateTime.now();
     _periodStart = DateTime(now.year, now.month, 1);
     _periodEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
@@ -47,8 +53,7 @@ class _GeneralLedgerCreditsScreenState extends State<GeneralLedgerScreen> {
 
   Query _query() {
     // Credits only
-    return FirebaseFirestore.instance
-        .collection('ledger')
+    return DB.colSync(_cid, C.ledger)
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(_periodStart))
         .where('date', isLessThanOrEqualTo: Timestamp.fromDate(_periodEnd))
         .where('credit', isGreaterThan: 0) // <<< only credits
@@ -378,7 +383,7 @@ class _AddCreditDialogState extends State<_AddCreditDialog> {
     final ts = Timestamp.fromDate(DateTime(_date.year, _date.month, _date.day));
     final now = Timestamp.now();
 
-    final db = FirebaseFirestore.instance;
+    final db = DB.firestore;
     final doc = {
       'account': _creditAccount!,
       'description': desc,
@@ -393,14 +398,29 @@ class _AddCreditDialogState extends State<_AddCreditDialog> {
       'createdAt': now,
     };
 
-    await db.collection('ledger').add(doc);
+    await (await DB.col(C.ledger)).add(doc);
     if (context.mounted) Navigator.pop(context);
   }
 }
 
 /// =================== HISTORY & PRINT (CREDITS ONLY) ===================
-class CreditsHistoryScreen extends StatelessWidget {
+class CreditsHistoryScreen extends StatefulWidget {
+
   const CreditsHistoryScreen({super.key});
+  @override
+  State<CreditsHistoryScreen> createState() => _CreditsHistoryScreenState();
+}
+
+class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -434,130 +454,129 @@ class CreditsHistoryScreen extends StatelessWidget {
   }
 
   Future<void> _printMonthCredits(BuildContext context, DateTime start, DateTime end) async {
-    final snap = await FirebaseFirestore.instance
-        .collection('ledger')
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end))
-        .where('credit', isGreaterThan: 0)
-        .orderBy('date')
-        .get();
-
-    if (snap.docs.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No credits for ${DateFormat('MMM yyyy').format(start)}')),
-        );
+      final snap = await DB.colSync(_cid, C.ledger)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end))
+          .where('credit', isGreaterThan: 0)
+          .orderBy('date')
+          .get();
+  
+      if (snap.docs.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No credits for ${DateFormat('MMM yyyy').format(start)}')),
+          );
+        }
+        return;
       }
-      return;
-    }
-
-    // Group by account
-    final entries = snap.docs.map((d) => d.data()).toList();
-    final Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (final e in entries) {
-      final acct = (e['account'] as String?) ?? 'Unknown';
-      (grouped[acct] ??= []).add(e);
-    }
-    for (final list in grouped.values) {
-      list.sort((a, b) {
-        final da = (a['date'] as Timestamp).toDate();
-        final db = (b['date'] as Timestamp).toDate();
-        return da.compareTo(db);
-      });
-    }
-
-    // Build PDF (credits-only)
-    final pdf = pw.Document();
-    num grandC = 0;
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageTheme: pw.PageTheme(margin: const pw.EdgeInsets.all(24)),
-        header: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('Credits Report', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-            pw.Text(DateFormat('MMMM yyyy').format(start), style: const pw.TextStyle(color: PdfColors.grey700)),
-            pw.Divider(),
-          ],
-        ),
-        build: (_) {
-          final widgets = <pw.Widget>[];
-
-          grouped.forEach((account, list) {
-            num cTot = 0;
-
-            widgets.add(pw.SizedBox(height: 8));
-            widgets.add(pw.Text('Account: $account', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
-            widgets.add(pw.SizedBox(height: 4));
-
+  
+      // Group by account
+      final entries = snap.docs.map((d) => d.data()).toList();
+      final Map<String, List<Map<String, dynamic>>> grouped = {};
+      for (final e in entries) {
+        final acct = (e['account'] as String?) ?? 'Unknown';
+        (grouped[acct] ??= []).add(e);
+      }
+      for (final list in grouped.values) {
+        list.sort((a, b) {
+          final da = (a['date'] as Timestamp).toDate();
+          final db = (b['date'] as Timestamp).toDate();
+          return da.compareTo(db);
+        });
+      }
+  
+      // Build PDF (credits-only)
+      final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
+      num grandC = 0;
+  
+      pdf.addPage(
+        pw.MultiPage(
+          pageTheme: pw.PageTheme(margin: const pw.EdgeInsets.all(24)),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Credits Report', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              pw.Text(DateFormat('MMMM yyyy').format(start), style: const pw.TextStyle(color: PdfColors.grey700)),
+              pw.Divider(),
+            ],
+          ),
+          build: (_) {
+            final widgets = <pw.Widget>[];
+  
+            grouped.forEach((account, list) {
+              num cTot = 0;
+  
+              widgets.add(pw.SizedBox(height: 8));
+              widgets.add(pw.Text('Account: $account', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
+              widgets.add(pw.SizedBox(height: 4));
+  
+              widgets.add(
+                pw.TableHelper.fromTextArray(
+                  headers: ['Date', 'Description', 'Credit', 'Costing'],
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  border: pw.TableBorder.all(color: PdfColors.grey),
+                  data: list.map((e) {
+                    final c = (e['credit'] ?? 0) as num;
+                    final cost = (e['costing'] ?? 0) as num;
+                    cTot += c;
+                    return [
+                      _dateFmt.format((e['date'] as Timestamp).toDate()),
+                      (e['description'] ?? '-') as String,
+                      _fmt(c),
+                      cost == 0 ? '-' : _fmt(cost),
+                    ];
+                  }).toList(),
+                ),
+              );
+  
+              grandC += cTot;
+  
+              widgets.add(pw.SizedBox(height: 6));
+              widgets.add(
+                pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(6),
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.grey),
+                      borderRadius: pw.BorderRadius.circular(4),
+                    ),
+                    child: pw.Text('Credit Total: ${_fmt(cTot)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  ),
+                ]),
+              );
+              widgets.add(pw.Divider());
+            });
+  
             widgets.add(
-              pw.TableHelper.fromTextArray(
-                headers: ['Date', 'Description', 'Credit', 'Costing'],
-                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                border: pw.TableBorder.all(color: PdfColors.grey),
-                data: list.map((e) {
-                  final c = (e['credit'] ?? 0) as num;
-                  final cost = (e['costing'] ?? 0) as num;
-                  cTot += c;
-                  return [
-                    _dateFmt.format((e['date'] as Timestamp).toDate()),
-                    (e['description'] ?? '-') as String,
-                    _fmt(c),
-                    cost == 0 ? '-' : _fmt(cost),
-                  ];
-                }).toList(),
-              ),
-            );
-
-            grandC += cTot;
-
-            widgets.add(pw.SizedBox(height: 6));
-            widgets.add(
-              pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(6),
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Container(
+                  padding: const pw.EdgeInsets.all(8),
                   decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey),
+                    color: PdfColors.indigo50,
+                    border: pw.Border.all(color: PdfColors.indigo),
                     borderRadius: pw.BorderRadius.circular(4),
                   ),
-                  child: pw.Text('Credit Total: ${_fmt(cTot)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  child: pw.Text('TOTAL CREDIT: ${_fmt(grandC)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                 ),
-              ]),
-            );
-            widgets.add(pw.Divider());
-          });
-
-          widgets.add(
-            pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: pw.Container(
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.indigo50,
-                  border: pw.Border.all(color: PdfColors.indigo),
-                  borderRadius: pw.BorderRadius.circular(4),
-                ),
-                child: pw.Text('TOTAL CREDIT: ${_fmt(grandC)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
               ),
-            ),
-          );
-
-          return widgets;
-        },
-      ),
-    );
-
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
-  }
-
-  static List<DateTime> _lastMonths(int n) {
-    final now = DateTime.now();
-    return List.generate(n, (i) => DateTime(now.year, now.month - i, 1));
-  }
-
-  static String _fmt(num n) => n.toStringAsFixed(2);
+            );
+  
+            return widgets;
+          },
+        ),
+      );
+  
+      await Printing.layoutPdf(onLayout: (format) async => pdf.save());
+    }
+  
+    static List<DateTime> _lastMonths(int n) {
+      final now = DateTime.now();
+      return List.generate(n, (i) => DateTime(now.year, now.month - i, 1));
+    }
+  
+    static String _fmt(num n) => n.toStringAsFixed(2);
 }
 
 /// =================== UI WIDGETS ===================

@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 class AdminOverviewDashboardScreen extends StatefulWidget {
   const AdminOverviewDashboardScreen({super.key});
 
@@ -12,6 +14,7 @@ class AdminOverviewDashboardScreen extends StatefulWidget {
 
 class _AdminOverviewDashboardScreenState
     extends State<AdminOverviewDashboardScreen> {
+  String _cid = '';
   int selectedMonth = DateTime.now().month;
   int selectedYear = DateTime.now().year;
 
@@ -29,13 +32,23 @@ class _AdminOverviewDashboardScreenState
     'November': 11,
     'December': 12,
   };
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(('Incentive Summary') , style: TextStyle(color: Colors.white)),
+        title: const Text('Incentive Summary', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -44,8 +57,7 @@ class _AdminOverviewDashboardScreenState
           // 🧾 Main Table
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('marketing_incentives')
+              stream: DB.colSync(_cid, C.marketingIncentives)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -119,8 +131,7 @@ class _AdminOverviewDashboardScreenState
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('marketing_incentives')
+              stream: DB.colSync(_cid, C.marketingIncentives)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox.shrink();

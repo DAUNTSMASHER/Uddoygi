@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/profile.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
-class MarketingDrawer extends StatelessWidget {
+class MarketingDrawer extends StatefulWidget {
   const MarketingDrawer({Key? key}) : super(key: key);
+
+  @override
+  State<MarketingDrawer> createState() => _MarketingDrawerState();
+}
+
+class _MarketingDrawerState extends State<MarketingDrawer> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +33,7 @@ class MarketingDrawer extends StatelessWidget {
     return Drawer(
       backgroundColor: Colors.white,
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUid)
-            .snapshots(),
+        stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.users).doc(currentUid).snapshots(),
         builder: (ctx, snap) {
           String name = 'User';
           String photoUrl = '';
@@ -132,9 +146,10 @@ class MarketingDrawer extends StatelessWidget {
                 title: const Text('Logout',
                     style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                 onTap: () async {
-                  await FirebaseAuth.instance.signOut();
+                  Navigator.pop(context);
+                  await LocalStorageService.performLogout();
                   if (context.mounted) {
-                    Navigator.pushReplacementNamed(context, '/login');
+                    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
                   }
                 },
               ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 
 class PendingComplaintScreen extends StatefulWidget {
@@ -13,6 +15,7 @@ class PendingComplaintScreen extends StatefulWidget {
 }
 
 class _PendingComplaintScreenState extends State<PendingComplaintScreen> {
+  String _cid = '';
   bool _loading = false;
 
   Future<void> _showActionDialog(DocumentSnapshot complaint) async {
@@ -47,8 +50,7 @@ class _PendingComplaintScreenState extends State<PendingComplaintScreen> {
                     ? null
                     : () async {
                   setState(() => _loading = true);
-                  await FirebaseFirestore.instance
-                      .collection('complaints')
+                  await DB.colSync(_cid, C.complaints)
                       .doc(complaint.id)
                       .update({
                     'status': selectedStatus,
@@ -95,18 +97,27 @@ class _PendingComplaintScreenState extends State<PendingComplaintScreen> {
       backgroundColor: color.withOpacity(0.13),
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pending Complaints'),
+        title: const Text('Pending Complaints', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       backgroundColor: Colors.indigo[50],
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('complaints')
+        stream: DB.colSync(_cid, C.complaints)
             .where('status', isEqualTo: 'pending')
             .orderBy('timestamp', descending: true)
             .snapshots(),

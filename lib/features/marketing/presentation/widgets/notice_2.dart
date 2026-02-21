@@ -1,5 +1,7 @@
 // lib/widgets/notice_2.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -42,6 +44,7 @@ class NoticeComposerDialog extends StatefulWidget {
 }
 
 class _NoticeComposerDialogState extends State<NoticeComposerDialog> {
+  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   final _controller = TextEditingController();
@@ -55,6 +58,9 @@ class _NoticeComposerDialogState extends State<NoticeComposerDialog> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     final authUser = FirebaseAuth.instance.currentUser;
     _resolvedEmail = widget.userEmail ??
         authUser?.email ??
@@ -83,8 +89,7 @@ class _NoticeComposerDialogState extends State<NoticeComposerDialog> {
 
     // Fallback: users/{email}.photoUrl
     if (_resolvedEmail.isEmpty) return;
-    final snap = await FirebaseFirestore.instance
-        .collection('users')
+    final snap = await DB.colSync(_cid, C.users)
         .doc(_resolvedEmail)
         .get();
     final data = snap.data();
@@ -98,7 +103,7 @@ class _NoticeComposerDialogState extends State<NoticeComposerDialog> {
     if (widget.categories != null) {
       return Stream.value(widget.categories!);
     }
-    return FirebaseFirestore.instance
+    return DB.firestore
         .collection(widget.categoriesCollection)
         .orderBy(widget.categoryNameField)
         .snapshots()

@@ -1,9 +1,11 @@
 // lib/features/factory/presentation/screens/confirmation_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 const Color _panel = Color(0xFFF7F8FB);
 
 class ConfirmationScreen extends StatefulWidget {
@@ -14,6 +16,7 @@ class ConfirmationScreen extends StatefulWidget {
 }
 
 class _ConfirmationScreenState extends State<ConfirmationScreen> {
+  String _cid = '';
   String? _token;
   bool _ready = false;
   bool _working = false;
@@ -25,6 +28,9 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _boot();
   }
 
@@ -73,14 +79,13 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
   Future<void> _load(String token) async {
     try {
       final vSnap =
-      await FirebaseFirestore.instance.collection('address_validations').doc(token).get();
+      await DB.colSync(_cid, C.addressValidations).doc(token).get();
       _validationSnap = vSnap;
 
       // 1) Find the work order
       String? orderId = vSnap.data()?['workOrderId'] as String?;
       if (orderId == null) {
-        final q = await FirebaseFirestore.instance
-            .collection('work_orders')
+        final q = await DB.colSync(_cid, C.workOrders)
             .where('addressValidation.token', isEqualTo: token)
             .limit(1)
             .get();
@@ -91,7 +96,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
 
       if (orderId != null) {
         _orderSnap =
-        await FirebaseFirestore.instance.collection('work_orders').doc(orderId).get();
+        await DB.colSync(_cid, C.workOrders).doc(orderId).get();
       }
 
       // 2) Try to resolve invoice by common fields
@@ -114,14 +119,13 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
       DocumentSnapshot<Map<String, dynamic>>? invoiceSnap;
       if (invoiceId != null && invoiceId.isNotEmpty) {
         final doc =
-        await FirebaseFirestore.instance.collection('invoices').doc(invoiceId).get();
+        await DB.colSync(_cid, C.invoices).doc(invoiceId).get();
         if (doc.exists) invoiceSnap = doc;
       }
 
       // Else by invoice number
       if (invoiceSnap == null && invoiceNo != null && invoiceNo.isNotEmpty) {
-        final q = await FirebaseFirestore.instance
-            .collection('invoices')
+        final q = await DB.colSync(_cid, C.invoices)
             .where('invoiceNo', isEqualTo: invoiceNo)
             .limit(1)
             .get();
@@ -130,8 +134,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
 
       // Else by work order number linkage (if your schema stores it on invoices)
       if (invoiceSnap == null && workOrderNo != null && workOrderNo.isNotEmpty) {
-        final q = await FirebaseFirestore.instance
-            .collection('invoices')
+        final q = await DB.colSync(_cid, C.invoices)
             .where('workOrderNo', isEqualTo: workOrderNo)
             .limit(1)
             .get();
@@ -156,10 +159,10 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
       setState(() => _working = true);
       final now = Timestamp.now();
 
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = DB.firestore.batch();
 
       // 1) address_validations/{token}
-      final vRef = FirebaseFirestore.instance.collection('address_validations').doc(token);
+      final vRef = DB.colSync(_cid, C.addressValidations).doc(token);
       batch.update(vRef, {
         'status': 'confirmed',
         'confirmedAt': now,
@@ -169,7 +172,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
       String? workOrderId = _validationSnap?.data()?['workOrderId'] as String?;
       workOrderId ??= _orderSnap?.id;
       if (workOrderId != null) {
-        final oRef = FirebaseFirestore.instance.collection('work_orders').doc(workOrderId);
+        final oRef = DB.colSync(_cid, C.workOrders).doc(workOrderId);
         batch.update(oRef, {
           'addressValidation.status': 'confirmed',
           'addressValidation.confirmedAt': now,
@@ -202,7 +205,12 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
 
     if (_token == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Confirm Address'), backgroundColor: _darkBlue),
+        appBar: AppBar(
+          title: const Text('Confirm Address', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          backgroundColor: _darkBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
         body: const Center(child: Text('Invalid confirmation link.')),
       );
     }
@@ -242,7 +250,12 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
 
     return Scaffold(
       backgroundColor: _panel,
-      appBar: AppBar(title: const Text('Confirm Address'), backgroundColor: _darkBlue),
+      appBar: AppBar(
+        title: const Text('Confirm Address', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 600),

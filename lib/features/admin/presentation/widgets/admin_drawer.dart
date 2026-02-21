@@ -1,12 +1,14 @@
 // lib/features/marketing/presentation/widgets/admin_drawer.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uddoygi/profile.dart';
 
-const Color _darkBlue = Color(0xFF3C0765);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 class AdminDrawer extends StatefulWidget {
   const AdminDrawer({Key? key}) : super(key: key);
@@ -25,36 +27,39 @@ class _DrawerItemCfg {
 }
 
 class _AdminDrawerState extends State<AdminDrawer> {
+  String _cid = '';
   final user = FirebaseAuth.instance.currentUser;
   late final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
-  late final List<_DrawerItemCfg> _items = [
+  // Items are built as a getter so they always use the current _cid
+  List<_DrawerItemCfg> get _items => [
     _DrawerItemCfg('dashboard', 'Dashboard', Icons.dashboard, '/admin/dashboard', const []),
-
     _DrawerItemCfg('notices', 'All Notices', Icons.list_alt, '/admin/notices/all',
-        [FirebaseFirestore.instance.collection('notices')]),
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.notices)]),
     _DrawerItemCfg('notice_publish', 'Publish Notice', Icons.add_alert, '/admin/notices',
-        [FirebaseFirestore.instance.collection('notices')]),
-
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.notices)]),
     _DrawerItemCfg('employees', 'Employee Directory', Icons.people, '/admin/employees',
-        [FirebaseFirestore.instance.collection('users')]),
-
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.users)]),
     _DrawerItemCfg('reports', 'Generate Reports', Icons.bar_chart, '/admin/reports',
-        [FirebaseFirestore.instance.collection('invoices'),
-          FirebaseFirestore.instance.collection('expenses')]),
-
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.invoices), DB.colSync(_cid, C.expenses)]),
     _DrawerItemCfg('welfare', 'Welfare Scheme', Icons.favorite, '/common/welfare',
-        [FirebaseFirestore.instance.collection('welfare')]),
-
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.welfare)]),
     _DrawerItemCfg('complaints', 'Complaints', Icons.report_problem, '/common/complaints',
-        [FirebaseFirestore.instance.collection('complaints')]),
-
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.complaints)]),
     _DrawerItemCfg('salary', 'Salary Management', Icons.attach_money, '/admin/salary',
-        [FirebaseFirestore.instance.collection('salaries')]),
-
-    _DrawerItemCfg('messages', 'Messages', Icons.message, '/common/messages',
-        [FirebaseFirestore.instance.collection('messages')]),
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.salaries)]),
+    _DrawerItemCfg('messages', 'Messages', Icons.message_rounded, '/common/messages',
+        _cid.isEmpty ? const [] : [DB.colSync(_cid, C.messages)]),
+    _DrawerItemCfg('settings', 'Settings', Icons.settings_rounded, '/admin/settings', const []),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   Future<void> _markSectionSeen(String key) async {
     final prefs = await SharedPreferences.getInstance();
@@ -73,9 +78,9 @@ class _AdminDrawerState extends State<AdminDrawer> {
     return Drawer(
       backgroundColor: Colors.grey[50],
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: uid.isEmpty
+        stream: (uid.isEmpty || _cid.isEmpty)
             ? null
-            : FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+            : DB.colSync(_cid, C.users).doc(uid).snapshots(),
         builder: (context, snap) {
           final hasData = snap.hasData && snap.data!.exists;
           final data = hasData ? (snap.data!.data() ?? <String, dynamic>{}) : <String, dynamic>{};
@@ -209,6 +214,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
+
               _SectionTitle('WELFARE & COMPLAINTS'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'welfare'),
@@ -249,15 +255,36 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
+              _SectionTitle('SYSTEM'),
+              _DrawerTile(
+                cfg: _items.firstWhere((e) => e.keyId == 'settings'),
+                onTap: () async {
+                  await _markSectionSeen('settings');
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/admin/settings');
+                },
+              ),
+
               const Divider(height: 24),
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
                 title: const Text(
                   'Logout',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+                onTap: () async {
+                  Navigator.pop(context); // close drawer first
+                  await LocalStorageService.performLogout();
+                  if (context.mounted) {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  }
+                },
               ),
               const SizedBox(height: 8),
             ],
@@ -340,7 +367,7 @@ class _DrawerTile extends StatelessWidget {
       ),
       title: Text(
         cfg.title,
-        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -365,6 +392,7 @@ class _BadgeCounter extends StatefulWidget {
 }
 
 class _BadgeCounterState extends State<_BadgeCounter> {
+  String _cid = '';
   int _count = 0;
   final Map<int, int> _perStream = {};
   final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _subs = [];
@@ -372,6 +400,9 @@ class _BadgeCounterState extends State<_BadgeCounter> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _attach();
   }
 

@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +15,7 @@ class AdminAllNoticesScreen extends StatefulWidget {
 }
 
 class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
+  String _cid = '';
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   List<PlatformFile> _pickedFiles = [];
@@ -41,7 +44,7 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
           fileUrls.add(url);
         }
       }
-      await FirebaseFirestore.instance.collection('notices').add({
+      await DB.colSync(_cid, C.notices).add({
         'title': title,
         'description': description,
         'timestamp': FieldValue.serverTimestamp(),
@@ -61,8 +64,7 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
 
   Future<void> _addComment(String noticeId, String comment) async {
     if (comment.trim().isEmpty) return;
-    await FirebaseFirestore.instance
-        .collection('notices')
+    await DB.colSync(_cid, C.notices)
         .doc(noticeId)
         .collection('comments')
         .add({
@@ -75,15 +77,24 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
   Color get primary => Colors.indigo;
   Color get accent => Colors.blueAccent;
   Color get containerBg => Colors.grey[100]!;
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: containerBg,
       appBar: AppBar(
-        title: const Text('Notices', style: TextStyle(color: Colors.white)),
+        title: const Text('Notices', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: primary,
-        iconTheme: const IconThemeData(color: Colors.white),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -159,8 +170,7 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
           // --- Notices List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('notices')
+              stream: DB.colSync(_cid, C.notices)
                   .orderBy('timestamp', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
@@ -251,8 +261,7 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                             const Divider(height: 24, color: Colors.grey),
                             // Comments Section
                             StreamBuilder<QuerySnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('notices')
+                              stream: DB.colSync(_cid, C.notices)
                                   .doc(noticeId)
                                   .collection('comments')
                                   .orderBy('timestamp', descending: false)

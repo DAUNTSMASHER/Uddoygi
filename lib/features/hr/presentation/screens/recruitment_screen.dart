@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -15,6 +17,7 @@ class RecruitmentScreen extends StatefulWidget {
 }
 
 class _RecruitmentScreenState extends State<RecruitmentScreen> {
+  String _cid = '';
   String _selectedRole = 'All';
   DateTime? _selectedDate;
   String _searchText = '';
@@ -23,7 +26,7 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
   int _currentPage = 1;
 
   Future<void> _exportPDF(List<QueryDocumentSnapshot> applicants) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     pdf.addPage(
       pw.Page(
         build: (pw.Context context) => pw.Column(
@@ -105,9 +108,9 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
                   };
 
                   if (isEdit) {
-                    await FirebaseFirestore.instance.collection('applicants').doc(doc.id).update(data);
+                    await DB.colSync(_cid, C.applicants).doc(doc.id).update(data);
                   } else {
-                    await FirebaseFirestore.instance.collection('applicants').add(data);
+                    await DB.colSync(_cid, C.applicants).add(data);
                   }
                   Navigator.pop(context);
                 },
@@ -130,18 +133,28 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
     if (_searchText.isNotEmpty && !data['name'].toLowerCase().contains(_searchText.toLowerCase())) return false;
     return true;
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recruitment'),
+        title: const Text('Recruitment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             onPressed: () async {
-              final snapshot = await FirebaseFirestore.instance.collection('applicants').get();
+              final snapshot = await DB.colSync(_cid, C.applicants).get();
               _exportPDF(snapshot.docs);
             },
           )
@@ -197,8 +210,7 @@ class _RecruitmentScreenState extends State<RecruitmentScreen> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('applicants')
+              stream: DB.colSync(_cid, C.applicants)
                   .orderBy('appliedAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {

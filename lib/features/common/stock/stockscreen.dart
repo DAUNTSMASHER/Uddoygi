@@ -5,9 +5,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// ===== Factory Dashboard Palette (kept consistent) =====
-const Color _darkBlue   = Color(0xFF0D47A1); // brand/nav
+const Color _darkBlue   = Color(0xFF2A0A4B); // brand/nav
 const Color _accent     = Color(0xFFFFC107); // soft yellow accent
 const Color _surface    = Color(0xFFF7F8FB); // panel bg
 const Color _okGreen    = Color(0xFF10B981);
@@ -38,6 +40,7 @@ class StockScreen extends StatefulWidget {
 }
 
 class _StockScreenState extends State<StockScreen> {
+  String _cid = '';
   final _notif = FlutterLocalNotificationsPlugin();
 
   // Toolbar state
@@ -48,6 +51,9 @@ class _StockScreenState extends State<StockScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _initNotifications();
     _scheduleDailyReminder();
   }
@@ -90,8 +96,7 @@ class _StockScreenState extends State<StockScreen> {
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _stocksStream() {
     // server-ordered by name; further sorted client-side based on _sort
-    return FirebaseFirestore.instance
-        .collection('stocks')
+    return DB.colSync(_cid, C.stocks)
         .orderBy('name')
         .snapshots();
   }
@@ -392,8 +397,8 @@ class _StockScreenState extends State<StockScreen> {
 
     final newQty = prevQty + delta;
 
-    final ref = FirebaseFirestore.instance.collection('stocks').doc(docId);
-    await FirebaseFirestore.instance.runTransaction((tx) async {
+    final ref = (await DB.col(C.stocks)).doc(docId);
+    await DB.firestore.runTransaction((tx) async {
       tx.update(ref, {
         'qty': newQty,
         'lastUpdated': FieldValue.serverTimestamp(),
@@ -431,7 +436,7 @@ class _StockScreenState extends State<StockScreen> {
     required int minT,
     required int maxT,
   }) async {
-    final doc = await FirebaseFirestore.instance.collection('stocks').doc(docId).get();
+    final doc = await (await DB.col(C.stocks)).doc(docId).get();
     final data = doc.data() ?? {};
     final lastLow  = (data['lastAlertLowAt']  as Timestamp?)?.toDate();
     final lastHigh = (data['lastAlertHighAt'] as Timestamp?)?.toDate();
@@ -476,7 +481,7 @@ class _StockScreenState extends State<StockScreen> {
   /// Collects UIDs of users who should receive stock notifications and queues a dispatch.
   /// Rule: if any users have `notifyStock == true`, use them; else send to ALL users.
   Future<void> _queueStockPushToEveryone(String title, String body, {required bool highPriority}) async {
-    final usersCol = FirebaseFirestore.instance.collection('users');
+    final usersCol = DB.colSync(_cid, C.users);
 
     // Try targeted first
     final targeted = await usersCol.where('notifyStock', isEqualTo: true).get();
@@ -490,7 +495,7 @@ class _StockScreenState extends State<StockScreen> {
 
     if (uids.isEmpty) return; // nothing to do
 
-    await FirebaseFirestore.instance.collection('alert_dispatch').add({
+    await (await DB.col(C.alertDispatch)).add({
       'alertId'   : null,
       'uids'      : uids,
       'title'     : title,
@@ -502,8 +507,8 @@ class _StockScreenState extends State<StockScreen> {
     });
 
     // (Optional) write in-app notification docs for badges/center
-    final batch = FirebaseFirestore.instance.batch();
-    final notiCol = FirebaseFirestore.instance.collection('notifications');
+    final batch = DB.firestore.batch();
+    final notiCol = DB.colSync(_cid, C.notifications);
     final now = FieldValue.serverTimestamp();
     for (final uid in uids) {
       batch.set(notiCol.doc(), {
@@ -519,7 +524,7 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   Future<void> _quickDailyUpdate(BuildContext context) async {
-    final snap = await FirebaseFirestore.instance.collection('stocks').orderBy('name').get();
+    final snap = await (await DB.col(C.stocks)).orderBy('name').get();
     if (!mounted) return;
 
     final controllers = <String, TextEditingController>{};
@@ -653,7 +658,7 @@ class _StockScreenState extends State<StockScreen> {
     );
 
     if (result != null) {
-      final col = FirebaseFirestore.instance.collection('stocks');
+      final col = DB.colSync(_cid, C.stocks);
 
       DocumentReference<Map<String, dynamic>> ref;
       if (result.docId == null) {
@@ -910,7 +915,7 @@ class _StockEditSheetState extends State<_StockEditSheet> {
       ),
     );
     if (ok != true) return;
-    await FirebaseFirestore.instance.collection('stocks').doc(id).delete();
+    await (await DB.col(C.stocks)).doc(id).delete();
     if (!mounted) return;
     Navigator.pop(context); // close sheet
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stock item deleted')));
@@ -1576,10 +1581,19 @@ class _GlobalMovementSheet extends StatefulWidget {
 }
 
 class _GlobalMovementSheetState extends State<_GlobalMovementSheet> {
+  String _cid = '';
   String? _selectedId;
   Map<String, dynamic>? _selectedData;
   final _amountCtl = TextEditingController(text: '1');
   final _noteCtl   = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   void dispose() {
@@ -1609,7 +1623,7 @@ class _GlobalMovementSheetState extends State<_GlobalMovementSheet> {
           const SizedBox(height: 12),
 
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('stocks').orderBy('name').snapshots(),
+            stream: DB.colSync(_cid, C.stocks).orderBy('name').snapshots(),
             builder: (ctx, snap) {
               final docs = snap.data?.docs ?? [];
               return DropdownButtonFormField<String>(
@@ -1635,7 +1649,7 @@ class _GlobalMovementSheetState extends State<_GlobalMovementSheet> {
                 onChanged: (v) async {
                   setState(() => _selectedId = v);
                   if (v != null) {
-                    final doc = await FirebaseFirestore.instance.collection('stocks').doc(v).get();
+                    final doc = await (await DB.col(C.stocks)).doc(v).get();
                     setState(() => _selectedData = doc.data());
                   }
                 },

@@ -1,19 +1,35 @@
 // lib/features/marketing/presentation/screens/work_order_updates_screen.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
-class WorkOrderUpdatesScreen extends StatelessWidget {
+class WorkOrderUpdatesScreen extends StatefulWidget {
   const WorkOrderUpdatesScreen({Key? key}) : super(key: key);
 
-  /// Stream of all work_orders where agentEmail == current user
+  @override
+  State<WorkOrderUpdatesScreen> createState() => _WorkOrderUpdatesScreenState();
+}
+
+class _WorkOrderUpdatesScreenState extends State<WorkOrderUpdatesScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   Stream<QuerySnapshot<Map<String, dynamic>>> _updatesStream(String userEmail) {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
+    if (_cid.isEmpty) return const Stream.empty();
+    return DB.colSync(_cid, C.workOrders)
         .where('agentEmail', isEqualTo: userEmail)
         .orderBy('lastUpdated', descending: true)
         .snapshots();
@@ -21,8 +37,7 @@ class WorkOrderUpdatesScreen extends StatelessWidget {
 
   Future<void> _acknowledge(BuildContext context, String docId) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('work_orders')
+      await (await DB.col(C.workOrders))
           .doc(docId)
           .delete();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -36,7 +51,6 @@ class WorkOrderUpdatesScreen extends StatelessWidget {
   }
 
   void _trackOrder(String woNo) {
-    // TODO: hook up your tracking logic here
     debugPrint('Track $woNo');
   }
 
@@ -51,8 +65,10 @@ class WorkOrderUpdatesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Work Order Updates'),
+        title: const Text('Work Order Updates', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _updatesStream(userEmail),

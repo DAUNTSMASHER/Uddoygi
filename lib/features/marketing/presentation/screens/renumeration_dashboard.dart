@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -12,6 +14,7 @@ class RenumerationDashboard extends StatefulWidget {
 }
 
 class _RenumerationDashboardState extends State<RenumerationDashboard> {
+  String _cid = '';
   double currentMonthTotal = 0;
   double allTimeTotal = 0;
   List<Map<String, dynamic>> userIncentives = [];
@@ -22,12 +25,14 @@ class _RenumerationDashboardState extends State<RenumerationDashboard> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadIncentives();
   }
 
   Future<void> _loadIncentives() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('marketing_incentives')
+    final snapshot = await DB.colSync(_cid, C.marketingIncentives)
         .get();
 
     double allIncentive = 0;
@@ -64,8 +69,7 @@ class _RenumerationDashboardState extends State<RenumerationDashboard> {
   }
 
   void _showIncentivePopup(String reportId) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('marketing_incentives')
+    final snapshot = await DB.colSync(_cid, C.marketingIncentives)
         .doc(reportId)
         .get();
 
@@ -115,8 +119,10 @@ class _RenumerationDashboardState extends State<RenumerationDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Renumeration'),
+        title: const Text('Renumeration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

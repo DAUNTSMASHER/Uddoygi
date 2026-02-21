@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 class SubmitRecommendationPage extends StatefulWidget {
   const SubmitRecommendationPage({Key? key}) : super(key: key);
@@ -12,6 +14,7 @@ class SubmitRecommendationPage extends StatefulWidget {
 }
 
 class _SubmitRecommendationPageState extends State<SubmitRecommendationPage> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
 
   final _fullNameController = TextEditingController();
@@ -108,8 +111,7 @@ class _SubmitRecommendationPageState extends State<SubmitRecommendationPage> {
       'sentToCEO': true,
     };
 
-    final doc = await FirebaseFirestore.instance
-        .collection('recommendation')
+    final doc = await DB.colSync(_cid, C.recommendation)
         .add(data);
     setState(() => _docId = doc.id);
 
@@ -126,8 +128,7 @@ class _SubmitRecommendationPageState extends State<SubmitRecommendationPage> {
       return;
     }
 
-    final snap = await FirebaseFirestore.instance
-        .collection('recommendation')
+    final snap = await DB.colSync(_cid, C.recommendation)
         .doc(_docId)
         .get();
     final data = snap.data()!;
@@ -168,14 +169,23 @@ class _SubmitRecommendationPageState extends State<SubmitRecommendationPage> {
               color: _darkBlue, fontSize: 18, fontWeight: FontWeight.bold)),
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Submit Recommendation'),
+        title: const Text('Submit Recommendation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: SingleChildScrollView(

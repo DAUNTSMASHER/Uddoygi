@@ -1,4 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -15,10 +17,19 @@ class BenefitsCompensationScreen extends StatefulWidget {
 
 class _BenefitsCompensationScreenState
     extends State<BenefitsCompensationScreen> {
+  String _cid = '';
   final List<String> _types = ['All', 'Bonus', 'Incentive', 'Allowance'];
   String _selectedType = 'All';
   String _searchEmployee = '';
   DateTime? _filterDate;
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -26,11 +37,12 @@ class _BenefitsCompensationScreenState
       backgroundColor: Colors.blue[50], // soft blue background
       appBar: AppBar(
         backgroundColor: Colors.blue[800],
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text(
           'Benefits & Compensation',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
@@ -134,8 +146,7 @@ class _BenefitsCompensationScreenState
             // Benefits list from Firestore
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('benefits')
+                stream: DB.colSync(_cid, C.benefits)
                     .orderBy('date', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -340,7 +351,7 @@ class _BenefitsCompensationScreenState
                         return;
                       }
 
-                      await FirebaseFirestore.instance.collection('benefits').add({
+                      await DB.colSync(_cid, C.benefits).add({
                         'employee': employee,
                         'type': benefitType,
                         'amount': amount,
@@ -371,12 +382,11 @@ class _BenefitsCompensationScreenState
   }
 
   Future<void> _exportPdf() async {
-    final query = await FirebaseFirestore.instance
-        .collection('benefits')
+    final query = await DB.colSync(_cid, C.benefits)
         .orderBy('date', descending: true)
         .get();
 
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     final logs = query.docs;
 
     pdf.addPage(

@@ -14,6 +14,8 @@ import 'package:flutter/services.dart';
 // Optional: if you added these deps earlier, keep them. If not, you can remove.
 import 'package:google_fonts/google_fonts.dart';
 import 'package:circle_flags/circle_flags.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class CustomerDetailsPage extends StatefulWidget {
   final String customerId;            // Firestore doc id
@@ -30,6 +32,7 @@ class CustomerDetailsPage extends StatefulWidget {
 }
 
 class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
 
   late final DocumentReference<Map<String, dynamic>> _ref;
@@ -54,7 +57,10 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
   @override
   void initState() {
     super.initState();
-    _ref = FirebaseFirestore.instance.collection('customers').doc(widget.customerId);
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+    DB.col(C.customers).then((col) { if (mounted) setState(() => _ref = col.doc(widget.customerId)); });
     _load();
   }
 
@@ -412,7 +418,7 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
   TextStyle _gf({double? fontSize, FontWeight? weight, Color? color}) {
     final base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
     try {
-      return GoogleFonts.inter(textStyle: base.copyWith(fontSize: fontSize, fontWeight: weight, color: color));
+      return GoogleFonts.ubuntu(textStyle: base.copyWith(fontSize: fontSize, fontWeight: weight, color: color));
     } catch (_) {
       return base.copyWith(fontSize: fontSize, fontWeight: weight, color: color);
     }

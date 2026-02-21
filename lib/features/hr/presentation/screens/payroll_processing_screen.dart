@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class PayrollProcessingScreen extends StatefulWidget {
   const PayrollProcessingScreen({super.key});
@@ -14,6 +16,7 @@ class PayrollProcessingScreen extends StatefulWidget {
 }
 
 class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
+  String _cid = '';
   /* ======================= Theme ======================= */
   static const Color _primary = Color(0xFF25BC5F);   // green
   static const Color _primaryDark = Color(0xFF065F46);
@@ -45,6 +48,9 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _resetAndLoad();
   }
 
@@ -67,8 +73,7 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
   }
 
   Query<Map<String, dynamic>> _baseQuery() {
-    var q = FirebaseFirestore.instance
-        .collection('payrolls')
+    var q = DB.colSync(_cid, C.payrolls)
         .where('period', isEqualTo: selectedMonth);
 
     if (filterDepartment.trim().isNotEmpty) {
@@ -153,8 +158,7 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
   Future<void> _generatePayrollForEmployee(String employeeId, double grossSalary) async {
     try {
       // Enrich from users
-      final userSnap = await FirebaseFirestore.instance
-          .collection('users')
+      final userSnap = await DB.colSync(_cid, C.users)
           .where('employeeId', isEqualTo: employeeId)
           .limit(1)
           .get();
@@ -173,8 +177,7 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
       }
 
       // Loans
-      final loansSnap = await FirebaseFirestore.instance
-          .collection('loans')
+      final loansSnap = await DB.colSync(_cid, C.loans)
           .where('employeeId', isEqualTo: employeeId)
           .where('status', whereIn: ['Approved', 'Active'])
           .get();
@@ -208,7 +211,7 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
 
       final netSalary = (grossSalary - totalDeduction).clamp(0, double.infinity);
 
-      await FirebaseFirestore.instance.collection('payrolls').add({
+      await (await DB.col(C.payrolls)).add({
         'employeeUid': employeeUid,
         'employeeId': employeeId,
         'employeeName': employeeName ?? employeeId,
@@ -265,7 +268,7 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
   }
 
   Future<void> exportPayrollToPDF() async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     pdf.addPage(
       pw.Page(
         build: (_) => pw.Column(
@@ -785,12 +788,21 @@ class _EmployeePickerSheet extends StatefulWidget {
 }
 
 class _EmployeePickerSheetState extends State<_EmployeePickerSheet> {
+  String _cid = '';
   String _q = '';
   String _dept = '';
 
   @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection('users');
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.users);
     if (_dept.isNotEmpty) q = q.where('department', isEqualTo: _dept);
 
     return SafeArea(

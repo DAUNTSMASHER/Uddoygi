@@ -1,7 +1,39 @@
 rules_version = '2';
+// ─────────────────────────────────────────────────────────────────────────────
+// Uddoygi — Firestore Security Rules  (DEPLOYED — matches Firebase Console)
+//
+// LAYER 1 (server-side, Firebase enforces):
+//   companies/{id}  → public read if isActive == true  (login screen lookup)
+//                     write if authenticated
+//   everything else → read + write if authenticated (request.auth != null)
+//
+// LAYER 2 (client-side, app enforces via AppRules):
+//   • Company isolation : user can only access their own companyId
+//   • Role-based access : each role has a defined set of allowed collections
+//   • Screen guard      : AppRulesGuard wraps screens before rendering
+//
+// Both layers must pass for data to flow.
+// ─────────────────────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only authenticated users can read/write anything
+
+    // ── companies/{companyId} ───────────────────────────────────────────────
+    // Public read for active companies — login screen shows name/logo
+    // before the user signs in (no auth token needed).
+    match /companies/{companyId} {
+      allow read:  if resource.data.isActive == true;
+      allow write: if request.auth != null;
+    }
+
+    // Subcollections under companies/{companyId}
+    match /companies/{companyId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ── Everything else ─────────────────────────────────────────────────────
+    // All other collections (data/{companyId}/*, users/*, smtp_config/*, etc.)
+    // require the user to be authenticated.
+    // Fine-grained role/company isolation is enforced by AppRules (client-side).
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

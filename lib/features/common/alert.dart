@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
-/// ===== Green palette (match HR) =====
-const Color _brandGreen = Color(0xFF065F46); // deep green
-const Color _greenMid   = Color(0xFF10B981); // accent
-const Color _surface    = Color(0xFFF1F8F4); // light surface
-const Color _border     = Color(0x1A065F46); // 10% green
+// Neutral indigo palette — shared widget, works across all departments
+const Color _brandGreen = Color(0xFF3730A3); // neutral indigo
+const Color _greenMid   = Color(0xFF6366F1); // indigo mid
+const Color _surface    = Color(0xFFF5F3FF); // light lavender surface
+const Color _border     = Color(0x1A3730A3); // 10% indigo
 
 class AlertPage extends StatefulWidget {
   const AlertPage({Key? key}) : super(key: key);
@@ -20,6 +22,7 @@ class AlertPage extends StatefulWidget {
 enum _AlertMode { individuals, department }
 
 class _AlertPageState extends State<AlertPage> {
+  String _cid = '';
   _AlertMode _mode = _AlertMode.individuals;
 
   final _searchCtl = TextEditingController();
@@ -33,8 +36,8 @@ class _AlertPageState extends State<AlertPage> {
   // ---------- Streams ----------
 
   /// Users list with lightweight model + client-side filter.
-  Stream<List<_UserLite>> _usersStream(String query) {
-    return FirebaseFirestore.instance.collection('users').snapshots().map((s) {
+  Stream<List<_UserLite>> _usersStream(String query) async* {
+    yield* DB.stream(C.users).map((s) {
       final q = query.trim().toLowerCase();
       final out = <_UserLite>[];
       for (final d in s.docs) {
@@ -58,8 +61,8 @@ class _AlertPageState extends State<AlertPage> {
   }
 
   /// Unique departments from users.department
-  Stream<List<String>> _departmentsStream() {
-    return FirebaseFirestore.instance.collection('users').snapshots().map((s) {
+  Stream<List<String>> _departmentsStream() async* {
+    yield* DB.stream(C.users).map((s) {
       final set = <String>{};
       for (final d in s.docs) {
         final dep = (d.data()['department'] ?? '').toString().trim();
@@ -103,9 +106,9 @@ class _AlertPageState extends State<AlertPage> {
           return;
         }
 
+        final col = await DB.col(C.users);
         final snaps = await Future.wait(
-          _selectedUserIds.map((id) =>
-              FirebaseFirestore.instance.collection('users').doc(id).get()),
+          _selectedUserIds.map((id) => col.doc(id).get()),
         );
 
         recipients = snaps.where((d) => d.exists).map((d) {
@@ -131,8 +134,7 @@ class _AlertPageState extends State<AlertPage> {
           return;
         }
 
-        final q = await FirebaseFirestore.instance
-            .collection('users')
+        final q = await DB.colSync(_cid, C.users)
             .where('department', isEqualTo: department)
             .get();
 
@@ -154,7 +156,7 @@ class _AlertPageState extends State<AlertPage> {
       }
 
       // -------- Create master alert doc --------
-      final alertRef = await FirebaseFirestore.instance.collection('alerts').add({
+      final alertRef = await (await DB.col(C.alerts)).add({
         'message'        : message,
         'priority'       : _highPriority ? 'high' : 'normal',
         'mode'           : _mode.name,
@@ -172,8 +174,8 @@ class _AlertPageState extends State<AlertPage> {
 
       // -------- Fan-out in-app notifications --------
       if (recipients.isNotEmpty) {
-        final batch = FirebaseFirestore.instance.batch();
-        final col = FirebaseFirestore.instance.collection('notifications');
+        final batch = DB.firestore.batch();
+        final col = DB.colSync(_cid, C.notifications);
         for (final r in recipients) {
           batch.set(col.doc(), {
             'to'        : r.email,
@@ -196,7 +198,7 @@ class _AlertPageState extends State<AlertPage> {
       final tokenSet = <String>{};
       try {
         for (final uid in uidList) {
-          final udoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final udoc = await (await DB.col(C.users)).doc(uid).get();
           final udata = udoc.data() as Map<String, dynamic>?;
 
           // 1) top-level array
@@ -205,8 +207,7 @@ class _AlertPageState extends State<AlertPage> {
 
           // 2) subcollection fallback
           if (arr.isEmpty) {
-            final sub = await FirebaseFirestore.instance
-                .collection('users').doc(uid)
+            final sub = await DB.colSync(_cid, C.users).doc(uid)
                 .collection('fcmTokens')
                 .get();
             for (final d in sub.docs) {
@@ -234,8 +235,7 @@ class _AlertPageState extends State<AlertPage> {
         'byEmail'    : me.email,
       };
 
-      final queued = await FirebaseFirestore.instance
-          .collection('alert_dispatch')
+      final queued = await DB.colSync(_cid, C.alertDispatch)
           .add(dispatchDoc);
 
       debugPrint('📣 queued alert_dispatch ${queued.id} → $dispatchDoc');
@@ -283,6 +283,14 @@ class _AlertPageState extends State<AlertPage> {
   }
 
   // ---------- UI ----------
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {

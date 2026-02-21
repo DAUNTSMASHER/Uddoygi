@@ -1,14 +1,16 @@
-// lib/features/factory/presentation/screens/work_order_details_screen.dart
+﻿// lib/features/factory/presentation/screens/work_order_details_screen.dart
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF40062D);
 
 class WorkOrderDetailsScreen extends StatefulWidget {
   final String orderId;
@@ -19,7 +21,7 @@ class WorkOrderDetailsScreen extends StatefulWidget {
 }
 
 class _WorkOrderDetailsScreenState extends State<WorkOrderDetailsScreen> {
-  final _firestore = FirebaseFirestore.instance;
+  String _cid = '';
   Map<String, dynamic>? _workOrder;
   Map<String, dynamic>? _invoice;
   bool _loading = true;
@@ -27,13 +29,15 @@ class _WorkOrderDetailsScreenState extends State<WorkOrderDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _fetchWorkOrderAndInvoice();
   }
 
   Future<void> _fetchWorkOrderAndInvoice() async {
     // 1) load work order
-    final woSnap = await _firestore
-        .collection('work_orders')
+    final woSnap = await DB.colSync(_cid, C.workOrders)
         .doc(widget.orderId)
         .get();
     final woData = woSnap.data();
@@ -43,7 +47,7 @@ class _WorkOrderDetailsScreenState extends State<WorkOrderDetailsScreen> {
     Map<String, dynamic>? invData;
     final invId = woData['invoiceId'] as String?;
     if (invId != null) {
-      final invSnap = await _firestore.collection('invoices').doc(invId).get();
+      final invSnap = await DB.colSync(_cid, C.invoices).doc(invId).get();
       invData = invSnap.data();
     }
 
@@ -55,7 +59,7 @@ class _WorkOrderDetailsScreenState extends State<WorkOrderDetailsScreen> {
   }
 
   Future<Uint8List> _buildPdf(PdfPageFormat format) async {
-    final doc = pw.Document();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     final items = List<Map<String, dynamic>>.from(_workOrder!['items'] ?? []);
     final woNo = _workOrder!['workOrderNo'] as String? ?? widget.orderId;
     final finalTs = _workOrder!['finalDate'] as Timestamp;
@@ -105,19 +109,26 @@ class _WorkOrderDetailsScreenState extends State<WorkOrderDetailsScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Order Details'), backgroundColor: _darkBlue),
+        appBar: AppBar(
+          title: const Text('অর্ডার বিস্তারিত', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          backgroundColor: _darkBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order Details'),
+        title: const Text('অর্ডার বিস্তারিত', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.download, color: Colors.white),
-            tooltip: 'Download PDF',
+            tooltip: 'PDF ডাউনলোড',
             onPressed: () async {
               final bytes = await _buildPdf(PdfPageFormat.a4);
               await Printing.sharePdf(

@@ -12,7 +12,7 @@ import 'package:googleapis/drive/v3.dart' as gdrive;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 // TODO: replace with your real Drive folder ID
 const String _driveFolderId = '14Qws-stNhY1966KoPECG95nyY1c4bITw';
@@ -170,7 +170,12 @@ class _DrivePageState extends State<DrivePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Upload File'), backgroundColor: _darkBlue),
+      appBar: AppBar(
+        title: const Text('Upload File', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Center(
         child: _loading
             ? Column(

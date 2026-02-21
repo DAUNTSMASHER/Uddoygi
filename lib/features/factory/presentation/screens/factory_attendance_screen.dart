@@ -1,5 +1,8 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/features/attendance/admin_detail_view.dart';
 import 'package:uddoygi/features/attendance/user_attendance_view.dart';
@@ -11,7 +14,7 @@ class FactoryAttendanceScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null || user.email == null) {
-      _showError(context, "⚠️ User not logged in.");
+      _showError(context, "⚠️ ব্যবহারকারী লগইন করেননি।");
       return;
     }
 
@@ -36,8 +39,10 @@ class FactoryAttendanceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Factory Attendance'),
-        backgroundColor: Colors.indigo,
+        title: const Text('কারখানার উপস্থিতি', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: const Color(0xFF40062D),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: GridView.count(
         crossAxisCount: 2,
@@ -46,7 +51,7 @@ class FactoryAttendanceScreen extends StatelessWidget {
         mainAxisSpacing: 16,
         children: [
           _AttendanceOptionCard(
-            title: 'Worker Attendance',
+            title: 'কর্মীর উপস্থিতি',
             icon: Icons.people_alt,
             color: Colors.blueGrey,
             onTap: () {
@@ -57,9 +62,9 @@ class FactoryAttendanceScreen extends StatelessWidget {
             },
           ),
           _AttendanceOptionCard(
-            title: 'My Attendance',
+            title: 'আমার উপস্থিতি',
             icon: Icons.person_pin_circle,
-            color: Colors.teal,
+            color: const Color(0xFF40062D),
             onTap: () => _openMyAttendance(context),
           ),
         ],
@@ -99,10 +104,13 @@ class _AttendanceOptionCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 40, color: color),
-              const SizedBox(height: 16),
-              Text(
+              const SizedBox(height: 12),
+              AutoSizeText(
                 title,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                minFontSize: 11,
+                stepGranularity: 0.5,
                 style: TextStyle(
                   fontSize: 16,
                   color: color,

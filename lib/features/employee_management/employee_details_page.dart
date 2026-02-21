@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../storage/drive.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 class EmployeeDetailsPage extends StatefulWidget {
   final String uid;
@@ -22,15 +24,22 @@ class EmployeeDetailsPage extends StatefulWidget {
 }
 
 class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
-  late final DocumentReference<Map<String, dynamic>> _docRef;
+  String _cid = '';
+
+  // Built only after _cid is loaded — never use an empty-CID reference.
+  DocumentReference<Map<String, dynamic>>? get _docRef =>
+      _cid.isEmpty ? null : DB.colSync(_cid, C.users).doc(widget.uid);
 
   @override
   void initState() {
     super.initState();
-    _docRef = FirebaseFirestore.instance.collection('users').doc(widget.uid);
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
   }
 
   Future<void> _pickAndUploadPhoto(String employeeId) async {
+    if (_docRef == null) return;
     final result = await FilePicker.platform.pickFiles(type: FileType.image);
     if (result?.files.single.path == null) return;
 
@@ -47,11 +56,12 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
     );
 
     if (url != null && url.isNotEmpty) {
-      await _docRef.update({'profilePhotoUrl': url});
+      await _docRef!.update({'profilePhotoUrl': url});
     }
   }
 
   Future<void> _pickAndUploadCV(String employeeId) async {
+    if (_docRef == null) return;
     final result = await FilePicker.platform.pickFiles(type: FileType.any);
     if (result?.files.single.path == null) return;
 
@@ -68,11 +78,12 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
     );
 
     if (url != null && url.isNotEmpty) {
-      await _docRef.update({'cvUrl': url});
+      await _docRef!.update({'cvUrl': url});
     }
   }
 
   Future<void> _editField(String key, String label, String currentValue) async {
+    if (_docRef == null) return;
     if (key == 'dateOfBirth' || key == 'joiningDate') {
       final parts = currentValue.split('/');
       DateTime initial = DateTime.now();
@@ -91,7 +102,7 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
         lastDate: DateTime.now(),
       );
       if (picked != null) {
-        await _docRef.update({key: Timestamp.fromDate(picked)});
+        await _docRef!.update({key: Timestamp.fromDate(picked)});
       }
       return;
     }
@@ -109,7 +120,7 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
       ),
     );
     if (updated != null && updated != currentValue) {
-      await _docRef.update({key: updated});
+      await _docRef!.update({key: updated});
     }
   }
 
@@ -144,13 +155,22 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar:
-      AppBar(title: const Text('Employee Details'), backgroundColor: _darkBlue),
+      appBar: AppBar(
+        title: const Text(
+          'Employee Details',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       backgroundColor: Colors.white,
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _docRef.snapshots(),
+      body: _cid.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: _docRef!.snapshots(),
         builder: (context, snap) {
-          if (snap.hasError) return const Center(child: Text('Error loading'));
+          if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
           if (!snap.hasData || !snap.data!.exists) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -204,7 +224,7 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
                 profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
                 child: profileUrl.isEmpty
                     ? Text(fullName.isEmpty ? '?' : fullName[0],
-                    style: const TextStyle(fontSize: 32, color: Colors.white))
+                    style: const TextStyle(fontSize: 32, color: Color(0xFF2A0A4B), fontWeight: FontWeight.w900))
                     : null,
               ),
             ),
@@ -319,3 +339,4 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
     );
   }
 }
+

@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF40062D);
 
 class PurchaseOrdersScreen extends StatefulWidget {
   const PurchaseOrdersScreen({Key? key}) : super(key: key);
@@ -14,26 +16,48 @@ class PurchaseOrdersScreen extends StatefulWidget {
 }
 
 class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
-  final _poRef = FirebaseFirestore.instance.collection('purchase_orders');
-  final _priceController = TextEditingController();
+  String _cid = '';
+  final _priceController    = TextEditingController();
   final _quantityController = TextEditingController();
   final _supplierController = TextEditingController();
-  final _productController = TextEditingController();
-  final _agentController = TextEditingController();
+  final _productController  = TextEditingController();
+  final _agentController    = TextEditingController();
 
   String? _selectedInvoice;
 
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _quantityController.dispose();
+    _supplierController.dispose();
+    _productController.dispose();
+    _agentController.dispose();
+    super.dispose();
+  }
+
   Future<void> _acceptPO(String docId) async {
-    await _poRef.doc(docId).update({
+    if (_cid.isEmpty) return;
+    await DB.colSync(_cid, C.purchaseOrders).doc(docId).update({
       'status': 'accepted',
       'acceptedAt': Timestamp.now(),
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('✅ PO accepted')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Purchase order accepted')),
+      );
+    }
   }
 
   Future<void> _rejectPO(String docId) async {
+    if (_cid.isEmpty) return;
     String? recommendation;
     await showDialog(
       context: context,
@@ -41,7 +65,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
         title: const Text('Reject Purchase Order'),
         content: TextFormField(
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Recommendation'),
+          decoration: const InputDecoration(labelText: 'Reason / Recommendation'),
           onChanged: (v) => recommendation = v,
         ),
         actions: [
@@ -61,14 +85,16 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     );
     if ((recommendation ?? '').trim().isEmpty) return;
 
-    await _poRef.doc(docId).update({
+    await DB.colSync(_cid, C.purchaseOrders).doc(docId).update({
       'status': 'rejected',
       'recommendation': recommendation,
       'rejectedAt': Timestamp.now(),
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('❌ PO rejected')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ Purchase order rejected')),
+      );
+    }
   }
 
   Future<void> _submitPurchaseDetails() async {
@@ -84,47 +110,51 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
       return;
     }
 
-    await FirebaseFirestore.instance.collection('product_prices').add({
-      'product': _productController.text.trim(),
-      'price': double.tryParse(_priceController.text.trim()) ?? 0,
-      'quantity': int.tryParse(_quantityController.text.trim()) ?? 0,
-      'supplier': _supplierController.text.trim(),
-      'invoice': _selectedInvoice,
-      'agent': _agentController.text.trim(),
+    await DB.colSync(_cid, C.productPrices).add({
+      'product':   _productController.text.trim(),
+      'price':     double.tryParse(_priceController.text.trim()) ?? 0,
+      'quantity':  int.tryParse(_quantityController.text.trim()) ?? 0,
+      'supplier':  _supplierController.text.trim(),
+      'invoice':   _selectedInvoice,
+      'agent':     _agentController.text.trim(),
       'timestamp': Timestamp.now(),
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('📝 Purchase details saved.')),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('📝 Purchase details saved.')),
+      );
+    }
 
     _priceController.clear();
     _quantityController.clear();
     _supplierController.clear();
     _productController.clear();
     _agentController.clear();
-
-    setState(() {
-      _selectedInvoice = null;
-    });
+    setState(() => _selectedInvoice = null);
   }
 
   Future<List<String>> _getInvoiceIDs() async {
-    final snap = await FirebaseFirestore.instance.collection('invoices').get();
+    if (_cid.isEmpty) return [];
+    final snap = await DB.colSync(_cid, C.invoices).get();
     return snap.docs.map((d) => d.id).toList();
   }
 
   Future<String?> _getAgentForInvoice(String invoiceId) async {
-    final doc = await FirebaseFirestore.instance.collection('invoices').doc(invoiceId).get();
+    if (_cid.isEmpty) return null;
+    final doc = await DB.colSync(_cid, C.invoices).doc(invoiceId).get();
     return doc.data()?['submittedBy'] as String?;
   }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Purchase Orders'),
+        title: const Text('Purchase Orders', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -133,9 +163,11 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: _poRef.orderBy('timestamp', descending: true).snapshots(),
+                stream: _cid.isEmpty
+                    ? const Stream.empty()
+                    : DB.colSync(_cid, C.purchaseOrders).orderBy('timestamp', descending: true).snapshots(),
                 builder: (ctx, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
+                  if (_cid.isEmpty || snap.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   final docs = snap.data?.docs ?? [];
@@ -204,7 +236,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                                 Align(
                                   alignment: Alignment.centerRight,
                                   child: Text(
-                                    'Status: ${status.toUpperCase()}',
+                                    'Status: ${status == 'accepted' ? 'Accepted' : 'Rejected'}',
                                     style: TextStyle(
                                       fontStyle: FontStyle.italic,
                                       color: status == 'accepted'
@@ -231,7 +263,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                 children: [
                   const Divider(thickness: 1),
                   const Text(
-                    '🛒 Product Price Entry',
+                    'Product Price Entry',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
@@ -298,7 +330,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                     controller: _priceController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'Price per Unit',
+                      labelText: 'প্রতি ইউনিট Price',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -308,7 +340,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                   TextFormField(
                     controller: _supplierController,
                     decoration: const InputDecoration(
-                      labelText: 'Supplier Name',
+                      labelText: 'Supplierর নাম',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -320,7 +352,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                     child: ElevatedButton.icon(
                       onPressed: _submitPurchaseDetails,
                       icon: const Icon(Icons.save),
-                      label: const Text('Submit Price Entry'),
+                      label: const Text('Price এন্ট্রি জমা দিন'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _darkBlue,
                         padding: const EdgeInsets.symmetric(vertical: 14),

@@ -1,216 +1,72 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 import 'package:uddoygi/features/employee_management/add_employee_page.dart';
 import 'package:uddoygi/features/employee_management/all_employees_page.dart';
 import 'package:uddoygi/features/employee_management/hr_recommendations_page.dart';
 import 'package:uddoygi/features/employee_management/transitions_page.dart';
 
-class EmployeeManagementScreen extends StatelessWidget {
-  const EmployeeManagementScreen({super.key});
+// ── Palette ───────────────────────────────────────────────────────────────────
+const Color _p900  = Color(0xFF2D0060);   // deepest purple
+const Color _p700  = Color(0xFF5B0A98);   // primary purple
+const Color _p500  = Color(0xFF7C3AED);   // mid violet
+const Color _p200  = Color(0xFFEDE9FE);   // lavender tint
+const Color _bg    = Color(0xFFF5F3FF);   // page bg
+const Color _white = Colors.white;
+const Color _ink   = Color(0xFF1A1A2E);
+const Color _sub   = Color(0xFF64748B);
 
-  static const Color _deepPurple = Color(0xFF5B0A98);
-  static const Color _accentPurple = Color(0xFF6911AC);
-  static const Color _ink = Color(0xFF1B1B1F);
+// Accent palette for dept chips
+const _deptColors = {
+  'HR & Accounts':  Color(0xFF0891B2),
+  'Marketing':      Color(0xFF16A34A),
+  'Factory':        Color(0xFFB45309),
+  'Admin':          Color(0xFF7C3AED),
+  'R&D':            Color(0xFFDB2777),
+  'Others':         Color(0xFF64748B),
+};
+
+class EmployeeManagementScreen extends StatefulWidget {
+  const EmployeeManagementScreen({super.key});
+  @override
+  State<EmployeeManagementScreen> createState() => _EmployeeManagementScreenState();
+}
+
+class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
+    with SingleTickerProviderStateMixin {
+  String _cid = '';
+  late final AnimationController _heroCtrl;
+  late final Animation<double> _heroAnim;
 
   @override
-  Widget build(BuildContext context) {
-    final navCards = [
-      _DashboardCard(
-        title: 'Add Employee',
-        icon: Icons.person_add,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddEmployeePage())),
-      ),
-      _DashboardCard(
-        title: 'All Employees',
-        icon: Icons.group,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllEmployeesPage())),
-      ),
-      _DashboardCard(
-        title: 'Recommendations',
-        icon: Icons.thumb_up,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HRRecommendationsPage())),
-      ),
-      _DashboardCard(
-        title: 'Promotions',
-        icon: Icons.swap_vert,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TransitionsPage())),
-      ),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Employee Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        backgroundColor: _deepPurple,
-        elevation: 0,
-      ),
-      backgroundColor: const Color(0xFFF7F8FB),
-      body: LayoutBuilder(
-        builder: (context, c) {
-          final w = c.maxWidth;
-          final cross = _gridCount(w);
-
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('users').snapshots(),
-            builder: (ctx, usersSnap) {
-              final waiting = usersSnap.connectionState == ConnectionState.waiting;
-              final users = usersSnap.data?.docs ?? [];
-
-              final monthStart = DateTime(DateTime.now().year, DateTime.now().month, 1);
-              final totalEmployees = users.length;
-              int newThisMonth = 0;
-
-              final Map<String, int> dept = {
-                'hr': 0,
-                'accounts': 0,
-                'marketing': 0,
-                'factory': 0,
-                'admin': 0,
-                'others': 0,
-              };
-
-              for (final u in users) {
-                final data = u.data();
-                final raw = (data['department'] as String?)?.trim().toLowerCase() ?? '';
-                final dep = _normalizeDept(raw);
-                if (!dept.containsKey(dep)) {
-                  dept['others'] = (dept['others'] ?? 0) + 1;
-                } else {
-                  dept[dep] = (dept[dep] ?? 0) + 1;
-                }
-
-                final createdAt = data['createdAt'];
-                DateTime? created;
-                if (createdAt is Timestamp) created = createdAt.toDate();
-                if (createdAt is DateTime) created = createdAt;
-                if (created != null && created.isAfter(monthStart)) newThisMonth++;
-              }
-
-              final hrAndAccounts = (dept['hr'] ?? 0) + (dept['accounts'] ?? 0);
-
-              return FutureBuilder<_AttendanceQuick>(
-                future: _attendanceQuick(),
-                builder: (ctx, attSnap) {
-                  final attendance = attSnap.data ?? const _AttendanceQuick();
-
-                  final statTiles = [
-                    _StatTileData(title: 'Total Employees', value: '$totalEmployees', icon: Icons.badge, color: _deepPurple),
-                    _StatTileData(title: 'New This Month', value: '$newThisMonth', icon: Icons.fiber_new, color: _accentPurple),
-                    _StatTileData(title: 'Avg Attendance', value: '${attendance.avgPercent.toStringAsFixed(1)}%', icon: Icons.insights, color: Colors.green.shade700),
-                    _StatTileData(title: 'On Leave Today', value: '${attendance.leaveToday}', icon: Icons.beach_access, color: Colors.orange.shade800),
-                  ];
-
-                  final deptTiles = <_DeptTileData>[
-                    _DeptTileData(label: 'HR & Accounts', count: hrAndAccounts, icon: Icons.account_balance),
-                    _DeptTileData(label: 'Marketing', count: dept['marketing'] ?? 0, icon: Icons.campaign),
-                    _DeptTileData(label: 'Factory', count: dept['factory'] ?? 0, icon: Icons.precision_manufacturing),
-                    _DeptTileData(label: 'Admin', count: dept['admin'] ?? 0, icon: Icons.admin_panel_settings),
-                    if ((dept['others'] ?? 0) > 0) _DeptTileData(label: 'Others', count: dept['others']!, icon: Icons.grid_view),
-                  ];
-
-                  // Responsive fixed heights → no overflow
-                  final statHeight = _gridItemHeight(w, cross, factor: 0.46, minH: 76, maxH: 100);
-                  final deptHeight = _gridItemHeight(w, cross, factor: 0.44, minH: 72, maxH: 96);
-                  final navHeight  = _gridItemHeight(w, cross, factor: 0.95, minH: 110, maxH: 150);
-
-                  return ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _SectionFrame(
-                        title: 'Overview',
-                        gradientA: _deepPurple,
-                        gradientB: _accentPurple,
-                        // section body background now purple-tinted (not white)
-                        bodyTint: const Color(0xFFF1E8FF),
-                        child: waiting
-                            ? const SizedBox(height: 128, child: Center(child: CircularProgressIndicator(color: _deepPurple)))
-                            : GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          shrinkWrap: true,
-                          itemCount: statTiles.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cross,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            mainAxisExtent: statHeight,
-                          ),
-                          itemBuilder: (_, i) => _StatTile(data: statTiles[i]),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _SectionFrame(
-                        title: 'Employees by Department',
-                        gradientA: _accentPurple,
-                        gradientB: _deepPurple,
-                        bodyTint: const Color(0xFFF1E8FF),
-                        child: waiting
-                            ? const SizedBox(height: 96, child: Center(child: CircularProgressIndicator(color: _deepPurple)))
-                            : GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          shrinkWrap: true,
-                          itemCount: deptTiles.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cross,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            mainAxisExtent: deptHeight,
-                          ),
-                          itemBuilder: (_, i) => _DeptTile(data: deptTiles[i]),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _SectionFrame(
-                        title: 'Quick Actions',
-                        gradientA: _deepPurple,
-                        gradientB: _accentPurple,
-                        bodyTint: const Color(0xFFF1E8FF),
-                        child: GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          shrinkWrap: true,
-                          itemCount: navCards.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: cross,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            mainAxisExtent: navHeight,
-                          ),
-                          itemBuilder: (_, i) => navCards[i],
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
-    );
+  void initState() {
+    super.initState();
+    _heroCtrl = AnimationController(
+        vsync: this, duration: const Duration(seconds: 10))
+      ..repeat(reverse: true);
+    _heroAnim = CurvedAnimation(parent: _heroCtrl, curve: Curves.easeInOut);
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
   }
 
-  static int _gridCount(double w) {
-    if (w < 560) return 2;
-    if (w < 960) return 3;
-    return 4;
-  }
-
-  static double _gridItemHeight(double w, int cross, {required double factor, double minH = 72, double maxH = 120}) {
-    // content width (ListView has 16+16 padding; tiles have 12 spacing)
-    final contentW = math.max(0.0, w - 32);
-    final colW = (contentW - (cross - 1) * 12) / cross;
-    final h = colW * factor;
-    return h.clamp(minH, maxH);
+  @override
+  void dispose() {
+    _heroCtrl.dispose();
+    super.dispose();
   }
 
   static String _normalizeDept(String raw) {
-    if (raw.isEmpty) return 'others';
-    if (raw.contains('hr')) return 'hr';
-    if (raw.contains('account')) return 'accounts';
-    if (raw.contains('market')) return 'marketing';
-    if (raw.contains('factory') || raw.contains('production')) return 'factory';
-    if (raw.contains('admin')) return 'admin';
-    return raw;
+    if (raw.isEmpty) return 'Others';
+    if (raw.contains('hr') || raw.contains('account')) return 'HR & Accounts';
+    if (raw.contains('market')) return 'Marketing';
+    if (raw.contains('factory') || raw.contains('production')) return 'Factory';
+    if (raw.contains('admin')) return 'Admin';
+    if (raw.contains('rnd') || raw.contains('r&d') || raw.contains('research')) return 'R&D';
+    return 'Others';
   }
 
   static Future<_AttendanceQuick> _attendanceQuick() async {
@@ -218,145 +74,320 @@ class EmployeeManagementScreen extends StatelessWidget {
     final y = now.year.toString();
     final m = now.month.toString().padLeft(2, '0');
     final d = now.day.toString().padLeft(2, '0');
-
-    final recs = await FirebaseFirestore.instance.collectionGroup('records').get();
-
-    int present = 0, late = 0, total = 0, leaveToday = 0;
-    for (final r in recs.docs) {
-      final parentId = r.reference.parent.parent?.id ?? '';
-      final parts = parentId.split('-');
-      if (parts.length != 3) continue;
-
-      final status = (r.data()['status'] ?? '').toString().toLowerCase();
-      if (parts[0] == y && parts[1] == m) {
-        if (status == 'present') present++;
-        if (status == 'late') late++;
-        total++;
+    try {
+      final recs = await DB.firestore.collectionGroup('records').get();
+      int present = 0, late = 0, total = 0, leaveToday = 0;
+      for (final r in recs.docs) {
+        final parentId = r.reference.parent.parent?.id ?? '';
+        final parts = parentId.split('-');
+        if (parts.length != 3) continue;
+        final status = (r.data()['status'] ?? '').toString().toLowerCase();
+        if (parts[0] == y && parts[1] == m) {
+          if (status == 'present') present++;
+          if (status == 'late') late++;
+          total++;
+        }
+        if (parts[0] == y && parts[1] == m && parts[2] == d) {
+          if (status == 'leave') leaveToday++;
+        }
       }
-      if (parts[0] == y && parts[1] == m && parts[2] == d) {
-        if (status == 'leave') leaveToday++;
-      }
+      final avg = total > 0 ? ((present + late) / total) * 100 : 0.0;
+      return _AttendanceQuick(avgPercent: avg, leaveToday: leaveToday);
+    } catch (_) {
+      return const _AttendanceQuick();
     }
-
-    final avg = total > 0 ? ((present + late) / total) * 100 : 0.0;
-    return _AttendanceQuick(avgPercent: avg, leaveToday: leaveToday);
   }
-}
-
-/* ======================== SECTION FRAME (animated bg + PURPLE body) ======================== */
-
-class _SectionFrame extends StatelessWidget {
-  const _SectionFrame({
-    required this.title,
-    required this.child,
-    required this.gradientA,
-    required this.gradientB,
-    this.bodyTint = const Color(0xFFF1E8FF), // soft purple panel
-  });
-
-  final String title;
-  final Widget child;
-  final Color gradientA;
-  final Color gradientB;
-  final Color bodyTint;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: Stack(
-        children: [
-          _AnimatedPurpleBg(a: gradientA, b: gradientB),
-          // Purple panel with header + content (no Positioned overlays)
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Card(
-              elevation: 0,
-              color: bodyTint,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: gradientA.withOpacity(.25), width: 1),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title pill (solid purple, white text)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: gradientA,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: .2,
+    return Scaffold(
+      backgroundColor: _bg,
+      body: _cid.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: _p700))
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: DB.colSync(_cid, C.users).snapshots(),
+              builder: (_, usersSnap) {
+                final users = usersSnap.data?.docs ?? [];
+                final waiting = usersSnap.connectionState == ConnectionState.waiting;
+
+                final monthStart = DateTime(DateTime.now().year, DateTime.now().month, 1);
+                int totalEmployees = users.length;
+                int newThisMonth = 0;
+                final Map<String, int> deptMap = {};
+
+                for (final u in users) {
+                  final data = u.data();
+                  final raw = (data['department'] as String?)?.trim().toLowerCase() ?? '';
+                  final dep = _normalizeDept(raw);
+                  deptMap[dep] = (deptMap[dep] ?? 0) + 1;
+
+                  final createdAt = data['createdAt'];
+                  DateTime? created;
+                  if (createdAt is Timestamp) created = createdAt.toDate();
+                  if (createdAt is DateTime) created = createdAt;
+                  if (created != null && created.isAfter(monthStart)) newThisMonth++;
+                }
+
+                return FutureBuilder<_AttendanceQuick>(
+                  future: _attendanceQuick(),
+                  builder: (_, attSnap) {
+                    final att = attSnap.data ?? const _AttendanceQuick();
+
+                    return CustomScrollView(
+                      slivers: [
+                        // ── Animated hero header ──────────────────────────────
+                        SliverToBoxAdapter(
+                          child: _HeroHeader(
+                            anim: _heroAnim,
+                            totalEmployees: totalEmployees,
+                            newThisMonth: newThisMonth,
+                            avgAttendance: att.avgPercent,
+                            leaveToday: att.leaveToday,
+                            loading: waiting,
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Section content (grids/list/etc.)
-                    child,
-                  ],
-                ),
-              ),
+
+                        // ── Department breakdown ──────────────────────────────
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                            child: _SectionLabel(
+                              icon: Icons.donut_small_rounded,
+                              label: 'By Department',
+                            ),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                            child: waiting
+                                ? const _Shimmer(height: 72)
+                                : _DeptRow(deptMap: deptMap, total: totalEmployees),
+                          ),
+                        ),
+
+                        // ── Quick actions ─────────────────────────────────────
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                            child: _SectionLabel(
+                              icon: Icons.bolt_rounded,
+                              label: 'Quick Actions',
+                            ),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
+                          sliver: SliverGrid(
+                            delegate: SliverChildListDelegate([
+                              _ActionCard(
+                                title: 'Add Employee',
+                                subtitle: 'Onboard a new team member',
+                                icon: Icons.person_add_alt_1_rounded,
+                                accent: _p700,
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => const AddEmployeePage())),
+                              ),
+                              _ActionCard(
+                                title: 'All Employees',
+                                subtitle: 'View & manage the full directory',
+                                icon: Icons.groups_rounded,
+                                accent: const Color(0xFF0891B2),
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => const AllEmployeesPage())),
+                              ),
+                              _ActionCard(
+                                title: 'Recommendations',
+                                subtitle: 'Review HR suggestions',
+                                icon: Icons.thumb_up_alt_rounded,
+                                accent: const Color(0xFF16A34A),
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => const HRRecommendationsPage())),
+                              ),
+                              _ActionCard(
+                                title: 'Promotions',
+                                subtitle: 'Manage role transitions',
+                                icon: Icons.trending_up_rounded,
+                                accent: const Color(0xFFB45309),
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => const TransitionsPage())),
+                              ),
+                            ]),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
             ),
-          ),
-        ],
-      ),
     );
   }
 }
 
-class _AnimatedPurpleBg extends StatefulWidget {
-  const _AnimatedPurpleBg({required this.a, required this.b});
-  final Color a;
-  final Color b;
+// ── Animated hero header ──────────────────────────────────────────────────────
+class _HeroHeader extends StatelessWidget {
+  final Animation<double> anim;
+  final int totalEmployees;
+  final int newThisMonth;
+  final double avgAttendance;
+  final int leaveToday;
+  final bool loading;
 
-  @override
-  State<_AnimatedPurpleBg> createState() => _AnimatedPurpleBgState();
-}
-
-class _AnimatedPurpleBgState extends State<_AnimatedPurpleBg> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _t;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat(reverse: true);
-    _t = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  const _HeroHeader({
+    required this.anim,
+    required this.totalEmployees,
+    required this.newThisMonth,
+    required this.avgAttendance,
+    required this.leaveToday,
+    required this.loading,
+  });
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _t,
-      builder: (_, __) {
-        final begin = Alignment.topLeft;
-        final end = Alignment.bottomRight;
-        final a = Alignment.lerp(begin, end, _t.value)!;
-        final b = Alignment.lerp(end, begin, _t.value)!;
+      animation: anim,
+      builder: (context, child) {
+        final t = anim.value;
+        final gradBegin = Alignment.lerp(Alignment.topLeft, Alignment.bottomLeft, t)!;
+        final gradEnd   = Alignment.lerp(Alignment.bottomRight, Alignment.topRight, t)!;
 
         return Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(begin: a, end: b, colors: [widget.a, widget.b]),
-          ),
-          foregroundDecoration: const BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topCenter, end: Alignment.bottomCenter,
-              colors: [Colors.white24, Colors.transparent, Colors.white12], stops: [0.0, 0.55, 1.0],
+              begin: gradBegin,
+              end: gradEnd,
+              colors: const [_p900, _p700, Color(0xFF9333EA)],
+              stops: const [0.0, 0.55, 1.0],
+            ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                  child: Row(children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white, size: 18),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Expanded(
+                      child: Text('Employee Dashboard',
+                          style: GoogleFonts.spaceGrotesk(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                    // Decorative orb
+                    Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.people_rounded,
+                          color: Colors.white70, size: 20),
+                    ),
+                    const SizedBox(width: 8),
+                  ]),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Big stat
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        loading ? '—' : '$totalEmployees',
+                        style: GoogleFonts.spaceGrotesk(
+                            color: Colors.white,
+                            fontSize: 56,
+                            fontWeight: FontWeight.w800,
+                            height: 1.0),
+                      ),
+                      const SizedBox(width: 10),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Total',
+                                style: GoogleFonts.spaceGrotesk(
+                                    color: Colors.white60,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500)),
+                            Text('Employees',
+                                style: GoogleFonts.spaceGrotesk(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      // New badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.white30),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.fiber_new_rounded,
+                              color: Colors.white, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            loading ? '—' : '+$newThisMonth this month',
+                            style: GoogleFonts.spaceGrotesk(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // KPI chips row
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: Row(children: [
+                    _HeroChip(
+                      icon: Icons.how_to_reg_rounded,
+                      label: 'Avg Attendance',
+                      value: loading
+                          ? '—'
+                          : '${avgAttendance.toStringAsFixed(1)}%',
+                      color: const Color(0xFF4ADE80),
+                    ),
+                    const SizedBox(width: 10),
+                    _HeroChip(
+                      icon: Icons.beach_access_rounded,
+                      label: 'On Leave Today',
+                      value: loading ? '—' : '$leaveToday',
+                      color: const Color(0xFFFBBF24),
+                    ),
+                  ]),
+                ),
+              ],
             ),
           ),
         );
@@ -365,80 +396,153 @@ class _AnimatedPurpleBgState extends State<_AnimatedPurpleBg> with SingleTickerP
   }
 }
 
-/* ======================== MODELS & TILES ======================== */
-
-class _AttendanceQuick {
-  final double avgPercent;
-  final int leaveToday;
-  const _AttendanceQuick({this.avgPercent = 0, this.leaveToday = 0});
-}
-
-class _StatTileData {
-  final String title;
-  final String value;
+class _HeroChip extends StatelessWidget {
   final IconData icon;
-  final Color color;
-  const _StatTileData({required this.title, required this.value, required this.icon, required this.color});
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({super.key, required this.data});
-  final _StatTileData data;
-
-  @override
-  Widget build(BuildContext context) {
-    return _CardShell(
-      borderColor: data.color.withOpacity(.22),
-      child: Row(
-        children: [
-          CircleAvatar(radius: 18, backgroundColor: data.color.withOpacity(.10), child: Icon(data.icon, color: data.color)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(data.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: data.color)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeptTileData {
   final String label;
-  final int count;
-  final IconData icon;
-  const _DeptTileData({required this.label, required this.count, required this.icon});
-}
-
-class _DeptTile extends StatelessWidget {
-  const _DeptTile({super.key, required this.data});
-  final _DeptTileData data;
+  final String value;
+  final Color color;
+  const _HeroChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const purple = Color(0xFF3C0765);
-    return _CardShell(
-      child: Row(
-        children: [
-          CircleAvatar(radius: 18, backgroundColor: purple.withOpacity(.08), child: Icon(data.icon, color: purple)),
-          const SizedBox(width: 12),
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Row(children: [
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(data.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.purple, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text('${data.count}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                Text(value,
+                    style: GoogleFonts.spaceGrotesk(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800)),
+                Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.spaceGrotesk(
+                        color: Colors.white60,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500)),
               ],
             ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Department row ────────────────────────────────────────────────────────────
+class _DeptRow extends StatelessWidget {
+  final Map<String, int> deptMap;
+  final int total;
+  const _DeptRow({required this.deptMap, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    if (deptMap.isEmpty) {
+      return Container(
+        height: 72,
+        decoration: BoxDecoration(
+          color: _white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x14000000)),
+        ),
+        child: Center(
+          child: Text('No employees yet',
+              style: GoogleFonts.spaceGrotesk(color: _sub, fontSize: 13)),
+        ),
+      );
+    }
+
+    final sorted = deptMap.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x14000000)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Stacked bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: sorted.map((e) {
+                  final frac = total > 0 ? e.value / total : 0.0;
+                  final color = _deptColors[e.key] ?? _p500;
+                  return Flexible(
+                    flex: (frac * 1000).round(),
+                    child: Container(color: color),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Legend chips
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: sorted.map((e) {
+              final color = _deptColors[e.key] ?? _p500;
+              final pct = total > 0
+                  ? '${(e.value / total * 100).toStringAsFixed(0)}%'
+                  : '0%';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: color.withValues(alpha: 0.2)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 7, height: 7,
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 5),
+                  Text('${e.key}  ',
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 11, fontWeight: FontWeight.w600, color: _ink)),
+                  Text('${e.value}',
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+                  Text('  $pct',
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 10, color: _sub)),
+                ]),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -446,59 +550,142 @@ class _DeptTile extends StatelessWidget {
   }
 }
 
-class _CardShell extends StatelessWidget {
-  const _CardShell({super.key, this.child, this.borderColor});
-  final Widget? child;
-  final Color? borderColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 1.5,
-      margin: EdgeInsets.zero,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: (borderColor ?? const Color(0x22000000)), width: 1.2),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Padding(padding: const EdgeInsets.all(12), child: child),
-    );
-  }
-}
-
-class _DashboardCard extends StatelessWidget {
+// ── Action card ───────────────────────────────────────────────────────────────
+class _ActionCard extends StatelessWidget {
   final String title;
+  final String subtitle;
   final IconData icon;
+  final Color accent;
   final VoidCallback onTap;
-  const _DashboardCard({required this.title, required this.icon, required this.onTap});
 
-  static const Color _darkBlue = Color(0xFF3C0765);
+  const _ActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 1.5,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: _darkBlue.withOpacity(.22), width: 1.2),
-        borderRadius: BorderRadius.circular(14),
-      ),
+    return Material(
+      color: _white,
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(radius: 26, backgroundColor: _darkBlue.withOpacity(.08), child: Icon(icon, size: 26, color: _darkBlue)),
-                const SizedBox(height: 10),
-                Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _darkBlue)),
-              ],
-            ),
+        borderRadius: BorderRadius.circular(18),
+        splashColor: accent.withValues(alpha: 0.08),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0x14000000)),
+            boxShadow: const [
+              BoxShadow(color: Color(0x07000000), blurRadius: 8, offset: Offset(0, 3)),
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top: icon + arrow
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: accent, size: 22),
+                  ),
+                  const Spacer(),
+                  Container(
+                    width: 26, height: 26,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.arrow_forward_rounded,
+                        color: accent, size: 14),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // Title
+              Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _ink)),
+              const SizedBox(height: 3),
+              Text(subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.spaceGrotesk(
+                      fontSize: 10.5,
+                      color: _sub,
+                      fontWeight: FontWeight.w500)),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+// ── Section label ─────────────────────────────────────────────────────────────
+class _SectionLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _SectionLabel({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(
+        width: 28, height: 28,
+        decoration: BoxDecoration(
+          color: _p200,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: _p700, size: 15),
+      ),
+      const SizedBox(width: 8),
+      Text(label,
+          style: GoogleFonts.spaceGrotesk(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: _ink)),
+    ]);
+  }
+}
+
+// ── Shimmer placeholder ───────────────────────────────────────────────────────
+class _Shimmer extends StatelessWidget {
+  final double height;
+  const _Shimmer({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: _p200,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(color: _p700, strokeWidth: 2),
+      ),
+    );
+  }
+}
+
+// ── Data models ───────────────────────────────────────────────────────────────
+class _AttendanceQuick {
+  final double avgPercent;
+  final int leaveToday;
+  const _AttendanceQuick({this.avgPercent = 0, this.leaveToday = 0});
 }

@@ -17,6 +17,8 @@
 //   circle_flags: ^3.0.1
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:circle_flags/circle_flags.dart';
@@ -24,7 +26,7 @@ import 'package:circle_flags/circle_flags.dart';
 import 'customer_order_summary.dart';
 import 'customer_details.dart';
 
-class CustomerListView extends StatelessWidget {
+class CustomerListView extends StatefulWidget {
   final String userId;
   final String email; // agent email
 
@@ -33,6 +35,21 @@ class CustomerListView extends StatelessWidget {
     required this.userId,
     required this.email,
   });
+
+  @override
+  State<CustomerListView> createState() => _CustomerListViewState();
+}
+
+class _CustomerListViewState extends State<CustomerListView> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   String _extractAgentName(String email) {
     final namePart = email.split('@')[0];
@@ -51,14 +68,12 @@ class CustomerListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final agentName = _extractAgentName(email);
+    final agentName = _extractAgentName(widget.email);
 
     return Scaffold(
 
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('customers')
-            .where('agentName', isEqualTo: agentName)
+        stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.customers).where('agentName', isEqualTo: agentName)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -130,7 +145,7 @@ class CustomerListView extends StatelessWidget {
                                   ? ClipOval(child: CircleFlag(countryCode, size: 44))
                                   : Text(
                                 _initials(name),
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.ubuntu(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 16,
                                   color: Colors.blue.shade800,
@@ -147,7 +162,7 @@ class CustomerListView extends StatelessWidget {
                                     name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ubuntu(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
                                       color: Colors.blueGrey.shade900,
@@ -164,7 +179,7 @@ class CustomerListView extends StatelessWidget {
                                           country.isEmpty ? '—' : country,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.inter(
+                                          style: GoogleFonts.ubuntu(
                                             fontSize: 11,
                                             color: Colors.blueGrey.shade600,
                                             fontWeight: FontWeight.w600,
@@ -177,7 +192,7 @@ class CustomerListView extends StatelessWidget {
                               ),
                             ),
                             // Actions:
-                            // 1) Receipt ➜ per-customer summary (requires email)
+                            // 1) Receipt ➜ per-customer summary (requires widget.email)
                             IconButton(
                               icon: const Icon(Icons.receipt_long),
                               tooltip: 'Order Summary (this customer)',
@@ -185,7 +200,7 @@ class CustomerListView extends StatelessWidget {
                                 if (customerEmail.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
-                                      content: Text('No email set for this customer. Add an email to view order summary.'),
+                                      content: Text('No widget.email set for this customer. Add an widget.email to view order summary.'),
                                     ),
                                   );
                                   return;
@@ -198,7 +213,7 @@ class CustomerListView extends StatelessWidget {
                                 );
                               },
                             ),
-                            // 2) Edit ➜ open profile (by id, with email hint)
+                            // 2) Edit ➜ open profile (by id, with widget.email hint)
                             IconButton(
                               icon: const Icon(Icons.edit_outlined),
                               tooltip: 'Edit Customer',
@@ -212,8 +227,7 @@ class CustomerListView extends StatelessWidget {
                                 final ok = await _confirmDelete(context, name);
                                 if (ok != true) return;
                                 try {
-                                  await FirebaseFirestore.instance
-                                      .collection('customers')
+                                  await (await DB.col(C.customers))
                                       .doc(customer.id)
                                       .delete();
                                   if (context.mounted) {
@@ -238,7 +252,7 @@ class CustomerListView extends StatelessWidget {
                         // Per-customer ORDER UPDATE (compact live snapshot)
                         if (customerEmail.isNotEmpty)
                           _PerCustomerOrdersRow(
-                            agentEmail: email,
+                            agentEmail: widget.email,
                             customerEmail: customerEmail,
                           ),
 
@@ -274,7 +288,7 @@ class CustomerListView extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 address,
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.ubuntu(
                                   fontSize: 13,
                                   color: Colors.blueGrey.shade700,
                                   fontWeight: FontWeight.w600,
@@ -292,7 +306,7 @@ class CustomerListView extends StatelessWidget {
                             const SizedBox(width: 6),
                             Text(
                               'Agent: $agent',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ubuntu(
                                 fontSize: 12,
                                 color: Colors.blueGrey.shade600,
                                 fontWeight: FontWeight.w600,
@@ -342,7 +356,7 @@ class CustomerListView extends StatelessWidget {
           child: Text(
             label.isEmpty ? '—' : label,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ubuntu(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: Colors.blue.shade900,
@@ -369,14 +383,29 @@ class CustomerListView extends StatelessWidget {
 /// - Orders count
 /// - Last order date
 /// - Total amount (sum of grandTotal or total)
-class _PerCustomerOrdersRow extends StatelessWidget {
-  final String agentEmail;     // current agent
-  final String customerEmail;  // this card's customer
+class _PerCustomerOrdersRow extends StatefulWidget {
+  final String agentEmail;
+  final String customerEmail;
 
   const _PerCustomerOrdersRow({
     required this.agentEmail,
     required this.customerEmail,
   });
+
+  @override
+  State<_PerCustomerOrdersRow> createState() => _PerCustomerOrdersRowState();
+}
+
+class _PerCustomerOrdersRowState extends State<_PerCustomerOrdersRow> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   num _extractTotal(Map<String, dynamic> inv) {
     final gt = inv['grandTotal'];
@@ -408,11 +437,10 @@ class _PerCustomerOrdersRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Per-customer invoices for THIS agent
-    final q = FirebaseFirestore.instance
-        .collection('invoices')
-        .where('agentEmail', isEqualTo: agentEmail)
-        .where('customerEmail', isEqualTo: customerEmail);
+    if (_cid.isEmpty) return const SizedBox.shrink();
+    final q = DB.colSync(_cid, C.invoices)
+        .where('agentEmail', isEqualTo: widget.agentEmail)
+        .where('customerEmail', isEqualTo: widget.customerEmail);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: q.snapshots(),
@@ -499,7 +527,7 @@ class _StatPill extends StatelessWidget {
             child: Text(
               '$label: $value',
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ubuntu(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: Colors.blueGrey.shade900,

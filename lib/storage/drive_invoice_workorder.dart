@@ -9,7 +9,7 @@ import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 /// Folder IDs from Drive links provided
 const Map<String, String> _folderIds = {
@@ -155,8 +155,13 @@ class _DocumentUploadPageState extends State<DocumentUploadPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.type == 'invoice' ? 'Upload Invoice' : 'Upload Work Order'),
+        title: Text(
+          widget.type == 'invoice' ? 'Upload Invoice' : 'Upload Work Order',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Center(
         child: _loading

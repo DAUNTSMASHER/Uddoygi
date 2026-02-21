@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
 class TransitionsPage extends StatefulWidget {
   const TransitionsPage({Key? key}) : super(key: key);
@@ -11,6 +13,7 @@ class TransitionsPage extends StatefulWidget {
 }
 
 class _TransitionsPageState extends State<TransitionsPage> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
   String? _selectedDept;
   String? _selectedEmployeeUid;
@@ -49,8 +52,7 @@ class _TransitionsPageState extends State<TransitionsPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
-    final userRef = FirebaseFirestore.instance
-        .collection('users')
+    final userRef = DB.colSync(_cid, C.users)
         .doc(_selectedEmployeeUid);
     final userSnap = await userRef.get();
     final userData = userSnap.data()!;
@@ -59,7 +61,7 @@ class _TransitionsPageState extends State<TransitionsPage> {
         ?? 'Unnamed';
 
     // 1) record in promotions
-    await FirebaseFirestore.instance.collection('promotions').add({
+    await DB.colSync(_cid, C.promotions).add({
       'employeeUid': _selectedEmployeeUid,
       'employeeName': employeeName,
       'department': _selectedDept,
@@ -88,13 +90,23 @@ class _TransitionsPageState extends State<TransitionsPage> {
       const SnackBar(content: Text('Transition recorded & user updated')),
     );
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Promotion & Assignment'),
+        title: const Text('Promotion & Assignment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
@@ -129,8 +141,7 @@ class _TransitionsPageState extends State<TransitionsPage> {
               // Employee dropdown (filtered by lowercase dept)
               if (_selectedDept != null)
                 StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('users')
+                  stream: DB.colSync(_cid, C.users)
                       .where('department', isEqualTo: _selectedDept)
                       .snapshots(),
                   builder: (ctx, snap) {
@@ -250,8 +261,7 @@ class _TransitionsPageState extends State<TransitionsPage> {
 
               // recent entries
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('promotions')
+                stream: DB.colSync(_cid, C.promotions)
                     .orderBy('timestamp', descending: true)
                     .limit(10)
                     .snapshots(),

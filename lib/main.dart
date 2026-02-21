@@ -1,14 +1,16 @@
 // lib/main.dart
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'firebase_options.dart';
 import 'core/routes.dart';
+import 'services/db.dart';
+import 'services/local_storage_service.dart';
+import 'services/app_rules.dart';
 
 // Auth surfaces
 import 'features/auth/presentation/screens/splash_screen.dart';
@@ -79,9 +81,14 @@ Future<void> main() async {
   runApp(const UddyogiApp());
 }
 
-class UddyogiApp extends StatelessWidget {
+class UddyogiApp extends StatefulWidget {
   const UddyogiApp({super.key});
 
+  @override
+  State<UddyogiApp> createState() => _UddyogiAppState();
+}
+
+class _UddyogiAppState extends State<UddyogiApp> {
   String _computeInitialRoute() {
     if (!kIsWeb) return '/';
     final base = Uri.base;
@@ -99,13 +106,16 @@ class UddyogiApp extends StatelessWidget {
       ...appRoutes,
     };
 
+    final ubuntu = GoogleFonts.ubuntuTextTheme();
     return MaterialApp(
-      navigatorKey: messageNavigatorKey, // required for in-app banners/deeplinks
+      navigatorKey: messageNavigatorKey,
       title: 'Uddyogi - Smart Company Management',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.white,
         visualDensity: VisualDensity.adaptivePlatformDensity,
+        textTheme: ubuntu,
+        primaryTextTheme: ubuntu,
       ),
       debugShowCheckedModeBanner: false,
       initialRoute: _computeInitialRoute(),
@@ -129,47 +139,162 @@ class LoginScreenWrapper extends StatefulWidget {
 
 class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
   final _auth = FirebaseAuth.instance;
-  final _db = FirebaseFirestore.instance;
   bool _loading = false;
 
-  Future<void> _handleLogin(String email, String password) async {
+  /// Builds the company-namespaced Auth email (same logic as add_employee_page.dart).
+  /// e.g. john@co.com + CID12345 → john+CID12345@co.com
+  String _authEmail(String realEmail, String cid) {
+    final parts = realEmail.split('@');
+    if (parts.length != 2) return realEmail;
+    return '${parts[0]}+$cid@${parts[1]}';
+  }
+
+  /// Called by LoginScreen after the user enters email + password.
+  /// [companyId] is the verified company ID from Phase 1.
+  /// Tries compound email (john+CID@domain) first, falls back to raw email
+  /// for admin accounts and legacy employees created before this change.
+  Future<void> _handleLogin(
+      String email, String password, String companyId) async {
     setState(() => _loading = true);
     try {
-      final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+      // Save companyId FIRST so DB.col() works immediately after login
+      await LocalStorageService.saveCompanyId(companyId);
 
-      if (!kIsWeb) {
-        await registerForPushNotifications();
+      // Try company-namespaced email first (new employees), then raw email (admin/legacy).
+      // e.g. john@co.com in company ABC12345 → john+ABC12345@co.com in Firebase Auth.
+      final compoundEmail = _authEmail(email, companyId);
+      late final UserCredential cred;
+      try {
+        cred = await _auth.signInWithEmailAndPassword(
+            email: compoundEmail, password: password);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          // Fallback: try raw email (admin or legacy account)
+          cred = await _auth.signInWithEmailAndPassword(
+              email: email, password: password);
+        } else {
+          rethrow;
+        }
       }
-      await DevicePresence.instance.start(); // defensive: ensure presence starts here too
 
-      // Route by department
-      final snap = await _db.collection('users').doc(cred.user!.uid).get();
-      if (!snap.exists) throw Exception('User data not found');
+      if (!kIsWeb) await registerForPushNotifications();
+      await DevicePresence.instance.start();
+
+      // Fetch user doc from new path: data/{companyId}/users/{uid}
+      final snap = await DB.colSync(companyId, C.users)
+          .doc(cred.user!.uid)
+          .get();
+      if (!snap.exists) throw Exception('User data not found.');
 
       final data = snap.data()!;
-      final dept = (data['department'] ?? '').toString().toLowerCase();
 
+      // ── Company ID guard ──────────────────────────────────
+      final userCompanyId =
+          (data['companyId'] ?? '').toString().trim();
+      if (userCompanyId.isNotEmpty &&
+          userCompanyId != companyId.trim()) {
+        await _auth.signOut();
+        throw Exception(
+            'This account does not belong to Company ID $companyId.');
+      }
+
+      // ── Clear any stale pending-reset field ───────────────────────────────
+      // If login succeeded, the password the user typed IS the current Firebase
+      // Auth password. If a _pendingPasswordReset exists in Firestore but the
+      // user already logged in successfully (meaning the reset was already
+      // applied), just clear the field.
+      final pendingPass = (data['_pendingPasswordReset'] as String?)?.trim() ?? '';
+      if (pendingPass.isNotEmpty && cred.user != null) {
+        try {
+          await DB.colSync(companyId, C.users).doc(cred.user!.uid).update({
+            '_pendingPasswordReset': null,
+            '_passwordResetAt':      null,
+            '_passwordResetBy':      null,
+          });
+        } catch (_) {}
+      }
+
+      // Persist session (also keeps companyId in local storage)
+      final role = (data['role'] ?? 'unknown').toString();
+      await LocalStorageService.saveSession(
+          cred.user!.uid, email, role);
+      await LocalStorageService.saveCompanyId(companyId);
+
+      // Load app-level rules — enforced client-side alongside Firebase rules
+      AppRules.instance.loadSession(
+        uid:       cred.user!.uid,
+        companyId: companyId,
+        role:      role,
+      );
+
+      final dept =
+          (data['department'] ?? '').toString().toLowerCase();
       String route;
       switch (dept) {
         case 'admin':     route = '/admin/dashboard';     break;
         case 'hr':        route = '/hr/dashboard';        break;
         case 'marketing': route = '/marketing/dashboard'; break;
         case 'factory':   route = '/factory/dashboard';   break;
-        default: throw Exception('Invalid department: $dept');
+        case 'rnd':       route = '/rnd/dashboard';       break;
+        default:
+          throw Exception('Invalid department: $dept');
       }
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, route);
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Authentication Error: ${e.message}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_friendlyAuthError(e.code)),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                "Hmm, something didn't go as planned. Please try again in a moment."),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Converts Firebase Auth error codes into friendly, human-readable messages.
+  static String _friendlyAuthError(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return "We couldn't find an account with that email. Double-check it and try again.";
+      case 'wrong-password':
+        return "That password doesn't look right. Give it another try.";
+      case 'invalid-credential':
+        return "Your email or password doesn't match our records. Please check and try again.";
+      case 'invalid-email':
+        return "That doesn't look like a valid email address. Could you check it?";
+      case 'user-disabled':
+        return "This account has been disabled. Please contact your administrator.";
+      case 'too-many-requests':
+        return "Too many failed attempts — your account is temporarily locked. Please wait a few minutes and try again.";
+      case 'network-request-failed':
+        return "Looks like you're offline. Please check your internet connection and try again.";
+      case 'email-already-in-use':
+        return "That email is already registered. Try logging in instead.";
+      case 'weak-password':
+        return "That password is a bit too simple. Please use at least 6 characters.";
+      case 'operation-not-allowed':
+        return "Sign-in isn't available right now. Please contact support.";
+      default:
+        return "Something went wrong with signing in. Please try again.";
     }
   }
 

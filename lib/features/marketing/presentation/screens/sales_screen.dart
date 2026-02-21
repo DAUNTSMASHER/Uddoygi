@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
@@ -11,10 +13,16 @@ import 'sales_report_screen.dart';
 import 'order_progress_screen.dart';
 import 'work_order_screen.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
-const Color _ink = Color(0xFF1D5DF1);
-const Color _cardBg = Colors.white;
-const Color _okGreen = Color(0xFF2ECC71);
+// ── Palette ───────────────────────────────────────────────────────────────────
+const Color _bg      = Color(0xFFF7F9FC);
+const Color _primary = Color(0xFF2563EB);
+const Color _primaryDk = Color(0xFF1E3A8A);
+const Color _card    = Color(0xFFFFFFFF);
+const Color _border  = Color(0x14000000);
+const Color _fg      = Color(0xFF0F172A);
+const Color _muted   = Color(0xFF94A3B8);
+const Color _success = Color(0xFF16A34A);
+const Color _warning = Color(0xFFF97316);
 
 class _Feature {
   final IconData icon;
@@ -31,39 +39,33 @@ class SalesScreen extends StatefulWidget {
 }
 
 class _SalesScreenState extends State<SalesScreen> {
-  static const double _fontRegular = 14;
-  static const double _fontLarge   = 16;
-
-  // Session / identity
+  String _cid = '';
   String? userEmail;
-  String? userFullName; // prefer full name; we also fallback to email local-part
+  String? userFullName;
 
-  // Live target watchers
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _curDocSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _curQuerySub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _prevQuerySub;
 
-  // Target values (as set by HR)
   double? _currentMonthTarget;
   double? _previousMonthTarget;
 
-  // KPI values
-  double salesTarget = 0;
-  int    orderCount  = 0; // paid orders (selected month)
-  double totalSales  = 0; // paid amount only (selected month)
+  double salesTarget   = 0;
+  int    orderCount    = 0;
+  double totalSales    = 0;
   bool   targetReached = false;
 
-  // Month picker
   DateTime selectedMonth = DateTime.now();
-
-  // UI state
-  int _activeTabIndex = 0;
-  int _bottomIndex = 0;
+  int _activeTab = 0;
+  int _bottomIdx = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadUserSession();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+    _loadSession();
   }
 
   @override
@@ -74,56 +76,32 @@ class _SalesScreenState extends State<SalesScreen> {
     super.dispose();
   }
 
-  // ——————————————————— Session & profile ———————————————————
-  Future<void> _loadUserSession() async {
+  Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
     if (session == null || !mounted) return;
-
     userEmail = (session['email'] as String?)?.trim();
-
-    // Try reading a proper name from session/users; if missing, fallback to email local-part
     String? sessionName = (session['fullName'] as String?)?.trim();
-
     String? fetchedName;
     if (userEmail != null && userEmail!.isNotEmpty) {
-      final u = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: userEmail)
-          .limit(1)
-          .get();
+      final u = await DB.colSync(_cid, C.users)
+          .where('email', isEqualTo: userEmail).limit(1).get();
       if (u.docs.isNotEmpty) {
         final m = u.docs.first.data();
         fetchedName = (m['fullName'] ?? m['name'] ?? m['displayName'] ?? '').toString().trim();
       }
     }
-
     userFullName = (sessionName?.isNotEmpty == true ? sessionName : fetchedName)?.trim();
-
-    // Fallback to local part of email if full name is missing
     if ((userFullName == null || userFullName!.isEmpty) && (userEmail?.isNotEmpty ?? false)) {
       userFullName = userEmail!.split('@').first;
     }
-
-    if (kDebugMode) {
-      debugPrint('[SalesScreen] Session email="$userEmail", fullName="$userFullName"');
-    }
-
-    // Start watching HR targets (current + previous month)
     _attachTargetListeners();
-
-    // Compute sales for the current month
-    await _calculateUserSales();
+    await _calculateSales();
     if (mounted) setState(() {});
   }
 
-  // ——————————————————— Helpers ———————————————————
   String _periodLabel(DateTime dt) => DateFormat('MMMM yyyy').format(dt);
-
-  String _periodKey(DateTime dt) {
-    final y = dt.year.toString();
-    final m = dt.month.toString().padLeft(2, '0');
-    return '$y-$m';
-  }
+  String _periodKey(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
 
   double _asDouble(dynamic v) {
     if (v == null) return 0.0;
@@ -133,634 +111,355 @@ class _SalesScreenState extends State<SalesScreen> {
 
   String _normalize(String s) => s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
-  /// Extract target from a single budget map using multiple strategies.
-  double? _readTargetFromBudget(Map<String, dynamic>? m) {
+  double? _readTarget(Map<String, dynamic>? m) {
     if (m == null) return null;
-
     final emailLower = (userEmail ?? '').toLowerCase();
     final nameLower  = _normalize(userFullName ?? '');
     final localLower = (userEmail ?? '').split('@').first.toLowerCase();
 
-    // 1) Fast path: index by email
-    final idxEmail = (m['targetsIndexEmail'] as Map?)?.map((k, v) => MapEntry(k.toString().toLowerCase(), v));
+    final idxEmail = (m['targetsIndexEmail'] as Map?)
+        ?.map((k, v) => MapEntry(k.toString().toLowerCase(), v));
     if (idxEmail != null && emailLower.isNotEmpty && idxEmail[emailLower] != null) {
       final v = _asDouble(idxEmail[emailLower]);
-      if (kDebugMode) debugPrint('[SalesScreen] hit targetsIndexEmail => $v');
       if (v > 0) return v;
     }
 
-    // 2) Fast path: index by lower(full name)
-    final idxLower = (m['targetsIndexLower'] as Map?)?.map((k, v) => MapEntry(k.toString().toLowerCase(), v));
+    final idxLower = (m['targetsIndexLower'] as Map?)
+        ?.map((k, v) => MapEntry(k.toString().toLowerCase(), v));
     if (idxLower != null) {
       if (nameLower.isNotEmpty && idxLower[nameLower] != null) {
         final v = _asDouble(idxLower[nameLower]);
-        if (kDebugMode) debugPrint('[SalesScreen] hit targetsIndexLower(name) => $v');
         if (v > 0) return v;
       }
       if (localLower.isNotEmpty && idxLower[localLower] != null) {
         final v = _asDouble(idxLower[localLower]);
-        if (kDebugMode) debugPrint('[SalesScreen] hit targetsIndexLower(local) => $v');
         if (v > 0) return v;
       }
     }
 
-    // 3) Fallback: scan salesTargets list
     final list = (m['salesTargets'] as List?) ?? const [];
-    if (kDebugMode) debugPrint('[SalesScreen] Scanning salesTargets (${list.length})');
-
     for (final e in list) {
       final em  = (e?['email'] ?? '').toString().toLowerCase();
       final nm  = _normalize((e?['name'] ?? '').toString());
       final mx  = _asDouble(e?['maxTarget']);
       final ft  = _asDouble(e?['finalTarget']);
       final eff = ft > 0 ? ft : mx;
-
       final byEmail = emailLower.isNotEmpty && em.isNotEmpty && em == emailLower;
       final byName  = nm.isNotEmpty && (nm == nameLower || nm == localLower);
-
-      if (kDebugMode) {
-        debugPrint('[SalesScreen]   row: name="$nm", email="$em", eff=$eff  match? email=$byEmail name=$byName');
-      }
-
       if ((byEmail || byName) && eff > 0) return eff;
     }
-
     return null;
   }
 
-  void _updateEffectiveTarget() {
+  void _updateTarget() {
     final next = _currentMonthTarget ?? _previousMonthTarget ?? salesTarget;
-    if (next != salesTarget) {
-      setState(() {
-        salesTarget = next;
-        targetReached = (salesTarget <= 0) ? false : totalSales >= salesTarget;
-      });
-    } else {
-      setState(() => targetReached = (salesTarget <= 0) ? false : totalSales >= salesTarget);
-    }
+    setState(() {
+      salesTarget  = next;
+      targetReached = salesTarget > 0 && totalSales >= salesTarget;
+    });
   }
 
-  // ——————————————————— Attach listeners ———————————————————
   void _attachTargetListeners() {
     _curDocSub?.cancel();
     _curQuerySub?.cancel();
     _prevQuerySub?.cancel();
 
     final curKey     = _periodKey(selectedMonth);
-    final prevKey    = _periodKey(DateTime(selectedMonth.year, selectedMonth.month - 1, 1));
+    final prevKey    = _periodKey(DateTime(selectedMonth.year, selectedMonth.month - 1));
     final curPeriod  = _periodLabel(selectedMonth);
-    final prevPeriod = _periodLabel(DateTime(selectedMonth.year, selectedMonth.month - 1, 1));
+    final prevPeriod = _periodLabel(DateTime(selectedMonth.year, selectedMonth.month - 1));
 
-    if (kDebugMode) {
-      debugPrint('[SalesScreen] Attach listeners: curKey=$curKey prevKey=$prevKey curPeriod="$curPeriod" prevPeriod="$prevPeriod"');
-    }
-
-    // A) Primary: listen to the monthly doc by deterministic key (new HR save writes here)
-    _curDocSub = FirebaseFirestore.instance
-        .collection('budgets')
-        .doc(curKey)
-        .snapshots()
-        .listen((doc) {
-      if (kDebugMode) debugPrint('[SalesScreen] doc/$curKey => exists=${doc.exists}');
+    _curDocSub = DB.colSync(_cid, C.budgets).doc(curKey).snapshots().listen((doc) {
       if (doc.exists) {
-        _currentMonthTarget = _readTargetFromBudget(doc.data());
-        if (kDebugMode) debugPrint('[SalesScreen] cur(doc) target => $_currentMonthTarget');
-        _updateEffectiveTarget();
+        _currentMonthTarget = _readTarget(doc.data());
+        _updateTarget();
       }
     });
 
-    // B) Legacy fallback: query by human-readable period (current)
-    _curQuerySub = FirebaseFirestore.instance
-        .collection('budgets')
-        .where('period', isEqualTo: curPeriod)
-        .limit(1)
-        .snapshots()
-        .listen((qs) {
-      if (kDebugMode) debugPrint('[SalesScreen] query period="$curPeriod" size=${qs.docs.length}');
+    _curQuerySub = DB.colSync(_cid, C.budgets)
+        .where('period', isEqualTo: curPeriod).limit(1).snapshots().listen((qs) {
       if (qs.docs.isNotEmpty) {
-        _currentMonthTarget = _readTargetFromBudget(qs.docs.first.data());
-        if (kDebugMode) debugPrint('[SalesScreen] cur (query) target => $_currentMonthTarget');
-        _updateEffectiveTarget();
+        _currentMonthTarget = _readTarget(qs.docs.first.data());
+        _updateTarget();
       }
     });
 
-    // C) Legacy fallback: query by previous period for fallback display
-    _prevQuerySub = FirebaseFirestore.instance
-        .collection('budgets')
-        .where('period', isEqualTo: prevPeriod)
-        .limit(1)
-        .snapshots()
-        .listen((qs) {
-      if (kDebugMode) debugPrint('[SalesScreen] query period="$prevPeriod" size=${qs.docs.length}');
+    _prevQuerySub = DB.colSync(_cid, C.budgets)
+        .where('period', isEqualTo: prevPeriod).limit(1).snapshots().listen((qs) {
       if (qs.docs.isNotEmpty) {
-        _previousMonthTarget = _readTargetFromBudget(qs.docs.first.data());
-        if (kDebugMode) debugPrint('[SalesScreen] prev (query) target => $_previousMonthTarget');
-        _updateEffectiveTarget();
+        _previousMonthTarget = _readTarget(qs.docs.first.data());
+        _updateTarget();
       }
     });
   }
 
-  // ——————————————————— Sales calc (PAID only) ———————————————————
-  Future<void> _calculateUserSales() async {
+  Future<void> _calculateSales() async {
     if (userEmail == null) return;
     final start = DateTime(selectedMonth.year, selectedMonth.month, 1);
     final end   = DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
 
-    final snap = await FirebaseFirestore.instance
-        .collection('invoices')
+    final snap = await DB.colSync(_cid, C.invoices)
         .where('agentEmail', isEqualTo: userEmail)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end))
         .get();
 
-    double paidTotal = 0;
-    int paidCount = 0;
+    double paid = 0;
+    int count   = 0;
 
-    bool _isPaid(Map<String, dynamic> m) {
-      final paidByFlag = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
-      final s = (m['status'] ?? '').toString().toLowerCase();
-      return paidByFlag || s.contains('payment taken') || s.contains('paid');
+    bool isPaid(Map<String, dynamic> m) {
+      final flag   = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
+      final status = (m['status'] ?? '').toString().toLowerCase();
+      return flag || status.contains('payment taken') || status.contains('paid');
     }
 
-    for (var doc in snap.docs) {
+    for (final doc in snap.docs) {
       final m = doc.data();
-      if (_isPaid(m)) {
-        paidTotal += (m['grandTotal'] as num? ?? 0).toDouble();
-        paidCount += 1;
+      if (isPaid(m)) {
+        paid  += (m['grandTotal'] as num? ?? 0).toDouble();
+        count += 1;
       }
     }
 
     if (!mounted) return;
     setState(() {
-      totalSales    = paidTotal;
-      orderCount    = paidCount;
-      targetReached = (salesTarget <= 0) ? false : totalSales >= salesTarget;
+      totalSales    = paid;
+      orderCount    = count;
+      targetReached = salesTarget > 0 && totalSales >= salesTarget;
     });
   }
 
-  // ——————————————————— Month picker ———————————————————
-  Future<void> _selectMonth(BuildContext ctx) async {
+  Future<void> _pickMonth() async {
     final picked = await showDatePicker(
-      context: ctx,
+      context: context,
       initialDate: selectedMonth,
       firstDate: DateTime(2025, 1),
       lastDate: DateTime.now(),
       initialDatePickerMode: DatePickerMode.year,
       builder: (c, w) => Theme(
         data: ThemeData.light().copyWith(
-          colorScheme: const ColorScheme.light(primary: _darkBlue),
+          colorScheme: const ColorScheme.light(primary: _primary),
         ),
         child: w!,
       ),
     );
-
     if (picked != null && picked != selectedMonth) {
       setState(() => selectedMonth = picked);
-      _attachTargetListeners();          // re-watch budgets for the new month
-      await _calculateUserSales();       // recalc paid sales
+      _attachTargetListeners();
+      await _calculateSales();
     }
   }
 
-  // ——————————————————— UI ———————————————————
+  bool _isPaid(Map<String, dynamic> m) {
+    final flag   = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
+    final status = (m['status'] ?? '').toString().toLowerCase();
+    return flag || status.contains('paid') || status.contains('payment taken');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final sw = media.size.width;
-    final isSmall = sw < 360;
-
     if (userEmail == null) {
       return const Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _bg,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // Last 30 days invoices for header counters + recent list
-    final since = DateTime.now().subtract(const Duration(days: 30));
-    final invQuery = FirebaseFirestore.instance
-        .collection('invoices')
+    final since    = DateTime.now().subtract(const Duration(days: 30));
+    final invQuery = DB.colSync(_cid, C.invoices)
         .where('agentEmail', isEqualTo: userEmail)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
         .orderBy('timestamp', descending: true);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _bg,
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: _primaryDk,
+        foregroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: Colors.white,
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text(
-          'Sales Dashboard',
-          style: TextStyle(
-            fontSize: isSmall ? _fontRegular : _fontLarge,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
-        ),
+        title: Text('Sales',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 17)),
         centerTitle: true,
-        elevation: 4,
-        shadowColor: Colors.black26,
-        backgroundColor: _darkBlue,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_darkBlue, _ink],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
       ),
 
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: invQuery.snapshots(),
         builder: (ctx, snap) {
-          final docs = snap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-
-          // Header counters (counts for last 30d)
-          final totalInvoices = docs.length;
-          final paid = docs.where((d) {
-            final m = d.data();
-            final paidByFlag = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
-            final status = (m['status'] ?? '').toString().toLowerCase();
-            return paidByFlag || status.contains('paid') || status.contains('payment taken');
-          }).length;
-          final pending = totalInvoices - paid;
+          final docs = snap.data?.docs ?? [];
+          final totalInv = docs.length;
+          final paidCount = docs.where((d) => _isPaid(d.data())).length;
+          final pendingCount = totalInv - paidCount;
 
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                child: _glassHeader(
-                  totalInvoices: totalInvoices,
-                  paid: paid,
-                  pending: pending,
+                child: _HeroCard(
+                  totalSales: totalSales,
+                  salesTarget: salesTarget,
+                  orderCount: orderCount,
+                  targetReached: targetReached,
+                  selectedMonth: selectedMonth,
+                  totalInv: totalInv,
+                  paidCount: paidCount,
+                  pendingCount: pendingCount,
+                  onPickMonth: _pickMonth,
                 ),
               ),
 
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                sliver: SliverToBoxAdapter(child: _featuresGrid(context)),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(child: _QuickActions(context)),
               ),
 
-              const SliverPadding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                 sliver: SliverToBoxAdapter(
-                  child: Text(
-                    'Recent transactions',
-                    style: TextStyle(
-                      fontSize: _fontLarge,
-                      fontWeight: FontWeight.w900,
-                      color: _darkBlue,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Recent transactions',
+                          style: GoogleFonts.inter(
+                              fontSize: 16, fontWeight: FontWeight.w700, color: _fg)),
+                      Text('Last 30 days',
+                          style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+                    ],
                   ),
                 ),
               ),
 
-              SliverToBoxAdapter(child: _segmentedTabs()),
+              SliverToBoxAdapter(child: _TabBar(active: _activeTab, onChanged: (i) => setState(() => _activeTab = i))),
 
               SliverToBoxAdapter(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: _activeTabIndex == 0
-                      ? _recentInvoicesList(docs)
-                      : (_activeTabIndex == 1 ? _expensesList() : _incomeList()),
+                  duration: const Duration(milliseconds: 160),
+                  child: _activeTab == 0 ? _InvoiceList(docs: docs, onDetail: _showDetail) : _EmptyTab(),
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           );
         },
       ),
 
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: _darkBlue,
-          boxShadow: [
-            BoxShadow(color: Color(0x33000000), blurRadius: 10, offset: Offset(0, -3)),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            currentIndex: _bottomIndex,
-            onTap: (i) {
-              setState(() => _bottomIndex = i);
-              switch (i) {
-                case 0:
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()));
-                  break;
-                case 1:
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()));
-                  break;
-                case 2:
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()));
-                  break;
-                case 3:
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()));
-                  break;
-                case 4:
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()));
-                  break;
-              }
-            },
-            backgroundColor: _darkBlue,
-            selectedItemColor: Colors.white,
-            unselectedItemColor: Colors.white70,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.description_rounded), label: 'New'),
-              BottomNavigationBarItem(icon: Icon(Icons.list_alt_rounded), label: 'Invoices'),
-              BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded), label: 'Work'),
-              BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Reports'),
-              BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded), label: 'Progress'),
-            ],
-          ),
-        ),
+      bottomNavigationBar: _BottomNav(
+        currentIndex: _bottomIdx,
+        onTap: (i) {
+          setState(() => _bottomIdx = i);
+          switch (i) {
+            case 0: Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen())); break;
+            case 1: Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen())); break;
+            case 2: Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen())); break;
+            case 3: Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen())); break;
+            case 4: Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen())); break;
+          }
+        },
       ),
     );
   }
 
-  // ——————————————————— Header ———————————————————
-  Widget _glassHeader({
-    required int totalInvoices,
-    required int paid,
-    required int pending,
-  }) {
-    final achievement = (salesTarget <= 0)
-        ? 0.0
-        : (totalSales / salesTarget * 100).clamp(0.0, 100.0).toDouble();
+  Widget _QuickActions(BuildContext context) {
+    final tiles = [
+      _Feature(Icons.description_rounded,  'New Invoice',  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()))),
+      _Feature(Icons.list_alt_rounded,     'All Invoices', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()))),
+      _Feature(Icons.work_history_rounded, 'Work Orders',  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()))),
+      _Feature(Icons.bar_chart_rounded,    'Reports',      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()))),
+      _Feature(Icons.timeline_rounded,     'Progress',     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()))),
+    ];
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFDEFDF4), Color(0xFFF4FAFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(color: Color(0x12000000), blurRadius: 16, offset: Offset(0, 6)),
-        ],
-        border: Border.all(color: Colors.white, width: 1),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: tiles.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 5,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: .9,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Summary',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: _darkBlue,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _pillButton(
-                icon: Icons.calendar_month_rounded,
-                label: DateFormat.yMMMM().format(selectedMonth),
-                onTap: () => _selectMonth(context),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          LayoutBuilder(
-            builder: (context, c) {
-              final wide = c.maxWidth >= 720;
-              final cross = wide ? 4 : 2;
-              final aspect = wide ? 3.1 : 2.2;
-              return GridView(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cross,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: aspect,
-                ),
-                children: [
-                  _kpiTiny(
-                    label: 'Target',
-                    value: salesTarget > 0 ? '৳${salesTarget.toStringAsFixed(0)}' : '—',
-                    icon: Icons.flag_rounded,
-                    accent: _darkBlue,
-                  ),
-                  _kpiTiny(
-                    label: 'Achieved (Paid)',
-                    value: '৳${totalSales.toStringAsFixed(0)}',
-                    icon: Icons.payments_rounded,
-                    accent: _okGreen,
-                  ),
-                  _kpiTiny(
-                    label: 'Orders (Paid)',
-                    value: '$orderCount',
-                    icon: Icons.receipt_long_rounded,
-                    accent: const Color(0xFF20B2AA),
-                  ),
-                  _kpiTiny(
-                    label: 'Progress',
-                    value: '${achievement.toStringAsFixed(0)}%',
-                    icon: Icons.trending_up_rounded,
-                    accent: _ink,
-                  ),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 10),
-
-          Row(
-            children: [
-              Expanded(child: _pillStat('Total', totalInvoices.toString())),
-              const SizedBox(width: 8),
-              Expanded(child: _pillStat('Paid', paid.toString(), color: const Color(0xFF21C7A8))),
-              const SizedBox(width: 8),
-              Expanded(child: _pillStat('Pending', pending.toString(), color: Colors.orange)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _kpiTiny({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color accent,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 4))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
+      itemBuilder: (_, i) {
+        final f = tiles[i];
+        return GestureDetector(
+          onTap: f.onTap,
+          child: Container(
             decoration: BoxDecoration(
-              color: accent.withOpacity(.12),
-              borderRadius: BorderRadius.circular(10),
+              color: _card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
             ),
-            child: Icon(icon, color: accent, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w700,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: _primary.withOpacity(.08),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Icon(f.icon, color: _primary, size: 20),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: _darkBlue,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                const SizedBox(height: 6),
+                Text(f.label,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                        fontSize: 10, fontWeight: FontWeight.w600, color: _fg)),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pillStat(String label, String value, {Color color = _darkBlue}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(.25)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.circle, size: 8, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              '$label: $value',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ——————————————————— Quick actions ———————————————————
-  Widget _featuresGrid(BuildContext context) {
-    final tiles = <_Feature>[
-      _Feature(Icons.description_rounded, 'New invoice', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()));
-      }),
-      _Feature(Icons.list_alt_rounded, 'All invoices', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()));
-      }),
-      _Feature(Icons.work_history_rounded, 'Work orders', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()));
-      }),
-      _Feature(Icons.bar_chart_rounded, 'Reports', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()));
-      }),
-      _Feature(Icons.timeline_rounded, 'Progress', () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()));
-      }),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, c) {
-        final wide = c.maxWidth >= 720;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: tiles.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: wide ? 5 : 3,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: wide ? 1.15 : .98,
-          ),
-          itemBuilder: (_, i) => _featureTile(tiles[i]),
         );
       },
     );
   }
 
-  Widget _featureTile(_Feature f) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 4)),
-        ],
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: f.onTap,
+  void _showDetail(String id, Map<String, dynamic> m) {
+    final customer = (m['customerName'] ?? 'N/A').toString();
+    final amt      = ((m['grandTotal'] as num?) ?? 0).toDouble();
+    final tracking = (m['tracking_number'] ?? '').toString();
+    final status   = (m['status'] ?? '').toString();
+    final ts       = m['timestamp'];
+    final date     = ts is Timestamp ? ts.toDate() : DateTime.now();
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: _card,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: _darkBlue.withOpacity(.08),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(f.icon, color: _darkBlue),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text(
-                f.label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: _darkBlue,
+            Text(customer,
+                style: GoogleFonts.inter(
+                    fontSize: 18, fontWeight: FontWeight.w700, color: _fg)),
+            const SizedBox(height: 12),
+            _KV('Status',   status.isEmpty ? '—' : status),
+            _KV('Tracking', tracking.isEmpty ? '—' : tracking),
+            _KV('Date',     DateFormat('dd MMM, yyyy').format(date)),
+            _KV('Amount',   '৳${amt.toStringAsFixed(0)}'),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                    context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: Text('Open Invoice',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _primary,
+                  side: const BorderSide(color: _primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
             ),
@@ -769,42 +468,256 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
   }
+}
 
-  Widget _segmentedTabs() {
-    final tabs = ['All invoices', 'Expenses', 'Income'];
+Widget _KV(String k, String v) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(k,
+              style: GoogleFonts.inter(fontSize: 12, color: _muted, fontWeight: FontWeight.w500)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(v,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: _fg)),
+        ),
+      ],
+    ),
+  );
+}
+
+// ── Hero card ─────────────────────────────────────────────────────────────────
+class _HeroCard extends StatelessWidget {
+  final double totalSales;
+  final double salesTarget;
+  final int orderCount;
+  final bool targetReached;
+  final DateTime selectedMonth;
+  final int totalInv;
+  final int paidCount;
+  final int pendingCount;
+  final VoidCallback onPickMonth;
+
+  const _HeroCard({
+    required this.totalSales,
+    required this.salesTarget,
+    required this.orderCount,
+    required this.targetReached,
+    required this.selectedMonth,
+    required this.totalInv,
+    required this.paidCount,
+    required this.pendingCount,
+    required this.onPickMonth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final achievement = salesTarget <= 0
+        ? 0.0
+        : (totalSales / salesTarget * 100).clamp(0.0, 100.0);
+
     return Container(
-      margin: const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 6),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_primary, _primaryDk],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+              color: _primary.withOpacity(.25),
+              blurRadius: 16,
+              offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Month picker row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Sales Summary',
+                  style: GoogleFonts.inter(
+                      color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+              GestureDetector(
+                onTap: onPickMonth,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.2),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_month_rounded,
+                          color: Colors.white, size: 14),
+                      const SizedBox(width: 5),
+                      Text(DateFormat.yMMMM().format(selectedMonth),
+                          style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Big sales number
+          Text(
+            '৳${totalSales.toStringAsFixed(0)}',
+            style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                height: 1),
+          ),
+          Text('Total paid sales',
+              style: GoogleFonts.inter(color: Colors.white60, fontSize: 13)),
+          const SizedBox(height: 14),
+
+          // Progress bar
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Target progress',
+                            style: GoogleFonts.inter(
+                                color: Colors.white70, fontSize: 11)),
+                        Text('${achievement.toStringAsFixed(0)}%',
+                            style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: achievement / 100,
+                        minHeight: 6,
+                        backgroundColor: Colors.white24,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            targetReached ? Colors.greenAccent.shade400 : Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // KPI row
+          Row(
+            children: [
+              _KpiChip(label: 'Target',  value: salesTarget > 0 ? '৳${salesTarget.toStringAsFixed(0)}' : '—'),
+              const SizedBox(width: 8),
+              _KpiChip(label: 'Orders',  value: '$orderCount'),
+              const SizedBox(width: 8),
+              _KpiChip(label: 'Paid',    value: '$paidCount', color: Colors.greenAccent.shade400),
+              const SizedBox(width: 8),
+              _KpiChip(label: 'Pending', value: '$pendingCount', color: Colors.orange.shade300),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KpiChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+  const _KpiChip({required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(value,
+                style: GoogleFonts.inter(
+                    color: color ?? Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: GoogleFonts.inter(
+                    color: Colors.white60, fontSize: 10, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+class _TabBar extends StatelessWidget {
+  final int active;
+  final ValueChanged<int> onChanged;
+  const _TabBar({required this.active, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    const tabs = ['All Invoices', 'Expenses', 'Income'];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _card,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 3))],
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: List.generate(tabs.length, (i) {
-          final selected = i == _activeTabIndex;
+          final sel = i == active;
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _activeTabIndex = i),
+              onTap: () => onChanged(i),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
+                duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: selected ? const Color(0xFF21C7A8).withOpacity(.12) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(22),
+                  color: sel ? _primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(24),
                 ),
                 child: Center(
-                  child: Text(
-                    tabs[i],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? const Color(0xFF21C7A8) : _darkBlue,
-                    ),
-                  ),
+                  child: Text(tabs[i],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: sel ? Colors.white : _muted)),
                 ),
               ),
             ),
@@ -813,331 +726,219 @@ class _SalesScreenState extends State<SalesScreen> {
       ),
     );
   }
+}
 
-  // ——————————————————— Lists ———————————————————
-  Widget _recentInvoicesList(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+// ── Invoice list ──────────────────────────────────────────────────────────────
+class _InvoiceList extends StatelessWidget {
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
+  final void Function(String, Map<String, dynamic>) onDetail;
+  const _InvoiceList({required this.docs, required this.onDetail});
+
+  bool _isPaid(Map<String, dynamic> m) {
+    final flag   = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
+    final status = (m['status'] ?? '').toString().toLowerCase();
+    return flag || status.contains('paid') || status.contains('payment taken');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     if (docs.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        child: _emptyCard('No invoices in the last 30 days'),
-      );
-    }
-    return Column(
-      key: const ValueKey('invoices'),
-      children: [
-        const SizedBox(height: 6),
-        ...docs.take(15).map((d) => _invoiceRow(d.id, d.data())).toList(),
-      ],
-    );
-  }
-
-  Widget _expensesList() {
-    return Padding(
-      key: const ValueKey('expenses'),
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      child: _emptyCard('No expenses recorded'),
-    );
-  }
-
-  Widget _incomeList() {
-    return Padding(
-      key: const ValueKey('income'),
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      child: _emptyCard('No income records'),
-    );
-  }
-
-  Widget _emptyCard(String msg) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 3))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _darkBlue.withOpacity(.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.inbox, color: _darkBlue),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              msg,
-              style: TextStyle(
-                color: Colors.grey.shade700,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _invoiceRow(String id, Map<String, dynamic> m) {
-    final customer = (m['customerName'] ?? 'N/A').toString();
-    final amt      = ((m['grandTotal'] as num?) ?? 0).toDouble();
-    final tracking = (m['tracking_number'] ?? '').toString();
-    final status   = (m['status'] ?? '').toString();
-    final ts       = m['timestamp'];
-    final date     = ts is Timestamp ? ts.toDate() : DateTime.now();
-
-    final isPaid = () {
-      final paidByFlag = (m['payment'] is Map) && ((m['payment']['taken'] as bool?) ?? false);
-      final s = status.toLowerCase();
-      return paidByFlag || s.contains('paid') || s.contains('payment taken');
-    }();
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12.withOpacity(.06)),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 3))],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: (isPaid ? const Color(0xFF21C7A8) : Colors.orange).withOpacity(.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(isPaid ? Icons.check_circle : Icons.schedule,
-                color: isPaid ? const Color(0xFF21C7A8) : Colors.orange),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => _showDetails(id, m),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    customer,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: _darkBlue,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      _statusDot(isPaid ? 'Paid' : 'Unpaid',
-                          color: isPaid ? const Color(0xFF21C7A8) : Colors.orange),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          tracking.isEmpty
-                              ? DateFormat('dd MMM, yyyy').format(date)
-                              : tracking,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '৳${amt.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              color: _darkBlue,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statusDot(String text, {required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.circle, size: 8, color: color),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ——————————————————— Shared UI helpers ———————————————————
-  Widget _pillButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
+        padding: const EdgeInsets.all(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.black12.withOpacity(.06)),
-            boxShadow: const [
-              BoxShadow(color: Color(0x12000000), blurRadius: 10, offset: Offset(0, 3)),
-            ],
-            gradient: const LinearGradient(
-              colors: [Color(0xFFF8FBFF), Color(0xFFF5FFFB)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: _card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
           ),
           child: Row(
             children: [
-              Icon(icon, color: _darkBlue, size: 18),
-              const SizedBox(width: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: const TextStyle(
-                    color: _darkBlue,
-                    fontSize: _fontRegular,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: _primary.withOpacity(.08),
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                child: const Icon(Icons.inbox_rounded, color: _primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('No invoices in the last 30 days',
+                    style: GoogleFonts.inter(color: _muted, fontSize: 14)),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  void _showDetails(String id, Map<String, dynamic> m) {
-    final customer = (m['customerName'] ?? 'N/A').toString();
-    final amt = ((m['grandTotal'] as num?) ?? 0).toDouble();
-    final tracking = (m['tracking_number'] ?? '').toString();
-    final status   = (m['status'] ?? '').toString();
-    final ts       = m['timestamp'];
-    final date = ts is Timestamp ? ts.toDate() : DateTime.now();
+    return Column(
+      key: const ValueKey('invoices'),
+      children: docs.take(20).map((d) {
+        final m        = d.data();
+        final customer = (m['customerName'] ?? 'N/A').toString();
+        final amt      = ((m['grandTotal'] as num?) ?? 0).toDouble();
+        final tracking = (m['tracking_number'] ?? '').toString();
+        final status   = (m['status'] ?? '').toString();
+        final ts       = m['timestamp'];
+        final date     = ts is Timestamp ? ts.toDate() : DateTime.now();
+        final paid     = _isPaid(m);
+        final color    = paid ? _success : _warning;
 
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                customer,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: _darkBlue,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _kv('Status', status.isEmpty ? '—' : status),
-              _kv('Tracking', tracking.isEmpty ? '—' : tracking),
-              _kv('Date', DateFormat('dd MMM, yyyy').format(date)),
-              _kv('Amount', '৳${amt.toStringAsFixed(0)}'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AllInvoicesScreen()),
-                      ),
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Go to invoice'),
-                      style: OutlinedButton.styleFrom(foregroundColor: _darkBlue),
-                    ),
+        return GestureDetector(
+          onTap: () => onDetail(d.id, m),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _border),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ],
-              ),
-              const SizedBox(height: 6),
-            ],
+                  child: Icon(
+                      paid ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                      color: color, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(customer,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700, fontSize: 14, color: _fg)),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          _StatusPill(
+                              label: paid ? 'Paid' : 'Pending', color: color),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              tracking.isEmpty
+                                  ? DateFormat('dd MMM, yyyy').format(date)
+                                  : tracking,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(fontSize: 12, color: _muted),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('৳${amt.toStringAsFixed(0)}',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w800, fontSize: 14, color: _fg)),
+              ],
+            ),
           ),
         );
-      },
+      }).toList(),
     );
   }
+}
 
-  Widget _kv(String k, String v) {
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatusPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(.3)),
+      ),
+      child: Text(label,
+          style: GoogleFonts.inter(
+              fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+    );
+  }
+}
+
+class _EmptyTab extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              k,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w600,
+      padding: const EdgeInsets.all(20),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: _primary.withOpacity(.08),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: const Icon(Icons.inbox_rounded, color: _primary),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              v,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: _darkBlue,
-              ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('No records to show',
+                  style: GoogleFonts.inter(color: _muted, fontSize: 14)),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Bottom nav ────────────────────────────────────────────────────────────────
+class _BottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  const _BottomNav({required this.currentIndex, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _primaryDk,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 10, offset: const Offset(0, -2))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: currentIndex,
+          onTap: onTap,
+          backgroundColor: _primaryDk,
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.white60,
+          selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 10),
+          unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 10),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.description_rounded),  label: 'New'),
+            BottomNavigationBarItem(icon: Icon(Icons.list_alt_rounded),     label: 'Invoices'),
+            BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded), label: 'Work'),
+            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded),    label: 'Reports'),
+            BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded),     label: 'Progress'),
+          ],
+        ),
       ),
     );
   }

@@ -1,21 +1,40 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-const Color _darkBlue = Color(0xFF0D47A1);
-class IncentiveHistoryScreen extends StatelessWidget {
+const Color _darkBlue = Color(0xFF2A0A4B);
+class IncentiveHistoryScreen extends StatefulWidget {
   const IncentiveHistoryScreen({super.key});
 
   @override
+  State<IncentiveHistoryScreen> createState() => _IncentiveHistoryScreenState();
+}
+
+class _IncentiveHistoryScreenState extends State<IncentiveHistoryScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final incentivesRef = FirebaseFirestore.instance.collection('marketing_incentives');
+    final incentivesRef = _cid.isEmpty ? null : DB.colSync(_cid, C.marketingIncentives);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(('Incentive History') , style: TextStyle(color: Colors.white)),
+        title: const Text('Incentive History', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: incentivesRef.snapshots(),
+        stream: incentivesRef?.snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 

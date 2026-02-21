@@ -1,4 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -14,6 +16,7 @@ class BalanceUpdateScreen extends StatefulWidget {
 }
 
 class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
+  String _cid = '';
   // ---------- UI helpers ----------
   final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳');
   final _dateFmt = DateFormat('yyyy-MM-dd');
@@ -55,6 +58,9 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     final now = DateTime.now();
     _periodStart = DateTime(now.year, now.month, 1);
     _periodEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
@@ -68,14 +74,12 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
   }
 
   // ---------- Queries (respecting date range) ----------
-  Query _ledgerQuery() => FirebaseFirestore.instance
-      .collection('ledger')
+  Query _ledgerQuery() => DB.colSync(_cid, C.ledger)
       .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(_periodStart))
       .where('date', isLessThanOrEqualTo: Timestamp.fromDate(_periodEnd))
       .orderBy('date', descending: true);
 
-  Query _expensesQuery() => FirebaseFirestore.instance
-      .collection('expenses')
+  Query _expensesQuery() => DB.colSync(_cid, C.expenses)
       .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(_periodStart))
       .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(_periodEnd))
       .orderBy('dueDate', descending: true);
@@ -287,14 +291,12 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
   // ---------- Recent updates (global) ----------
   Future<void> _openHistoryDialog() async {
     try {
-      final ledger = await FirebaseFirestore.instance
-          .collection('ledger')
+      final ledger = await DB.colSync(_cid, C.ledger)
           .orderBy('date', descending: true)
           .limit(20)
           .get();
 
-      final expenses = await FirebaseFirestore.instance
-          .collection('expenses')
+      final expenses = await DB.colSync(_cid, C.expenses)
           .orderBy('dueDate', descending: true)
           .limit(20)
           .get();
@@ -473,7 +475,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
     }
     final profit = totalCredit - totalExpense;
 
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
 
     pdf.addPage(
       pw.MultiPage(

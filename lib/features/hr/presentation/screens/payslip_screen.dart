@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class PayslipScreen extends StatefulWidget {
   const PayslipScreen({super.key});
@@ -12,6 +14,7 @@ class PayslipScreen extends StatefulWidget {
 }
 
 class _PayslipScreenState extends State<PayslipScreen> {
+  String _cid = '';
   /* ===== Theme ===== */
   static const Color _primary = Color(0xFF25BC5F);
   static const Color _primaryDark = Color(0xFF065F46);
@@ -92,8 +95,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
     String? employeeUid,
     String? employeeId,
   }) async {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('payrolls')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.payrolls)
         .where('period', isEqualTo: period)
         .where('status', isEqualTo: 'disbursed')
         .limit(1);
@@ -137,7 +139,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
         return;
       }
 
-      final notifRef = await FirebaseFirestore.instance.collection('notifications').add({
+      final notifRef = await (await DB.col(C.notifications)).add({
         'type': 'payslip_disbursement',
         'toUid': toUid.isEmpty ? null : toUid,
         'toEmail': toEmail.isEmpty ? null : toEmail,
@@ -206,7 +208,7 @@ class _PayslipScreenState extends State<PayslipScreen> {
   }
 
   Future<void> _downloadPayslip(Map<String, dynamic> data) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     final gross = _asNum(data['grossSalary']);
     final bonus = _asNum(data['bonus']);
     final loan = _asNum(data['loanDeduction']);
@@ -242,11 +244,18 @@ class _PayslipScreenState extends State<PayslipScreen> {
   }
 
   /* ========================= UI ========================= */
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    final q = FirebaseFirestore.instance
-        .collection('payrolls')
+    final q = DB.colSync(_cid, C.payrolls)
         .where('period', isEqualTo: _selectedPeriod)
         .orderBy('generatedAt', descending: true)
         .snapshots();

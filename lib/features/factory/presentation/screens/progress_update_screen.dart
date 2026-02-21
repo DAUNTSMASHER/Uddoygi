@@ -1,5 +1,8 @@
 // lib/features/factory/presentation/screens/progress_update_screen.dart
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -41,7 +44,7 @@ class _MetricCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Corner watermark icon (subtle, doesn’t fight the number)
+          // Corner watermark icon (subtle, doesnâ€™t fight the number)
           Positioned(
             right: 10,
             top: 10,
@@ -53,7 +56,7 @@ class _MetricCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Label — keep tiny per your 6–8sp guidance
+                // Label â€” keep tiny per your 6â€“8sp guidance
                 const SizedBox(height: 2),
                 Text(
                   title,
@@ -67,7 +70,7 @@ class _MetricCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                // Value — slightly larger for contrast
+                // Value â€” slightly larger for contrast
                 Text(
                   value,
                   maxLines: 1,
@@ -101,6 +104,7 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
+  String _cid = '';
   String? _selectedOrderNo;
   String? _selectedOrderDocId;
   Future<DocumentSnapshot<Map<String, dynamic>>>? _orderDocFuture;
@@ -122,6 +126,19 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     'Submit to the Head office', // terminal
   ];
 
+  /// Bangla display labels for each stage
+  static const Map<String, String> _stageBn = {
+    'Submitted to factory': 'à¦•à¦¾à¦°à¦–à¦¾à¦¨à¦¾à¦¯à¦¼ à¦œà¦®à¦¾ à¦¦à§‡à¦“à¦¯à¦¼à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡',
+    'Factory update 1 (base is done)': 'à¦†à¦ªà¦¡à§‡à¦Ÿ à§§ (à¦¬à§‡à¦¸ à¦¸à¦®à§à¦ªà¦¨à§à¦¨)',
+    'Hair is ready': 'à¦šà§à¦² à¦ªà§à¦°à¦¸à§à¦¤à§à¦¤',
+    'Knotting is going on': 'à¦¨à¦Ÿà¦¿à¦‚ à¦šà¦²à¦›à§‡',
+    'Putting': 'à¦ªà§à¦Ÿà¦¿à¦‚',
+    'Molding': 'à¦®à§‹à¦²à§à¦¡à¦¿à¦‚',
+    'Submit to the Head office': 'à¦ªà§à¦°à¦§à¦¾à¦¨ à¦•à¦¾à¦°à§à¦¯à¦¾à¦²à¦¯à¦¼à§‡ à¦œà¦®à¦¾',
+  };
+
+  String _stageName(String s) => _stageBn[s] ?? s;
+
   int _stageIndex(String? name) {
     if (name == null) return -1;
     final i = _stages.indexOf(name);
@@ -131,16 +148,14 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
   bool _isTerminal(String? stage) => stage == _stages.last;
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _acceptedOrdersStream =>
-      FirebaseFirestore.instance
-          .collection('work_orders')
+      DB.colSync(_cid, C.workOrders)
           .where('status', isEqualTo: 'Accepted')
           .orderBy('lastUpdated', descending: true)
           .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _trackingStream {
     if (_selectedOrderNo == null) return const Stream.empty();
-    return FirebaseFirestore.instance
-        .collection('work_order_tracking')
+    return DB.colSync(_cid, C.workOrderTracking)
         .where('workOrderNo', isEqualTo: _selectedOrderNo)
         .orderBy('createdAt', descending: true)
         .snapshots();
@@ -150,7 +165,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     if (_selectedNextStage == null || _selectedOrderNo == null || _selectedOrderDocId == null) return;
 
     // Validate forward-only move
-    final orderRef = FirebaseFirestore.instance.collection('work_orders').doc(_selectedOrderDocId);
+    final orderRef = DB.colSync(_cid, C.workOrders).doc(_selectedOrderDocId);
     final orderSnap = await orderRef.get();
     final orderData = orderSnap.data() ?? {};
     final currentStage = (orderData['currentStage'] as String?) ?? _stages.first;
@@ -161,7 +176,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('You cannot move backward or repeat the same stage.'),
+          content: const Text('à¦†à¦ªà¦¨à¦¿ à¦ªà§‡à¦›à¦¨à§‡ à¦¯à§‡à¦¤à§‡ à¦¬à¦¾ à¦à¦•à¦‡ à¦§à¦¾à¦ª à¦ªà§à¦¨à¦°à¦¾à¦¯à¦¼ à¦¨à¦¿à¦°à§à¦¬à¦¾à¦šà¦¨ à¦•à¦°à¦¤à§‡ à¦ªà¦¾à¦°à¦¬à§‡à¦¨ à¦¨à¦¾à¥¤'),
           backgroundColor: Colors.red.shade600,
         ),
       );
@@ -169,10 +184,10 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     }
 
     final now = Timestamp.now();
-    final batch = FirebaseFirestore.instance.batch();
+    final batch = DB.firestore.batch();
 
     // Log to tracking collection
-    final trackingRef = FirebaseFirestore.instance.collection('work_order_tracking').doc();
+    final trackingRef = DB.colSync(_cid, C.workOrderTracking).doc();
     batch.set(trackingRef, {
       'workOrderNo': _selectedOrderNo,
       'stage': _selectedNextStage,
@@ -209,15 +224,15 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
       _assignedCtl.clear();
       _timeLimit = DateTime.now().add(const Duration(days: 1));
       _orderDocFuture =
-          FirebaseFirestore.instance.collection('work_orders').doc(_selectedOrderDocId!).get();
+          DB.colSync(_cid, C.workOrders).doc(_selectedOrderDocId!).get();
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           isTerminalMove
-              ? '🎉 Work order submitted to Head Office. Progress 100%. Next step: Address Validation of the Customer.'
-              : 'Stage updated to "${_stages[nextIdx]}".',
+              ? 'ðŸŽ‰ à¦“à¦¯à¦¼à¦¾à¦°à§à¦• à¦…à¦°à§à¦¡à¦¾à¦° à¦ªà§à¦°à¦§à¦¾à¦¨ à¦•à¦¾à¦°à§à¦¯à¦¾à¦²à¦¯à¦¼à§‡ à¦œà¦®à¦¾ à¦¦à§‡à¦“à¦¯à¦¼à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤ à¦…à¦—à§à¦°à¦—à¦¤à¦¿ à§§à§¦à§¦%à¥¤ à¦ªà¦°à¦¬à¦°à§à¦¤à§€ à¦§à¦¾à¦ª: à¦•à§à¦°à§‡à¦¤à¦¾à¦° à¦ à¦¿à¦•à¦¾à¦¨à¦¾ à¦¯à¦¾à¦šà¦¾à¦‡à¥¤'
+              : 'à¦§à¦¾à¦ª à¦†à¦ªà¦¡à§‡à¦Ÿ à¦¹à¦¯à¦¼à§‡à¦›à§‡: "${_stageName(_stages[nextIdx])}"à¥¤',
         ),
         backgroundColor: isTerminalMove ? Colors.green.shade700 : null,
       ),
@@ -230,7 +245,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
       initialDate: _timeLimit,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'Select deadline',
+      helpText: 'à¦¸à¦®à¦¯à¦¼à¦¸à§€à¦®à¦¾ à¦¨à¦¿à¦°à§à¦¬à¦¾à¦šà¦¨ à¦•à¦°à§à¦¨',
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -250,11 +265,11 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     super.dispose();
   }
 
-  // ——————————— UI helpers ———————————
+  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” UI helpers â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 
   PreferredSizeWidget _appBar() {
     return AppBar(
-      title: Text(_selectedOrderNo == null ? 'Factory Progress' : 'Order $_selectedOrderNo'),
+      title: Text(_selectedOrderNo == null ? 'à¦•à¦¾à¦°à¦–à¦¾à¦¨à¦¾à¦° à¦…à¦—à§à¦°à¦—à¦¤à¦¿' : 'à¦…à¦°à§à¦¡à¦¾à¦° $_selectedOrderNo'),
       centerTitle: true,
       foregroundColor: Colors.white,
       backgroundColor: Colors.red,
@@ -326,7 +341,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
               label: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 220),
                 child: Text(
-                  s,
+                  _stageName(s),
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: fg, fontSize: 12),
                 ),
@@ -362,17 +377,17 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Progress: ${(progress * 100).toStringAsFixed(0)}%',
+          'à¦…à¦—à§à¦°à¦—à¦¤à¦¿: ${(progress * 100).toStringAsFixed(0)}%',
           style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
-  // ——————————— Dashboard ———————————
+  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” Dashboard â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 
   String _formatAvg(Duration? d) {
-    if (d == null || d.inSeconds <= 0) return '—';
+    if (d == null || d.inSeconds <= 0) return 'â€”';
     if (d.inDays >= 1) return '${d.inDays}d';
     if (d.inHours >= 1) return '${d.inHours}h';
     return '${d.inMinutes}m';
@@ -424,30 +439,30 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
           crossAxisCount: 2,
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
-          // ↓ More compact cards; tweak 1.6–2.2 to taste per device width
+          // â†“ More compact cards; tweak 1.6â€“2.2 to taste per device width
           childAspectRatio: 1.9,
         ),
         children: [
           _MetricCard(
-            title: 'Total orders',
+            title: 'à¦®à§‹à¦Ÿ à¦…à¦°à§à¦¡à¦¾à¦°',
             value: '$total',
             icon: Icons.all_inbox,
             accent: _darkBlue,
           ),
           _MetricCard(
-            title: 'Completed',
+            title: 'à¦¸à¦®à§à¦ªà¦¨à§à¦¨',
             value: '$completed',
             icon: Icons.verified,
             accent: Colors.green.shade700,
           ),
           _MetricCard(
-            title: 'Running',
+            title: 'à¦šà¦²à¦®à¦¾à¦¨',
             value: '$running',
             icon: Icons.play_circle_fill,
             accent: Colors.orange.shade700,
           ),
           _MetricCard(
-            title: 'Avg. complete time',
+            title: 'à¦—à¦¡à¦¼ à¦¸à¦®à§à¦ªà¦¨à§à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼',
             value: _formatAvg(avg),
             icon: Icons.timer,
             accent: Colors.purple.shade700,
@@ -457,7 +472,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     );
   }
 
-  // ——————————— Accepted Orders ———————————
+  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” Accepted Orders â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 
   Widget _ordersList() {
     return Container(
@@ -469,7 +484,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           final docs = snap.data?.docs ?? [];
-          if (docs.isEmpty) return _emptyState('No accepted work-orders yet.');
+          if (docs.isEmpty) return _emptyState('à¦à¦–à¦¨à¦“ à¦•à§‹à¦¨à§‹ à¦—à§ƒà¦¹à§€à¦¤ à¦“à¦¯à¦¼à¦¾à¦°à§à¦• à¦…à¦°à§à¦¡à¦¾à¦° à¦¨à§‡à¦‡à¥¤');
 
           return ListView.separated(
             padding: const EdgeInsets.only(bottom: 16),
@@ -484,20 +499,20 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
               final doc = docs[i - 1];
               final data = doc.data();
 
-              final no = data['workOrderNo'] as String? ?? '—';
+              final no = data['workOrderNo'] as String? ?? 'â€”';
               final stage = (data['currentStage'] as String?) ?? _stages.first;
               final when = (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now();
-              final tracking = (data['tracking_number'] as String?) ?? '—';
+              final tracking = (data['tracking_number'] as String?) ?? 'â€”';
               final agent = (data['agentName'] as String?)
                   ?? (data['agentEmail'] as String?)
-                  ?? '—';
+                  ?? 'â€”';
               final buyer = (data['buyerName'] as String?)
                   ?? (data['customerName'] as String?)
-                  ?? '—';
+                  ?? 'â€”';
 
               final bool isCompleted = (data['completed'] == true) || _isTerminal(stage);
 
-              // Small label text (6–8sp)
+              // Small label text (6â€“8sp)
               final tsLabelStyle = TextStyle(fontSize: 7, color: isCompleted ? Colors.white70 : Colors.grey.shade700, fontWeight: FontWeight.w600);
               final titleStyle   = TextStyle(fontSize: 8, color: isCompleted ? Colors.white : _darkBlue, fontWeight: FontWeight.w800);
               final infoStyle    = TextStyle(fontSize: 7, color: isCompleted ? Colors.white : Colors.black87, fontWeight: FontWeight.w700);
@@ -510,7 +525,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                   onTap: () => setState(() {
                     _selectedOrderNo = no;
                     _selectedOrderDocId = doc.id;
-                    _orderDocFuture = FirebaseFirestore.instance.collection('work_orders').doc(doc.id).get();
+                    _orderDocFuture = DB.colSync(_cid, C.workOrders).doc(doc.id).get();
                   }),
                   child: Container(
                     decoration: BoxDecoration(
@@ -533,20 +548,19 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // Top line: Order & Tracking (8sp)
-                              Text('Order $no  •  TRK $tracking',
-                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                              AutoSizeText('à¦…à¦°à§à¦¡à¦¾à¦° $no  â€¢  TRK $tracking',
+                                  maxLines: 1, minFontSize: 7, overflow: TextOverflow.ellipsis, style: titleStyle),
                               const SizedBox(height: 4),
-                              // Stage + time (6–7sp)
-                              Text(
-                                '${DateFormat.yMMMd().add_jm().format(when)}  •  $stage',
+                              AutoSizeText(
+                                '${DateFormat.yMMMd().add_jm().format(when)}  â€¢  ${_stageName(stage)}',
                                 maxLines: 1,
+                                minFontSize: 6,
                                 overflow: TextOverflow.ellipsis,
                                 style: tsLabelStyle,
                               ),
                               const SizedBox(height: 4),
-                              // Agent + Buyer (6–7sp)
-                              Text('Agent: $agent  •  Buyer: $buyer',
-                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: infoStyle),
+                              AutoSizeText('à¦à¦œà§‡à¦¨à§à¦Ÿ: $agent  â€¢  à¦•à§à¦°à§‡à¦¤à¦¾: $buyer',
+                                  maxLines: 1, minFontSize: 6, overflow: TextOverflow.ellipsis, style: infoStyle),
                             ],
                           ),
                         ),
@@ -563,7 +577,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     );
   }
 
-  // ——————————— Order Detail (scrollable, overflow-safe) ———————————
+  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” Order Detail (scrollable, overflow-safe) â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 
   Widget _orderDetail() {
     return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -615,7 +629,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                         ),
                       ),
 
-                      // If completed — show green completion card
+                      // If completed â€” show green completion card
                       if (isCompleted)
                         Padding(
                           padding: const EdgeInsets.all(12),
@@ -638,19 +652,19 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         const Text(
-                                          'Work order submitted to Head Office!',
+                                          'à¦“à¦¯à¦¼à¦¾à¦°à§à¦• à¦…à¦°à§à¦¡à¦¾à¦° à¦ªà§à¦°à¦§à¦¾à¦¨ à¦•à¦¾à¦°à§à¦¯à¦¾à¦²à¦¯à¦¼à§‡ à¦œà¦®à¦¾!',
                                           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white),
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
                                           completedAt == null
-                                              ? 'Finished: time not recorded.'
-                                              : 'Finished on ${DateFormat.yMMMd().add_jm().format(completedAt)}',
+                                              ? 'à¦¸à¦®à§à¦ªà¦¨à§à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼ à¦°à§‡à¦•à¦°à§à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤'
+                                              : 'à¦¸à¦®à§à¦ªà¦¨à§à¦¨: ${DateFormat.yMMMd().add_jm().format(completedAt)}',
                                           style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
                                         ),
                                         const SizedBox(height: 6),
                                         const Text(
-                                          '🎉 Great job! Next system stage: “Address Validation of the Customer”.',
+                                          'ðŸŽ‰ Great job! Next system stage: â€œAddress Validation of the Customerâ€.',
                                           style: TextStyle(fontSize: 12, color: Colors.white),
                                         ),
                                       ],
@@ -677,14 +691,14 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Update Stage',
+                                  Text('ধাপ আপডেট করুন',
                                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.grey.shade900)),
                                   const SizedBox(height: 10),
 
                                   TextFormField(
-                                    initialValue: currentStage,
+                                    initialValue: _stageName(currentStage),
                                     decoration: const InputDecoration(
-                                      labelText: 'Current Stage',
+                                      labelText: 'বর্তমান ধাপ',
                                       prefixIcon: Icon(Icons.flag),
                                       border: OutlineInputBorder(),
                                     ),
@@ -696,14 +710,14 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                     value: _selectedNextStage,
                                     isExpanded: true,
                                     decoration: const InputDecoration(
-                                      labelText: 'Next Stage (forward only)',
+                                      labelText: 'পরবর্তী ধাপ (শুধু সামনে)',
                                       prefixIcon: Icon(Icons.trending_up),
                                       border: OutlineInputBorder(),
                                     ),
                                     items: forwardStages
                                         .map((s) => DropdownMenuItem(
                                       value: s,
-                                      child: Text(s, overflow: TextOverflow.ellipsis),
+                                      child: Text(_stageName(s), overflow: TextOverflow.ellipsis),
                                     ))
                                         .toList(),
                                     onChanged: (v) => setState(() => _selectedNextStage = v),
@@ -713,7 +727,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                   TextField(
                                     controller: _assignedCtl,
                                     decoration: const InputDecoration(
-                                      labelText: 'Assign To (email/ID)',
+                                      labelText: 'দায়িত্বপ্রাপ্ত (ইমেইল/আইডি)',
                                       prefixIcon: Icon(Icons.person_add_alt_1),
                                       border: OutlineInputBorder(),
                                     ),
@@ -723,7 +737,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                   TextField(
                                     controller: _notesCtl,
                                     decoration: const InputDecoration(
-                                      labelText: 'Notes',
+                                      labelText: 'মন্তব্য',
                                       prefixIcon: Icon(Icons.notes),
                                       border: OutlineInputBorder(),
                                     ),
@@ -737,7 +751,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                         children: [
                                           const Icon(Icons.event, color: _darkBlue, size: 18),
                                           const SizedBox(width: 6),
-                                          const Text('Deadline:', style: TextStyle(fontWeight: FontWeight.w700)),
+                                          const Text('সময়সীমা:', style: TextStyle(fontWeight: FontWeight.w700)),
                                           const SizedBox(width: 4),
                                           Text(DateFormat.yMMMd().format(_timeLimit),
                                               style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -747,7 +761,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                       TextButton.icon(
                                         onPressed: _pickTimeLimit,
                                         icon: const Icon(Icons.edit_calendar),
-                                        label: const Text('Change'),
+                                        label: const Text('পরিবর্তন'),
                                         style: TextButton.styleFrom(foregroundColor: _darkBlue),
                                       ),
                                     ],
@@ -765,7 +779,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                       ),
                                       onPressed: (_selectedNextStage == null) ? null : _addUpdate,
                                       icon: const Icon(Icons.save),
-                                      label: const Text('Save Update'),
+                                      label: const Text('আপডেট সংরক্ষণ'),
                                     ),
                                   ),
                                 ],
@@ -796,7 +810,7 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                               if (docs.isEmpty) {
                                 return Padding(
                                   padding: const EdgeInsets.all(24),
-                                  child: _emptyState('No updates yet.', icon: Icons.history),
+                                  child: _emptyState('এখনও কোনো আপডেট নেই।', icon: Icons.history),
                                 );
                               }
 
@@ -833,20 +847,20 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           // Keep these compact but readable
-                                          Text(stage,
+                                          Text(_stageName(stage),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.w800, color: _darkBlue, fontSize: 12)),
                                           const SizedBox(height: 4),
                                           if (assigned.isNotEmpty)
-                                            Text('Assigned to: $assigned',
+                                            Text('দায়িত্বপ্রাপ্ত: $assigned',
                                                 maxLines: 1, overflow: TextOverflow.ellipsis),
                                           if (notes.isNotEmpty)
-                                            Text('Notes: $notes',
+                                            Text('মন্তব্য: $notes',
                                                 maxLines: 3, overflow: TextOverflow.ellipsis),
-                                          Text('Deadline: $tl'),
-                                          Text('Updated: $updatedAt',
+                                          Text('সময়সীমা: $tl'),
+                                          Text('আপডেট: $updatedAt',
                                               style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                         ],
                                       ),
@@ -883,3 +897,4 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
     );
   }
 }
+

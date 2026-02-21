@@ -1,22 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF2A0A4B);
 
-class HRRecommendationsPage extends StatelessWidget {
+class HRRecommendationsPage extends StatefulWidget {
   const HRRecommendationsPage({Key? key}) : super(key: key);
 
   @override
+  State<HRRecommendationsPage> createState() => _HRRecommendationsPageState();
+}
+
+class _HRRecommendationsPageState extends State<HRRecommendationsPage> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final recommendationsStream = FirebaseFirestore.instance
-        .collection('recommendation')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+    final recommendationsStream = _cid.isEmpty
+        ? const Stream<QuerySnapshot<Map<String, dynamic>>>.empty()
+        : DB.colSync(_cid, C.recommendation)
+            .orderBy('createdAt', descending: true)
+            .snapshots();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('HR Recommendations'),
+        title: const Text('HR Recommendations', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       backgroundColor: Colors.white,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(

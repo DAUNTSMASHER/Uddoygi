@@ -9,11 +9,12 @@ class AccountsPayableScreen extends StatelessWidget {
       backgroundColor: Colors.white, // changed from Colors.grey[100]
       appBar: AppBar(
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text(
           'Accounts Payable',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

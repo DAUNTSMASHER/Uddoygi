@@ -3,14 +3,12 @@ import 'dart:async';
 
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/factory/presentation/widgets/factory_drawer.dart';
 import 'package:uddoygi/features/common/notification.dart';
-import 'package:uddoygi/features/common/alert.dart';
 import 'package:uddoygi/features/common/stock/stockscreen.dart';
 // Direct imports for your factory sub-screens
 import 'package:uddoygi/features/factory/presentation/factory/work_order.dart';
@@ -20,11 +18,8 @@ import 'package:uddoygi/features/factory/presentation/factory/daily_production.d
 import 'package:uddoygi/features/factory/presentation/screens/progress_update_screen.dart';
 
 /// ===== Red theme (HR structure, just red) =====
-const Color _brandRed   = Color(0xFF40062D); // deep red
-const Color _redMid     = Color(0xFF500B49); // accent
-const Color _surface    = Color(0xFFFFF5F5); // near-white with warm tone
-const Color _cardBorder = Color(0x1A7F1D1D); // 10% red
-const Color _shadowLite = Color(0x14000000);
+const Color _brandRed = Color(0xFF40062D);
+const Color _redMid   = Color(0xFF500B49);
 
 class FactoryDashboard extends StatefulWidget {
   const FactoryDashboard({Key? key}) : super(key: key);
@@ -34,6 +29,7 @@ class FactoryDashboard extends StatefulWidget {
 }
 
 class _FactoryDashboardState extends State<FactoryDashboard> {
+  String _cid = '';
   String? email;
   String? uid;
   String? name;
@@ -42,31 +38,43 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   String _search = '';
   int _currentTab = 0;
 
+  Stream<int> _notifStream = Stream.value(0);
+  Stream<int> _msgStream   = Stream.value(0);
+
   @override
   void initState() {
     super.initState();
-    _loadSession();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final id = await LocalStorageService.getSavedCompanyId();
+    if (!mounted) return;
+    setState(() {
+      _cid = id ?? '';
+      if (_cid.isNotEmpty) {
+        _notifStream = _unreadNotificationsStream();
+        _msgStream   = _unreadMessagesStream();
+      }
+    });
+    await _loadSession();
   }
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
     final current = FirebaseAuth.instance.currentUser;
-
+    if (!mounted) return;
     setState(() {
-      email = session?['email'] as String? ?? current?.email;
-      uid = session?['uid'] as String? ?? current?.uid;
-      name = (session?['name'] as String?) ??
-          current?.displayName ??
-          current?.email ??
-          'Factory';
+      email    = session?['email'] as String? ?? current?.email;
+      uid      = session?['uid']   as String? ?? current?.uid;
+      name     = (session?['name'] as String?) ?? current?.displayName ?? current?.email ?? 'Factory';
       photoUrl = current?.photoURL;
     });
 
-    // Enrich from users/{uid}
-    if (uid != null) {
+    if (uid != null && _cid.isNotEmpty) {
       try {
-        final s = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        if (s.exists) {
+        final s = await DB.colSync(_cid, C.users).doc(uid).get();
+        if (s.exists && mounted) {
           final d = s.data()!;
           final n = (d['fullName'] as String?)?.trim();
           final p = (d['profilePhotoUrl'] as String?)?.trim();
@@ -80,8 +88,7 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   }
 
   Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-    await LocalStorageService.clearSession();
+    await LocalStorageService.performLogout();
     if (mounted) Navigator.pushReplacementNamed(context, '/login');
   }
 
@@ -101,10 +108,9 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   /// Unread messages badge stream
   Stream<int> _unreadMessagesStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream<int>.value(0);
+    if (user == null || _cid.isEmpty) return Stream<int>.value(0);
     final mail = user.email ?? '';
-    return FirebaseFirestore.instance
-        .collection('messages')
+    return DB.colSync(_cid, C.messages)
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
@@ -114,10 +120,9 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   /// Unread notifications badge stream
   Stream<int> _unreadNotificationsStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream<int>.value(0);
+    if (user == null || _cid.isEmpty) return Stream<int>.value(0);
     final mail = user.email ?? '';
-    return FirebaseFirestore.instance
-        .collection('notifications')
+    return DB.colSync(_cid, C.notifications)
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
@@ -126,17 +131,18 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
 
   // 3-column dashboard tiles (factory-relevant)
   final List<_DashboardItem> _allItems = const [
-    _DashboardItem('Stock', Icons.notification_important, ''),
-    _DashboardItem('Work Orders', Icons.work, ''),           // manual push
-    _DashboardItem('Purchase Orders', Icons.shopping_cart, ''),
-    _DashboardItem('QC Report', Icons.check_circle, ''),
-    _DashboardItem('Daily Production', Icons.factory, ''),
-    _DashboardItem('Updates', Icons.update, ''),
-    _DashboardItem('Notices', Icons.notifications, '/factory/notices'),
-    _DashboardItem('Messages', Icons.message, '/common/messages'),
-    _DashboardItem('Attendance', Icons.event_available, '/factory/attendance'),
-    _DashboardItem('Loan Requests', Icons.request_page, '/marketing/loan_request'),
-    _DashboardItem('Salary & OT', Icons.attach_money, '/common/salary'),
+    _DashboardItem('Stock',          Icons.inventory_2_outlined,  ''),
+    _DashboardItem('Work Orders',    Icons.work_outline,          ''),
+    _DashboardItem('Purchase Orders',Icons.shopping_cart_outlined,''),
+    _DashboardItem('QC Report',      Icons.fact_check_outlined,   ''),
+    _DashboardItem('Daily Production',Icons.factory_outlined,     ''),
+    _DashboardItem('Updates',        Icons.update_outlined,       ''),
+    _DashboardItem('Notices',        Icons.notifications_outlined,'/factory/notices'),
+    _DashboardItem('Messages',       Icons.message_outlined,      '/common/messages'),
+    _DashboardItem('Attendance',     Icons.event_available_outlined,'/factory/attendance'),
+    _DashboardItem('Loan Request',   Icons.request_page_outlined, '/marketing/loan_request'),
+    _DashboardItem('Salary & OT',    Icons.payments_outlined,     '/common/salary'),
+    _DashboardItem('R&D Request',    Icons.science_outlined,      '/rnd/request'),
   ];
 
   void _onItemTap(_DashboardItem item) {
@@ -152,7 +158,7 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseOrdersScreen()));
         break;
       case 'QC Report':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const QCReportScreen()));
+        Navigator.push(context, MaterialPageRoute(builder: (_) => QCReportScreen()));
         break;
       case 'Daily Production':
         Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyProductionScreen()));
@@ -174,10 +180,8 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
         .where((i) => i.title.toLowerCase().contains(_search.toLowerCase()))
         .toList();
 
-    const cols = 3; // match HR layout
-
     return Scaffold(
-      backgroundColor: _surface,
+      backgroundColor: const Color(0xFFFFF5F5),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: _brandRed,
@@ -185,42 +189,47 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
         title: Row(
           children: [
             CircleAvatar(
-              radius: 20,
+              radius: 17,
               backgroundColor: Colors.white24,
               backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty) ? NetworkImage(photoUrl!) : null,
               child: (photoUrl == null || photoUrl!.isEmpty)
-                  ? Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))
+                  ? Text(initials, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13))
                   : null,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                'Welcome, $displayName',
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              )
-                  .animate(key: ValueKey(displayName))
-                  .fadeIn(duration: 400.ms, curve: Curves.easeOutCubic)
-                  .slideX(begin: 0.08, end: 0)
-                  .then(delay: 120.ms)
-                  .blur(begin: const Offset(2, 2), end: Offset.zero, duration: 250.ms),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Factory', style: TextStyle(color: Colors.white60, fontSize: 11, fontWeight: FontWeight.w500)),
+                  Text(
+                    displayName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            tooltip: 'Notifications',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationPage()),
-            ),
+          StreamBuilder<int>(
+            stream: _notifStream,
+            builder: (_, s) => Stack(clipBehavior: Clip.none, children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, size: 22),
+                tooltip: 'Notifications',
+                onPressed: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const NotificationPage())),
+              ),
+              if ((s.data ?? 0) > 0)
+                Positioned(right: 8, top: 8,
+                    child: _Badge(count: s.data ?? 0)),
+            ]),
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded, size: 20),
             tooltip: 'Logout',
             onPressed: _logout,
           ),
@@ -231,63 +240,92 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
 
       bottomNavigationBar: _buildBottomNav(),
 
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        children: [
-          // Overview/summary (red) — now with live factory KPIs
-          const _FactoryOverviewHeaderRed(),
-          const SizedBox(height: 16),
-
-          // Search
-          TextField(
-            onChanged: (v) => setState(() => _search = v),
-            decoration: InputDecoration(
-              hintText: 'Search…',
-              prefixIcon: const Icon(Icons.search, color: _brandRed),
-              hintStyle: const TextStyle(color: _brandRed),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _cardBorder),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _cardBorder),
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      body: CustomScrollView(
+        slivers: [
+          // ── Hero overview card ───────────────────────────────────────────
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _FactoryOverviewHeaderRed(),
             ),
-            style: const TextStyle(color: _brandRed),
           ),
-          const SizedBox(height: 16),
 
-          // 3-column grid of tiles
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filtered.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cols,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.02,
+          // ── Section label + search ───────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 4, height: 18,
+                      decoration: BoxDecoration(
+                        color: _brandRed,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Quick Actions',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF0F172A))),
+                  ]),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0x14000000)),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+                      ],
+                    ),
+                    child: TextField(
+                      onChanged: (v) => setState(() => _search = v),
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)),
+                      decoration: const InputDecoration(
+                        hintText: 'Search features…',
+                        hintStyle: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                        prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            itemBuilder: (_, i) {
-              final it = filtered[i];
-              final isMessages = it.title == 'Messages';
-              return StreamBuilder<int>(
-                stream: isMessages ? _unreadMessagesStream() : const Stream<int>.empty(),
-                builder: (_, snap) {
-                  final count = snap.data ?? 0;
-                  return _DashTile(
-                    title: it.title,
-                    icon: it.icon,
-                    badgeCount: count,
-                    onTap: () => _onItemTap(it),
+          ),
+
+          // ── Feature grid ─────────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (_, i) {
+                  final it = filtered[i];
+                  final isMessages = it.title == 'Messages';
+                  return StreamBuilder<int>(
+                    stream: isMessages ? _msgStream : const Stream<int>.empty(),
+                    builder: (_, snap) => _DashTile(
+                      title: it.title,
+                      icon: it.icon,
+                      badgeCount: snap.data ?? 0,
+                      onTap: () => _onItemTap(it),
+                    ),
                   );
                 },
-              );
-            },
+                childCount: filtered.length,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.0,
+              ),
+            ),
           ),
         ],
       ),
@@ -296,22 +334,12 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
 
   Widget _buildBottomNav() {
     final items = <_NavItem>[
-      _NavItem('Home', Icons.home_rounded, onTap: () => setState(() => _currentTab = 0)),
-      _NavItem('Work', Icons.work_outline_rounded,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrdersScreen()))),
-      _NavItem('QC', Icons.fact_check_outlined,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QCReportScreen()))),
-      _NavItem('Production', Icons.factory_outlined,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyProductionScreen()))),
-      _NavItem(
-        'Notifications',
-        Icons.notifications,
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
-        badgeStream: _unreadNotificationsStream(),
-      ),
-      _NavItem('Messages', Icons.message_rounded,
-          onTap: () => Navigator.pushNamed(context, '/common/messages'),
-          badgeStream: _unreadMessagesStream()),
+      _NavItem('Home',     Icons.home_rounded,          onTap: () => setState(() => _currentTab = 0)),
+      _NavItem('Orders',   Icons.work_outline_rounded,  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrdersScreen()))),
+      _NavItem('QC',       Icons.fact_check_outlined,   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => QCReportScreen()))),
+      _NavItem('Production',Icons.factory_outlined,     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DailyProductionScreen()))),
+      _NavItem('Alerts',   Icons.notifications_outlined,onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())), badgeStream: _notifStream),
+      _NavItem('Messages', Icons.message_rounded,       onTap: () => Navigator.pushNamed(context, '/common/messages'), badgeStream: _msgStream),
     ];
 
     return SafeArea(
@@ -381,6 +409,14 @@ class _FactoryOverviewHeaderRed extends StatefulWidget {
 }
 
 class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
+  String _cid = '';
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
   _Range _range = _Range.thisMonth;
 
   ({DateTime a, DateTime b}) _rangeDates(_Range r) {
@@ -442,8 +478,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
     final mail = user?.email;
     final start = _todayStart();
     final end = _eod(start);
-    final q = FirebaseFirestore.instance
-        .collection('attendance')
+    final q = DB.colSync(_cid, C.attendance)
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end));
     final q2 = (mail != null) ? q.where('managerEmail', isEqualTo: mail) : q;
@@ -463,8 +498,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
   Stream<int> _activeWorkers() {
     final user = FirebaseAuth.instance.currentUser;
     final mail = user?.email;
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('users')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.users)
         .where('role', isEqualTo: 'worker')
         .where('active', isEqualTo: true);
     if (mail != null) q = q.where('managerEmail', isEqualTo: mail);
@@ -473,8 +507,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
 
   // Completed work orders (completed==true OR terminal stage)
   Stream<int> _completedOrders() {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
+    return DB.colSync(_cid, C.workOrders)
         .snapshots()
         .map((s) => s.docs.where((d) {
       final m = d.data();
@@ -486,8 +519,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
 
   // Running work orders (status==Accepted and not completed & not terminal)
   Stream<int> _runningOrders() {
-    return FirebaseFirestore.instance
-        .collection('work_orders')
+    return DB.colSync(_cid, C.workOrders)
         .where('status', isEqualTo: 'Accepted')
         .snapshots()
         .map((s) => s.docs.where((d) {
@@ -505,8 +537,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
     final start = DateTime(now.year, now.month, 1);
     final end = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
 
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('daily_production')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.dailyProduction)
         .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end));
     if (mail != null) q = q.where('managerEmail', isEqualTo: mail);
@@ -531,8 +562,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
     final start = _todayStart();
     final end = _eod(start);
 
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-        .collection('daily_production')
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.dailyProduction)
         .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end));
 
@@ -564,7 +594,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
 
   // Due loan amount (sum of dues)
   Stream<String> _dueLoanAmount() {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection('loan_requests');
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.loans);
     // If your schema has status 'paid'/'closed', exclude those:
     // q = q.where('status', whereIn: ['approved','disbursed','due']);
     return q.snapshots().map((s) {
@@ -590,7 +620,7 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
 
   // Average time to complete an order
   Stream<String> _avgCompletionTime() {
-    return FirebaseFirestore.instance.collection('work_orders').snapshots().map((s) {
+    return DB.colSync(_cid, C.workOrders).snapshots().map((s) {
       int count = 0;
       int totalMs = 0;
       for (final d in s.docs) {
@@ -623,65 +653,57 @@ class _FactoryOverviewHeaderRedState extends State<_FactoryOverviewHeaderRed> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [_brandRed, _redMid],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 14, offset: Offset(0, 6))],
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(
+            color: _brandRed.withValues(alpha: 0.3),
+            blurRadius: 18, offset: const Offset(0, 8))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title + Range filter
-          Row(
-            children: [
-              const Icon(Icons.insights, color: Colors.white),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Overview',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
-                ),
-              ),
-              _RangeFilter(
-                value: _range,
-                onChanged: (r) => setState(() => _range = r),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // 3×2 grid of KPI cards (compact)
-          LayoutBuilder(builder: (ctx, c) {
-            const spacing = 6.0;
-            final w = c.maxWidth;
-            final cardW = (w - (spacing * 2)) / 3; // three columns
-            final rng = _rangeDates(_range);
+          Row(children: [
+            const Icon(Icons.factory_rounded, color: Colors.white70, size: 18),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Factory Overview',
+                  style: TextStyle(color: Colors.white,
+                      fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+            _RangeFilter(
+              value: _range,
+              onChanged: (r) => setState(() => _range = r),
+            ),
+          ]),
+          const SizedBox(height: 18),
+          LayoutBuilder(builder: (_, c) {
+            const spacing = 8.0;
+            final cardW = (c.maxWidth - spacing * 2) / 3;
             return Wrap(
               spacing: spacing,
               runSpacing: spacing,
               children: [
-                // Attendance %
                 _StatCardPercent(
                   width: cardW,
-                  label: 'Attendance (today)',
+                  label: 'Attendance',
                   numerator: _presentToday(),
                   denominator: _activeWorkers(),
                 ),
                 // Completed WOs
-                _StatCardRed(width: cardW, label: 'Completed orders', streamText: _completedOrders().map((v) => '$v')),
-                // Running WOs
-                _StatCardRed(width: cardW, label: 'Running orders', streamText: _runningOrders().map((v) => '$v')),
+                _StatCardRed(width: cardW, label: 'Completed', streamText: _completedOrders().map((v) => '$v')),
+                _StatCardRed(width: cardW, label: 'Running', streamText: _runningOrders().map((v) => '$v')),
                 // Production today
-                _StatCardRed(width: cardW, label: "This month's production", streamText: _outputThisMonth()),
+                _StatCardRed(width: cardW, label: 'Monthly Output', streamText: _outputThisMonth()),
                 // Due loans
-                _StatCardRed(width: cardW, label: 'Due loan amount', streamText: _dueLoanAmount()),
+                _StatCardRed(width: cardW, label: 'Due Loans', streamText: _dueLoanAmount()),
                 // Avg completion time (range control doesn’t affect this; it’s global)
-                _StatCardRed(width: cardW, label: 'Avg. complete time', streamText: _avgCompletionTime()),
+                _StatCardRed(width: cardW, label: 'Avg. Time', streamText: _avgCompletionTime()),
               ],
             );
           }),
@@ -701,7 +723,31 @@ class _RangeFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white70),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<_Range>(
+          value: value,
+          isDense: true,
+          icon: const Icon(Icons.keyboard_arrow_down, color: _brandRed),
+          dropdownColor: Colors.white,
+          style: const TextStyle(color: _brandRed, fontWeight: FontWeight.w700, fontSize: 12),
+          items: const [
+            DropdownMenuItem(value: _Range.thisMonth, child: Text('This month')),
+            DropdownMenuItem(value: _Range.prevMonth, child: Text('Prev month')),
+            DropdownMenuItem(value: _Range.last3,     child: Text('Last 3 months')),
+            DropdownMenuItem(value: _Range.last12,    child: Text('One year')),
+          ],
+          onChanged: (r) {
+            if (r != null) onChanged(r);
+          },
+        ),
+      ),
     );
   }
 }
@@ -719,70 +765,44 @@ class _StatCardRed extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: 96,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _cardBorder),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: _brandRed.withOpacity(.08), shape: BoxShape.circle),
-            child: const Icon(Icons.assessment, color: _brandRed, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: StreamBuilder<String>(
-              stream: streamText,
-              builder: (_, snap) {
-                final v = snap.hasData ? snap.data! : '—';
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // VALUE (unchanged, readable)
-                    AutoSizeText(
-                      v,
+      child: StreamBuilder<String>(
+        stream: streamText,
+        builder: (_, snap) {
+          final loading = snap.connectionState == ConnectionState.waiting && !snap.hasData;
+          final v = snap.data ?? '—';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              loading
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                    )
+                  : Text(v,
                       maxLines: 1,
-                      minFontSize: 14,
-                      stepGranularity: 0.5,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: _brandRed,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 26,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    // LABEL — exactly 5sp and up to 2 lines
-                    SizedBox(
-                      height: 18, // enough to fit ~2 lines at 5sp
-                      child: AutoSizeText(
-                        label,
-                        maxLines: 2,
-                        minFontSize: 5,
-                        maxFontSize: 7,      // lock to 5sp
-                        stepGranularity: 0.1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _brandRed,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 7,        // lock to 5sp
-                          height: 1.05,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18)),
+              const SizedBox(height: 3),
+              Text(label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 10)),
+            ],
+          );
+        },
       ),
     );
   }
@@ -807,71 +827,45 @@ class _StatCardPercent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: 96,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: _cardBorder),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(color: _brandRed.withOpacity(.08), shape: BoxShape.circle),
-            child: const Icon(Icons.how_to_reg, color: _brandRed, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: StreamBuilder<int>(
-              stream: denominator,
-              builder: (_, totalSnap) {
-                final total = totalSnap.data ?? 0;
-                return StreamBuilder<int>(
-                  stream: numerator,
-                  builder: (_, presSnap) {
-                    final pres = presSnap.data ?? 0;
-                    final String txt =
-                    (total <= 0) ? '—' : '${(pres * 100 / total).toStringAsFixed(0)}%';
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        AutoSizeText(
-                          txt,
-                          maxLines: 1,
-                          minFontSize: 14,
-                          stepGranularity: 0.5,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _brandRed,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 26,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        AutoSizeText(
-                          label,
-                          maxLines: 2,
-                          minFontSize: 6,
-                          stepGranularity: 0.5,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _brandRed,
-                            fontWeight: FontWeight.w400,
-                            fontSize: 8,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+      child: StreamBuilder<int>(
+        stream: denominator,
+        builder: (_, totalSnap) {
+          final total = totalSnap.data ?? 0;
+          return StreamBuilder<int>(
+            stream: numerator,
+            builder: (_, presSnap) {
+              final pres = presSnap.data ?? 0;
+              final txt = (total <= 0) ? '—' : '${(pres * 100 / total).toStringAsFixed(0)}%';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(txt,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18)),
+                  const SizedBox(height: 3),
+                  Text(label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 10)),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -898,55 +892,92 @@ class _DashTile extends StatelessWidget {
     this.badgeCount = 0,
   });
 
+  static Color _accentFor(String t) {
+    const map = {
+      'Stock':           Color(0xFF40062D),
+      'Work Orders':     Color(0xFFB91C1C),
+      'Purchase Orders': Color(0xFFB45309),
+      'QC Report':       Color(0xFF0891B2),
+      'Daily Production':Color(0xFF40062D),
+      'Updates':         Color(0xFF16A34A),
+      'Notices':         Color(0xFF6366F1),
+      'Messages':        Color(0xFF7C3AED),
+      'Attendance':      Color(0xFF0D9488),
+      'Loan Request':    Color(0xFFB45309),
+      'Salary & OT':     Color(0xFF059669),
+      'R&D Request':     Color(0xFF7C3AED),
+    };
+    return map[t] ?? _brandRed;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final accent = _accentFor(title);
     return Material(
       color: Colors.white,
-      elevation: 0,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
+        borderRadius: BorderRadius.circular(16),
+        splashColor: accent.withValues(alpha: 0.08),
+        child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _cardBorder),
-            boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 8, offset: Offset(0, 3))],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0x14000000)),
+            boxShadow: const [
+              BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+            ],
           ),
           child: Stack(
             children: [
+              // Top accent stripe
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                ),
+              ),
               Center(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(icon, color: _brandRed, size: 28),
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(icon, color: accent, size: 22),
+                      ),
                       const SizedBox(height: 8),
-                      SizedBox(
-                        height: 28,
-                        child: AutoSizeText(
+                      LayoutBuilder(builder: (_, c) {
+                        double fs = 11.5;
+                        if (title.length > 12 || c.maxWidth < 90) fs = 10.5;
+                        if (title.length > 16 || c.maxWidth < 76) fs = 9.5;
+                        return Text(
                           title,
                           textAlign: TextAlign.center,
                           maxLines: 2,
-                          minFontSize: 9,
-                          stepGranularity: 0.5,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: _brandRed,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
+                          style: TextStyle(
+                              color: const Color(0xFF0F172A),
+                              fontSize: fs,
+                              fontWeight: FontWeight.w700),
+                        );
+                      }),
                     ],
                   ),
                 ),
               ),
               if (badgeCount > 0)
                 Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 8, top: 8,
                   child: _Badge(count: badgeCount),
                 ),
             ],

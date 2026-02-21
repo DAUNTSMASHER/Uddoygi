@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -26,6 +28,7 @@ class TaskAssignmentScreen extends StatefulWidget {
 }
 
 class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
+  String _cid = '';
   int _tab = 0;
 
   String get _title {
@@ -36,6 +39,14 @@ class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
       default: return 'Tasks';
     }
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -103,14 +114,14 @@ class _DashboardPage extends StatelessWidget {
   User get _me => FirebaseAuth.instance.currentUser!;
 
   /// 1) Total assigned (by me)
-  Stream<int> _countAssignedByMe() => FirebaseFirestore.instance
+  Stream<int> _countAssignedByMe() => DB.firestore
       .collection(_TASKS)
       .where('assignerId', isEqualTo: _me.uid)
       .snapshots()
       .map((s) => s.docs.length);
 
   /// 2) Submitted by me (I am assignee and status=submitted)
-  Stream<int> _countSubmittedByMe() => FirebaseFirestore.instance
+  Stream<int> _countSubmittedByMe() => DB.firestore
       .collection(_TASKS)
       .where('assigneeId', isEqualTo: _me.uid)
       .where('status', isEqualTo: 'submitted')
@@ -118,7 +129,7 @@ class _DashboardPage extends StatelessWidget {
       .map((s) => s.docs.length);
 
   /// 3) Completed by juniors (I am assigner and status=done)
-  Stream<int> _countCompletedByJuniors() => FirebaseFirestore.instance
+  Stream<int> _countCompletedByJuniors() => DB.firestore
       .collection(_TASKS)
       .where('assignerId', isEqualTo: _me.uid)
       .where('status', isEqualTo: 'done')
@@ -126,7 +137,7 @@ class _DashboardPage extends StatelessWidget {
       .map((s) => s.docs.length);
 
   /// 4) Rejected task (my submissions that were rejected / need changes)
-  Stream<int> _countRejectedForMe() => FirebaseFirestore.instance
+  Stream<int> _countRejectedForMe() => DB.firestore
       .collection(_TASKS)
       .where('assigneeId', isEqualTo: _me.uid)
       .where('status', whereIn: ['changes_requested', 'rejected'])
@@ -307,7 +318,7 @@ class _RecentSection extends StatelessWidget {
     return _SectionCard(
       title: 'Recent Tasks',
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
+        stream: DB.firestore
             .collection(_TASKS)
             .orderBy('createdAt', descending: true)
             .limit(10)
@@ -360,9 +371,9 @@ class _AssignPageState extends State<_AssignPage> {
 
   Future<Map<String, dynamic>?> _getMeProfile() async {
     // Try doc by uid first, fallback to email lookup
-    final byId = await FirebaseFirestore.instance.collection(_USERS).doc(_me.uid).get();
+    final byId = await DB.firestore.collection(_USERS).doc(_me.uid).get();
     if (byId.data() != null) return byId.data();
-    final byEmail = await FirebaseFirestore.instance.collection(_USERS)
+    final byEmail = await DB.firestore.collection(_USERS)
         .where('email', isEqualTo: _me.email).limit(1).get();
     return byEmail.docs.isNotEmpty ? byEmail.docs.first.data() : null;
   }
@@ -372,7 +383,7 @@ class _AssignPageState extends State<_AssignPage> {
     final myDept = (meProfile?['department'] ?? '').toString().toLowerCase();
     final myJoin = (meProfile?['joinDate'] as Timestamp?)?.toDate();
 
-    yield* FirebaseFirestore.instance.collection(_USERS)
+    yield* DB.firestore.collection(_USERS)
         .where('department', isEqualTo: myDept)
         .snapshots()
         .map((s) {
@@ -400,11 +411,11 @@ class _AssignPageState extends State<_AssignPage> {
 
     final meProfile = await _getMeProfile();
     final meName = (meProfile?['fullName'] ?? meProfile?['name'] ?? _me.email ?? 'Me').toString();
-    final assigneeDoc = await FirebaseFirestore.instance.collection(_USERS).doc(_assigneeId).get();
+    final assigneeDoc = await DB.firestore.collection(_USERS).doc(_assigneeId).get();
     final assigneeName = (assigneeDoc.data()?['fullName'] ?? assigneeDoc.data()?['name'] ?? 'User').toString();
 
     final now = DateTime.now();
-    await FirebaseFirestore.instance.collection(_TASKS).add({
+    await DB.firestore.collection(_TASKS).add({
       'title'      : _titleCtl.text.trim(),
       'description': _descCtl.text.trim(),
       'priority'   : _priority,
@@ -513,7 +524,7 @@ class _MyWorkPage extends StatelessWidget {
         const _SectionHeader(title: 'My Tasks', subtitle: 'Work assigned to you, with live updates'),
         const SizedBox(height: 10),
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
+          stream: DB.firestore
               .collection(_TASKS)
               .where('assigneeId', isEqualTo: me.uid)
               .orderBy('createdAt', descending: true)
@@ -696,7 +707,7 @@ class _AssignedByMeList extends StatelessWidget {
     return _SectionCard(
       title: 'Tasks I assigned',
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
+        stream: DB.firestore
             .collection(_TASKS)
             .where('assignerId', isEqualTo: me.uid)
             .orderBy('createdAt', descending: true)
@@ -872,7 +883,7 @@ class _RepliesSection extends StatelessWidget {
         const Text('Replies', style: TextStyle(fontWeight: FontWeight.w800, color: _brandBlue)),
         const SizedBox(height: 6),
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
+          stream: DB.firestore
               .collection(_TASKS).doc(taskId)
               .collection('replies')
               .orderBy('createdAt')
@@ -916,7 +927,7 @@ class _RepliesSection extends StatelessWidget {
               onPressed: () async {
                 final text = ctl.text.trim();
                 if (text.isEmpty) return;
-                await FirebaseFirestore.instance
+                await DB.firestore
                     .collection(_TASKS).doc(taskId)
                     .collection('replies')
                     .add({
@@ -1053,7 +1064,7 @@ class _TaskActions extends StatelessWidget {
 
   Future<void> _update(Map<String, dynamic> patch) async {
     patch['updatedAt'] = FieldValue.serverTimestamp();
-    await FirebaseFirestore.instance.collection(_TASKS).doc(docId).update(patch);
+    await DB.firestore.collection(_TASKS).doc(docId).update(patch);
   }
 
   Future<void> _openSubmitSheet(BuildContext context) async {
@@ -1193,7 +1204,7 @@ class _TaskActions extends StatelessWidget {
       });
       // also drop a first reply so the thread has context
       final me = FirebaseAuth.instance.currentUser!;
-      await FirebaseFirestore.instance
+      await DB.firestore
           .collection(_TASKS).doc(docId)
           .collection('replies')
           .add({

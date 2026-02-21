@@ -1,4 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,7 +9,7 @@ import 'package:pdf/pdf.dart' as pdf;
 import 'package:printing/printing.dart';
 
 const _green = Color(0xFF065F46);
-const _blue  = Color(0xFF0D47A1);
+const _blue  = Color(0xFF065F46);
 const _teal  = Color(0xFF21C7A8);
 const _orange = Color(0xFFFF8A00);
 
@@ -22,6 +24,7 @@ class BudgetTablePage extends StatefulWidget {
 }
 
 class _BudgetTablePageState extends State<BudgetTablePage> {
+  String _cid = '';
   final _companyCtl = TextEditingController(text: 'Wig Bangladesh');
   late String _period; // e.g. "September 2025"
   DateTime? _createdAt;
@@ -43,6 +46,9 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _period = DateFormat('MMMM yyyy').format(DateTime.now());
     _init();
   }
@@ -88,8 +94,7 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
 
   Future<void> _init() async {
     // Load agents (marketing dept) with emails
-    final users = await FirebaseFirestore.instance
-        .collection('users')
+    final users = await DB.colSync(_cid, C.users)
         .where('department', isEqualTo: 'marketing')
         .get();
 
@@ -175,7 +180,7 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
     }
 
     final periodKey = _periodKeyFromPeriod(_period);
-    final ref = FirebaseFirestore.instance.collection('budgets').doc(periodKey);
+    final ref = DB.colSync(_cid, C.budgets).doc(periodKey);
 
     final data = {
       'periodKey': periodKey,         // deterministic monthly id (Sales screen listens to this doc)
@@ -214,7 +219,7 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
   }
 
   Future<void> _downloadPdf() async {
-    final pdfDoc = pw.Document();
+    final pdfDoc = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     final items = [..._rows]..sort((a, b) => a.sl.compareTo(b.sl));
     final targets = _targets;
 
@@ -399,7 +404,9 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: _blue,
-        title: Text('Budget Table • $_period', style: const TextStyle(color: Colors.white)),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text('Budget Table • $_period', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         actions: [
           IconButton(
             tooltip: 'Download PDF',
@@ -952,7 +959,7 @@ class _TargetRowState extends State<_TargetRow> {
             ),
             const SizedBox(width: 8),
 
-            // Max target
+            // Max widget.target
             Expanded(
               flex: 2,
               child: TextField(
@@ -966,7 +973,7 @@ class _TargetRowState extends State<_TargetRow> {
             ),
             const SizedBox(width: 8),
 
-            // Final target
+            // Final widget.target
             Expanded(
               flex: 2,
               child: TextField(

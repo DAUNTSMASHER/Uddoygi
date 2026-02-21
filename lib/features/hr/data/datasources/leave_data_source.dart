@@ -1,31 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class LeaveDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Stream all leave requests
-  Stream<QuerySnapshot> getAllLeaveRequests() {
-    return _firestore.collection('leave_requests').snapshots();
+  Stream<QuerySnapshot> getAllLeaveRequests() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.leaveRequests).snapshots();
   }
 
-  // Get leave requests by user ID
-  Stream<QuerySnapshot> getUserLeaveRequests(String userId) {
-    return _firestore
-        .collection('leave_requests')
-        .where('userId', isEqualTo: userId)
+  Stream<QuerySnapshot> getUserLeaveRequests(String userId) async* {
+    final col = DB.colSync(await _getCid(), C.leaveRequests);
+    yield* col.where('userId', isEqualTo: userId)
         .orderBy('startDate', descending: true)
         .snapshots();
   }
 
-  // Add a new leave request
   Future<void> addLeaveRequest({
     required String userId,
-    required String startDate, // format YYYY-MM-DD
+    required String startDate,
     required String endDate,
     required String reason,
-    required String status, // 'pending', 'approved', 'rejected'
+    required String status,
   }) async {
-    await _firestore.collection('leave_requests').add({
+    await (await DB.col(C.leaveRequests)).add({
       'userId': userId,
       'startDate': startDate,
       'endDate': endDate,
@@ -35,13 +34,9 @@ class LeaveDataSource {
     });
   }
 
-  // Update a leave request
-  Future<void> updateLeaveRequest(String docId, Map<String, dynamic> updatedData) async {
-    await _firestore.collection('leave_requests').doc(docId).update(updatedData);
-  }
+  Future<void> updateLeaveRequest(String docId, Map<String, dynamic> data) async =>
+      (await DB.col(C.leaveRequests)).doc(docId).update(data);
 
-  // Delete a leave request
-  Future<void> deleteLeaveRequest(String docId) async {
-    await _firestore.collection('leave_requests').doc(docId).delete();
-  }
+  Future<void> deleteLeaveRequest(String docId) async =>
+      (await DB.col(C.leaveRequests)).doc(docId).delete();
 }

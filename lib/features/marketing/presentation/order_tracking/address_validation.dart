@@ -5,6 +5,8 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -28,24 +30,41 @@ const String _publicConfirmBaseUrl = 'https://uddyogi.web.app/#/address-confirm'
 // If you’ve enabled path URL strategy, you can switch to:
 // const String _publicConfirmBaseUrl = 'https://uddyogi.web.app/address-confirm';
 
-class AddressValidationPage extends StatelessWidget {
+class AddressValidationPage extends StatefulWidget {
   const AddressValidationPage({Key? key}) : super(key: key);
 
+  @override
+  State<AddressValidationPage> createState() => _AddressValidationPageState();
+}
+
+class _AddressValidationPageState extends State<AddressValidationPage> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   Stream<QuerySnapshot<Map<String, dynamic>>> get _ordersToValidateStream =>
-      FirebaseFirestore.instance
-          .collection('work_orders')
-          .where('currentStage', isEqualTo: _addressStage)
-          .orderBy('lastUpdated', descending: true)
-          .snapshots();
+      _cid.isEmpty
+          ? const Stream.empty()
+          : DB.colSync(_cid, C.workOrders)
+              .where('currentStage', isEqualTo: _addressStage)
+              .orderBy('lastUpdated', descending: true)
+              .snapshots();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _panel,
       appBar: AppBar(
-        title: const Text('Address Validation'),
+        title: const Text('Address Validation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         centerTitle: true,
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -138,6 +157,7 @@ class _OrderValidationCard extends StatefulWidget {
 }
 
 class _OrderValidationCardState extends State<_OrderValidationCard> {
+  String _cid = '';
   bool _busy = false;
 
   // ❌ DO NOT mark as @override — this is a helper, not overriding anything.
@@ -219,8 +239,7 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
             if (widget.existingToken != null) ...[
               const SizedBox(height: 12),
               StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('address_validations')
+                stream: DB.colSync(_cid, C.addressValidations)
                     .doc(widget.existingToken)
                     .snapshots(),
                 builder: (ctx, s) {
@@ -384,7 +403,7 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
       final url = '$_publicConfirmBaseUrl?token=$token';
 
       // 1) Firestore address_validations/{token}
-      await FirebaseFirestore.instance.collection('address_validations').doc(token).set({
+      await DB.colSync(_cid, C.addressValidations).doc(token).set({
         'token': token,
         'workOrderId': widget.orderDocId,
         'workOrderNo': widget.workOrderNo,
@@ -395,7 +414,7 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
       });
 
       // 2) Attach to work_order
-      await FirebaseFirestore.instance.collection('work_orders').doc(widget.orderDocId).update({
+      await DB.colSync(_cid, C.workOrders).doc(widget.orderDocId).update({
         'addressValidation': {
           'token': token,
           'url': url,
@@ -440,7 +459,7 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
     required String attachmentPath,
   }) async {
     try {
-      final cfgSnap = await FirebaseFirestore.instance.collection('smtp_config').doc('default').get();
+      final cfgSnap = await DB.firestore.collection('smtp_config').doc('default').get();
 
       if (!cfgSnap.exists) {
         // Fallback when SMTP isn’t configured: use share sheet with the QR and body text.
@@ -480,9 +499,9 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
     try {
       setState(() => _busy = true);
       final now = Timestamp.now();
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = DB.firestore.batch();
 
-      final trackingRef = FirebaseFirestore.instance.collection('work_order_tracking').doc();
+      final trackingRef = DB.colSync(_cid, C.workOrderTracking).doc();
       batch.set(trackingRef, {
         'workOrderNo': widget.workOrderNo,
         'stage': _addressValidatedStage,
@@ -493,7 +512,7 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
         'lastUpdated': now,
       });
 
-      final orderRef = FirebaseFirestore.instance.collection('work_orders').doc(widget.orderDocId);
+      final orderRef = DB.colSync(_cid, C.workOrders).doc(widget.orderDocId);
       batch.update(orderRef, {'currentStage': _addressValidatedStage, 'lastUpdated': now});
 
       await batch.commit();
@@ -539,9 +558,9 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
     try {
       setState(() => _busy = true);
       final now = Timestamp.now();
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = DB.firestore.batch();
 
-      final trackingRef = FirebaseFirestore.instance.collection('work_order_tracking').doc();
+      final trackingRef = DB.colSync(_cid, C.workOrderTracking).doc();
       batch.set(trackingRef, {
         'workOrderNo': widget.workOrderNo,
         'stage': _finalTrackingStage,
@@ -553,7 +572,7 @@ class _OrderValidationCardState extends State<_OrderValidationCard> {
         'trackingNo': tracking,
       });
 
-      final orderRef = FirebaseFirestore.instance.collection('work_orders').doc(widget.orderDocId);
+      final orderRef = DB.colSync(_cid, C.workOrders).doc(widget.orderDocId);
       batch.update(orderRef, {'currentStage': _finalTrackingStage, 'lastUpdated': now, 'trackingNo': tracking});
 
       await batch.commit();
@@ -580,7 +599,8 @@ class _PromptResult {
 /// —————————————————————————————————————————————————————————————
 /// LIVE QR PAGE — shows QR & link; watch status; confirm live now
 /// —————————————————————————————————————————————————————————————
-class _QrLivePage extends StatelessWidget {
+class _QrLivePage extends StatefulWidget {
+
   const _QrLivePage({
     Key? key,
     required this.workOrderNo,
@@ -593,12 +613,26 @@ class _QrLivePage extends StatelessWidget {
   final String token;
   final String url;
   final String qrPath;
+  @override
+  State<_QrLivePage> createState() => _QrLivePageState();
+}
+
+class _QrLivePageState extends State<_QrLivePage> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _panel,
-      appBar: AppBar(title: Text('WO $workOrderNo • QR'), backgroundColor: _darkBlue),
+      appBar: AppBar(title: Text('WO ${widget.workOrderNo} • QR'), backgroundColor: _darkBlue),
       body: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 520),
@@ -610,14 +644,13 @@ class _QrLivePage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.file(File(qrPath), width: 220, height: 220),
+                  Image.file(File(widget.qrPath), width: 220, height: 220),
                   const SizedBox(height: 10),
-                  SelectableText(url, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+                  SelectableText(widget.url, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
                   const SizedBox(height: 12),
                   StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('address_validations')
-                        .doc(token)
+                    stream: DB.colSync(_cid, C.addressValidations)
+                        .doc(widget.token)
                         .snapshots(),
                     builder: (_, snap) {
                       final status = snap.data?.data()?['status'] as String? ?? 'pending';
@@ -649,26 +682,25 @@ class _QrLivePage extends StatelessWidget {
                           final now = Timestamp.now();
 
                           // Read validation doc to get workOrderId/No
-                          final vRef = FirebaseFirestore.instance.collection('address_validations').doc(token);
+                          final vRef = DB.colSync(_cid, C.addressValidations).doc(widget.token);
                           final vSnap = await vRef.get();
                           final data = vSnap.data() ?? {};
                           final workOrderId = (data['workOrderId'] as String?) ?? '';
                           final workOrderNoDoc = (data['workOrderNo'] as String?) ?? '';
 
                           // Mirror updates (validation + work order)
-                          final batch = FirebaseFirestore.instance.batch();
+                          final batch = DB.firestore.batch();
                           batch.update(vRef, {'status': 'confirmed', 'confirmedAt': now});
 
                           if (workOrderId.isNotEmpty) {
-                            final oRef = FirebaseFirestore.instance.collection('work_orders').doc(workOrderId);
+                            final oRef = DB.colSync(_cid, C.workOrders).doc(workOrderId);
                             batch.update(oRef, {
                               'addressValidation.status': 'confirmed',
                               'addressValidation.confirmedAt': now,
                               'lastUpdated': now,
                             });
                           } else if (workOrderNoDoc.isNotEmpty) {
-                            final oq = await FirebaseFirestore.instance
-                                .collection('work_orders')
+                            final oq = await DB.colSync(_cid, C.workOrders)
                                 .where('workOrderNo', isEqualTo: workOrderNoDoc)
                                 .limit(1)
                                 .get();
@@ -794,12 +826,16 @@ class AddressConfirmPublicPage extends StatefulWidget {
 }
 
 class _AddressConfirmPublicPageState extends State<AddressConfirmPublicPage> {
+  String _cid = '';
   String? _token;
   bool _ready = false;
 
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _init();
   }
 
@@ -834,25 +870,24 @@ class _AddressConfirmPublicPageState extends State<AddressConfirmPublicPage> {
     try {
       final now = Timestamp.now();
 
-      final vRef = FirebaseFirestore.instance.collection('address_validations').doc(_token);
+      final vRef = DB.colSync(_cid, C.addressValidations).doc(_token);
       final vSnap = await vRef.get();
       final data = vSnap.data() ?? {};
       final workOrderId = (data['workOrderId'] as String?) ?? '';
       final workOrderNo = (data['workOrderNo'] as String?) ?? '';
 
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = DB.firestore.batch();
       batch.update(vRef, {'status': 'confirmed', 'confirmedAt': now});
 
       if (workOrderId.isNotEmpty) {
-        final oRef = FirebaseFirestore.instance.collection('work_orders').doc(workOrderId);
+        final oRef = DB.colSync(_cid, C.workOrders).doc(workOrderId);
         batch.update(oRef, {
           'addressValidation.status': 'confirmed',
           'addressValidation.confirmedAt': now,
           'lastUpdated': now,
         });
       } else if (workOrderNo.isNotEmpty) {
-        final oq = await FirebaseFirestore.instance
-            .collection('work_orders')
+        final oq = await DB.colSync(_cid, C.workOrders)
             .where('workOrderNo', isEqualTo: workOrderNo)
             .limit(1)
             .get();
@@ -896,7 +931,7 @@ class _AddressConfirmPublicPageState extends State<AddressConfirmPublicPage> {
           constraints: const BoxConstraints(maxWidth: 520),
           padding: const EdgeInsets.all(16),
           child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('address_validations').doc(_token).snapshots(),
+            stream: DB.colSync(_cid, C.addressValidations).doc(_token).snapshots(),
             builder: (_, snap) {
               final exists = snap.data?.exists ?? false;
               final data = snap.data?.data();

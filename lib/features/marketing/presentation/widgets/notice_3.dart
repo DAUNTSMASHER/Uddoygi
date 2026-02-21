@@ -1,5 +1,7 @@
 // lib/widgets/notice_3.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -40,6 +42,7 @@ class PostSettingsSheet extends StatefulWidget {
 }
 
 class _PostSettingsSheetState extends State<PostSettingsSheet> {
+  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   PostVisibility _vis = PostVisibility.anyone;
@@ -51,6 +54,9 @@ class _PostSettingsSheetState extends State<PostSettingsSheet> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _vis = widget.initial;
     _resolvedEmail =
         widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '';
@@ -66,7 +72,7 @@ class _PostSettingsSheetState extends State<PostSettingsSheet> {
       _error = '';
     });
     try {
-      final doc = await FirebaseFirestore.instance
+      final doc = await DB.firestore
           .collection(widget.settingsCollection)
           .doc(_resolvedEmail)
           .get();
@@ -89,7 +95,7 @@ class _PostSettingsSheetState extends State<PostSettingsSheet> {
   Future<void> _saveToFirestore(PostVisibility v) async {
     if (!widget.persistToFirestore || _resolvedEmail.isEmpty) return;
     try {
-      await FirebaseFirestore.instance
+      await DB.firestore
           .collection(widget.settingsCollection)
           .doc(_resolvedEmail)
           .set(

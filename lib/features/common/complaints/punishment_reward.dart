@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 
 class PunishmentRewardScreen extends StatefulWidget {
@@ -15,10 +17,18 @@ class PunishmentRewardScreen extends StatefulWidget {
 }
 
 class _PunishmentRewardScreenState extends State<PunishmentRewardScreen> {
+  String _cid = '';
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final query = FirebaseFirestore.instance
-        .collection('punishments')
+    final query = DB.colSync(_cid, C.punishments)
         .where(Filter.or(
       Filter('forEmail', isEqualTo: widget.userEmail),
       Filter('givenBy', isEqualTo: widget.userEmail),
@@ -27,8 +37,10 @@ class _PunishmentRewardScreenState extends State<PunishmentRewardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Punishment & Reward"),
+        title: const Text('Punishment & Reward', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       backgroundColor: Colors.indigo[50],
       body: StreamBuilder<QuerySnapshot>(

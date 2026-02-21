@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'work_order_details_screen.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// ব্র্যান্ড প্যালেট (ড্যাশবোর্ডের সাথে সামঞ্জস্য)
 const Color _brandTeal  = Color(0xFF40062D);
@@ -106,7 +108,8 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
-  final _firestore = FirebaseFirestore.instance;
+  String _cid = '';
+
 
   // ---------- UI State ----------
   String _search = '';                         // 🔎 সার্চ টেক্সট
@@ -125,7 +128,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     if (ok != true) return;
 
     try {
-      await _firestore.collection('work_orders').doc(id).update({
+      await (await DB.col(C.workOrders)).doc(id).update({
         'status': 'Accepted',
         'lastUpdated': FieldValue.serverTimestamp(),
       });
@@ -187,7 +190,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
     if (ok != true) return;
 
     try {
-      await _firestore.collection('work_orders').doc(id).update({
+      await (await DB.col(C.workOrders)).doc(id).update({
         'status': 'Rejected',
         'recommendation': recCtl.text.trim(),
         'lastUpdated': FieldValue.serverTimestamp(),
@@ -335,7 +338,7 @@ class _WorkOrdersScreenState extends State<WorkOrdersScreen> {
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         // 🔁 লাইভ ডেটা স্ট্রীম (টাইমস্ট্যাম্প-অনুযায়ী)
-        stream: _firestore.collection('work_orders').orderBy('timestamp', descending: true).snapshots(),
+        stream: DB.colSync(_cid, C.workOrders).orderBy('timestamp', descending: true).snapshots(),
         builder: (ctx, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

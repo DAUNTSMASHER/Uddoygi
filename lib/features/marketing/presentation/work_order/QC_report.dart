@@ -2,13 +2,30 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
-class QCReportScreen extends StatelessWidget {
-  const QCReportScreen({Key? key}) : super(key: key);
+class MarketingQCReportScreen extends StatefulWidget {
+  const MarketingQCReportScreen({Key? key}) : super(key: key);
+
+  @override
+  State<MarketingQCReportScreen> createState() => _MarketingQCReportScreenState();
+}
+
+class _MarketingQCReportScreenState extends State<MarketingQCReportScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,12 +34,10 @@ class QCReportScreen extends StatelessWidget {
     if (userEmail == null) {
       return Scaffold(
         appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: const Text('QC Report'),
+          title: const Text('QC Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
           backgroundColor: _darkBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
         ),
         body: const Center(
           child: Text('Please sign in to view QC reports'),
@@ -30,22 +45,20 @@ class QCReportScreen extends StatelessWidget {
       );
     }
 
-    final Stream<QuerySnapshot<Map<String, dynamic>>> qcStream =
-    FirebaseFirestore.instance
-        .collection('qc_reports')
-        .where('agentEmail', isEqualTo: userEmail)
-        .where('productType', isEqualTo: 'wig')
-        .orderBy('qcDate', descending: true)
-        .snapshots();
+    final Stream<QuerySnapshot<Map<String, dynamic>>> qcStream = _cid.isEmpty
+        ? const Stream.empty()
+        : DB.colSync(_cid, C.qcReports)
+            .where('agentEmail', isEqualTo: userEmail)
+            .where('productType', isEqualTo: 'wig')
+            .orderBy('qcDate', descending: true)
+            .snapshots();
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('QC Report'),
+        title: const Text('QC Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: qcStream,

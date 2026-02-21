@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.uddoygi"
-        minSdk = flutter.minSdkVersion
+        minSdk = flutter.minSdkVersion // Firebase Phone Auth requires at least 21
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"

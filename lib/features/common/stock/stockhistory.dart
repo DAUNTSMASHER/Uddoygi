@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 /// ===== Factory Dashboard Palette (match your stock screen) =====
-const Color _darkBlue   = Color(0xFF0D47A1);
+const Color _darkBlue   = Color(0xFF2A0A4B);
 const Color _accent     = Color(0xFFFFC107);
 const Color _surface    = Color(0xFFF7F8FB);
 const Color _okGreen    = Color(0xFF10B981);
@@ -25,7 +27,16 @@ class StockHistoryScreen extends StatefulWidget {
 }
 
 class _StockHistoryScreenState extends State<StockHistoryScreen> {
+  String _cid = '';
   int _tab = 0;
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -59,23 +70,37 @@ class _StockHistoryScreenState extends State<StockHistoryScreen> {
 }
 
 /// ===== DASHBOARD =====
-class _DashboardTab extends StatelessWidget {
+class _DashboardTab extends StatefulWidget {
   const _DashboardTab({Key? key}) : super(key: key);
 
+  @override
+  State<_DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<_DashboardTab> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
   Stream<_AggBundle> _bundleStream() {
+    if (_cid.isEmpty) return const Stream.empty();
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
     final dayStart   = DateTime(now.year, now.month, now.day);
 
-    // Server-sorted. Firestore may ask you to create a *collection group* index on "logs.ts".
-    final logsQ = FirebaseFirestore.instance
+    final logsQ = DB.firestore
         .collectionGroup('logs')
         .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(monthStart))
         .orderBy('ts', descending: false);
 
-    final stocksQ = FirebaseFirestore.instance.collection('stocks');
+    final stocksQ = DB.colSync(_cid, C.stocks);
 
-    // Print any index error to console so you can click the link.
     final logsStream = logsQ.snapshots().handleError((e, st) {
       final msg = _explainFirestoreError(e);
       debugPrint('[STOCK DASHBOARD] $msg');
@@ -237,7 +262,7 @@ class _HistoryTabState extends State<_HistoryTab> {
     final start = now.subtract(Duration(days: daysBack));
 
     // Server-sorted. May require the same collection-group index on logs.ts.
-    final q = FirebaseFirestore.instance
+    final q = DB.firestore
         .collectionGroup('logs')
         .where('ts', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .orderBy('ts', descending: true);
@@ -433,10 +458,19 @@ class _ProductsTab extends StatefulWidget {
 }
 
 class _ProductsTabState extends State<_ProductsTab> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
   final _searchCtl = TextEditingController();
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _stocksStream() {
-    return FirebaseFirestore.instance.collection('stocks').orderBy('name').snapshots();
+  Stream<QuerySnapshot<Map<String, dynamic>>> _stocksStream() async* {
+    yield* DB.colSync(_cid, C.stocks).orderBy('name').snapshots();
   }
 
   @override

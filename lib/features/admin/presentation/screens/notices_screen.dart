@@ -2,6 +2,7 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +19,7 @@ import 'package:uddoygi/features/marketing/presentation/widgets/notice_4.dart'; 
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_5.dart'; // CommentsPanel (noticeId version)
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_6.dart';
 
-const _brandBlue = Color(0xFF0D47A1);
+const _brandBlue = Color(0xFF2A0A4B);
 
 class AdminNoticeScreen extends StatefulWidget {
   const AdminNoticeScreen({super.key});
@@ -28,6 +29,7 @@ class AdminNoticeScreen extends StatefulWidget {
 }
 
 class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
+  String _cid = '';
   // session
   String? userEmail;
   String? userName;
@@ -56,6 +58,9 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadSession();
   }
 
@@ -71,7 +76,7 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
 
   /// Map email -> profile from `users` (real photo + name, same style as AllEmployeesPage)
   Stream<Map<String, _Profile>> _profilesStream() {
-    return FirebaseFirestore.instance.collection(_usersColl).snapshots().map((s) {
+    return DB.firestore.collection(_usersColl).snapshots().map((s) {
       final map = <String, _Profile>{};
       for (final d in s.docs) {
         final m = d.data();
@@ -90,7 +95,7 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> _noticesStream() {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection(_noticesColl);
+    Query<Map<String, dynamic>> q = DB.firestore.collection(_noticesColl);
     if (_dept != 'All') {
       q = q.where('department', isEqualTo: _dept);
     }
@@ -102,7 +107,7 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
 
   /// Employee dropdown source
   Stream<List<_Employee>> _employeesStream() {
-    Query<Map<String, dynamic>> q = FirebaseFirestore.instance.collection(_employeesColl);
+    Query<Map<String, dynamic>> q = DB.firestore.collection(_employeesColl);
     if (_dept != 'All') q = q.where('department', isEqualTo: _dept);
     return q.snapshots().map((s) {
       final list = s.docs
@@ -191,7 +196,7 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
           final deptForPost = category ?? (_dept == 'All' ? 'Marketing' : _dept);
           final now = Timestamp.now();
           final doc =
-          FirebaseFirestore.instance.collection(_noticesColl).doc();
+          DB.firestore.collection(_noticesColl).doc();
           final noticeData = {
             'title': _deriveTitle(text),
             'description': text,
@@ -581,7 +586,8 @@ class _DeptChip extends StatelessWidget {
 
 /* ======================== Compact comments widget ======================== */
 
-class _CompactComments extends StatelessWidget {
+class _CompactComments extends StatefulWidget {
+
   final String noticeId;
   final String meAvatarUrl;
   final String meName;
@@ -593,12 +599,25 @@ class _CompactComments extends StatelessWidget {
     required this.meName,
     required this.meEmail,
   });
+  @override
+  State<_CompactComments> createState() => _CompactCommentsState();
+}
+
+class _CompactCommentsState extends State<_CompactComments> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final commentsRef = FirebaseFirestore.instance
-        .collection('notices')
-        .doc(noticeId)
+    final commentsRef = DB.colSync(_cid, C.notices)
+        .doc(widget.noticeId)
         .collection('comments');
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -611,7 +630,7 @@ class _CompactComments extends StatelessWidget {
             // Write a comment (opens full panel)
             Row(
               children: [
-                CircleAvatar(radius: 16, backgroundImage: NetworkImage(meAvatarUrl)),
+                CircleAvatar(radius: 16, backgroundImage: NetworkImage(widget.meAvatarUrl)),
                 const SizedBox(width: 8),
                 Expanded(
                   child: InkWell(
@@ -648,28 +667,28 @@ class _CompactComments extends StatelessWidget {
   }
 
   void _openFullComments(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => FractionallySizedBox(
-        heightFactor: 0.9,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: CommentsPanel(
-            noticeId: noticeId,
-            meAvatarUrl: meAvatarUrl,
-            meName: meName,
-            meEmail: meEmail,
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (_) => FractionallySizedBox(
+          heightFactor: 0.9,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: CommentsPanel(
+              noticeId: widget.noticeId,
+              meAvatarUrl: widget.meAvatarUrl,
+              meName: widget.meName,
+              meEmail: widget.meEmail,
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 }
 
 /* ======================== small helpers ======================== */

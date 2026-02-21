@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 
-class ComplaintsFromMeScreen extends StatelessWidget {
+class ComplaintsFromMeScreen extends StatefulWidget {
   final String userEmail;
   final String? userName;
 
@@ -11,6 +13,21 @@ class ComplaintsFromMeScreen extends StatelessWidget {
     required this.userEmail,
     this.userName,
   });
+
+  @override
+  State<ComplaintsFromMeScreen> createState() => _ComplaintsFromMeScreenState();
+}
+
+class _ComplaintsFromMeScreenState extends State<ComplaintsFromMeScreen> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -46,13 +63,14 @@ class ComplaintsFromMeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Complaints From Me'),
+        title: const Text('Complaints From Me', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('complaints')
-            .where('submittedBy', isEqualTo: userEmail)
+        stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.complaints)
+            .where('submittedBy', isEqualTo: widget.userEmail)
             .orderBy('timestamp', descending: true)
             .snapshots(),
         builder: (context, snapshot) {

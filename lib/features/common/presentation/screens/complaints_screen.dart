@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/common/complaints/new_complaint.dart';
 import 'package:uddoygi/features/common/complaints/all_complaint.dart';
@@ -18,6 +19,7 @@ class ComplaintScreen extends StatefulWidget {
 }
 
 class _ComplaintScreenState extends State<ComplaintScreen> {
+  String _cid = '';
   String _role = "user";
   String _userEmail = "";
   String _userName = "";
@@ -28,6 +30,9 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _initSession();
   }
 
@@ -38,8 +43,7 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
     final name = (session?['name'] ?? email).toString();
 
     if (role == "unknown" && email.isNotEmpty) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+      final userDoc = await DB.colSync(_cid, C.users)
           .where('email', isEqualTo: email)
           .limit(1)
           .get();
@@ -146,7 +150,8 @@ class _AgainstMeScaffold extends StatelessWidget {
   }
 }
 
-class _ComplaintsAgainstMeTab extends StatelessWidget {
+class _ComplaintsAgainstMeTab extends StatefulWidget {
+
   final String userEmail;
   final String userName;
   final String role;
@@ -156,13 +161,26 @@ class _ComplaintsAgainstMeTab extends StatelessWidget {
     required this.userName,
     required this.role,
   });
+  @override
+  State<_ComplaintsAgainstMeTab> createState() => _ComplaintsAgainstMeTabState();
+}
+
+class _ComplaintsAgainstMeTabState extends State<_ComplaintsAgainstMeTab> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('complaints')
-          .where('againstEmail', isEqualTo: userEmail)
+      stream: DB.colSync(_cid, C.complaints)
+          .where('againstEmail', isEqualTo: widget.userEmail)
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -285,7 +303,8 @@ class _ResolutionScaffoldState extends State<_ResolutionScaffold>
   }
 }
 
-class _AllComplaintActionsList extends StatelessWidget {
+class _AllComplaintActionsList extends StatefulWidget {
+
   final String userName;
   final String userRole;
   const _AllComplaintActionsList({
@@ -294,10 +313,24 @@ class _AllComplaintActionsList extends StatelessWidget {
   });
 
   bool get isHrOrAdmin => userRole == "admin" || userRole == "hr";
+  @override
+  State<_AllComplaintActionsList> createState() => _AllComplaintActionsListState();
+}
+
+class _AllComplaintActionsListState extends State<_AllComplaintActionsList> {
+  String _cid = '';
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (!isHrOrAdmin) {
+    if (!widget.isHrOrAdmin) {
       return const Center(
         child: Text(
           "Unauthorized.\nOnly Admin and HR can access complaint actions.",
@@ -307,8 +340,7 @@ class _AllComplaintActionsList extends StatelessWidget {
       );
     }
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('complaints')
+      stream: DB.colSync(_cid, C.complaints)
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -336,14 +368,14 @@ class _AllComplaintActionsList extends StatelessWidget {
                 subtitle: Text("Status: ${(data['status'] ?? '').toString()}"),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: _brandBlue),
                 onTap: () {
-                  if (isHrOrAdmin) {
+                  if (widget.isHrOrAdmin) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => ComplaintActionsScreen(
                           complaintId: id,
-                          userName: userName,
-                          userRole: userRole,
+                          userName: widget.userName,
+                          userRole: widget.userRole,
                         ),
                       ),
                     );

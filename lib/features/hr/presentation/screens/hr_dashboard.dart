@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -31,6 +32,7 @@ class HRDashboard extends StatefulWidget {
 }
 
 class _HRDashboardState extends State<HRDashboard> {
+  String _cid = '';
   String? email;
   String? uid;
   String? name;
@@ -39,27 +41,43 @@ class _HRDashboardState extends State<HRDashboard> {
   String _search = '';
   int _currentTab = 0;
 
+  Stream<int> _notifStream = Stream.value(0);
+  Stream<int> _msgStream   = Stream.value(0);
+
   @override
   void initState() {
     super.initState();
-    _loadSession();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final id = await LocalStorageService.getSavedCompanyId();
+    if (!mounted) return;
+    setState(() {
+      _cid = id ?? '';
+      if (_cid.isNotEmpty) {
+        _notifStream = _unreadNotificationsStream();
+        _msgStream   = _unreadMessagesStream();
+      }
+    });
+    await _loadSession();
   }
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
     final current = FirebaseAuth.instance.currentUser;
-
+    if (!mounted) return;
     setState(() {
-      email = session?['email'] as String? ?? current?.email;
-      uid = session?['uid'] as String? ?? current?.uid;
-      name = (session?['name'] as String?) ?? current?.displayName ?? current?.email ?? 'HR';
+      email    = session?['email'] as String? ?? current?.email;
+      uid      = session?['uid']   as String? ?? current?.uid;
+      name     = (session?['name'] as String?) ?? current?.displayName ?? current?.email ?? 'HR';
       photoUrl = current?.photoURL;
     });
 
-    if (uid != null) {
+    if (uid != null && _cid.isNotEmpty) {
       try {
-        final s = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        if (s.exists) {
+        final s = await DB.colSync(_cid, C.users).doc(uid).get();
+        if (s.exists && mounted) {
           final d = s.data()!;
           final n = (d['fullName'] as String?)?.trim();
           final p = (d['profilePhotoUrl'] as String?)?.trim();
@@ -73,8 +91,7 @@ class _HRDashboardState extends State<HRDashboard> {
   }
 
   Future<void> _logout() async {
-    await FirebaseAuth.instance.signOut();
-    await LocalStorageService.clearSession();
+    await LocalStorageService.performLogout();
     if (mounted) Navigator.pushReplacementNamed(context, '/login');
   }
 
@@ -93,10 +110,9 @@ class _HRDashboardState extends State<HRDashboard> {
 
   Stream<int> _unreadMessagesStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream<int>.value(0);
+    if (user == null || _cid.isEmpty) return Stream<int>.value(0);
     final mail = user.email ?? '';
-    return FirebaseFirestore.instance
-        .collection('messages')
+    return DB.colSync(_cid, C.messages)
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
@@ -105,10 +121,9 @@ class _HRDashboardState extends State<HRDashboard> {
 
   Stream<int> _unreadNotificationsStream() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return Stream<int>.value(0);
+    if (user == null || _cid.isEmpty) return Stream<int>.value(0);
     final mail = user.email ?? '';
-    return FirebaseFirestore.instance
-        .collection('notifications')
+    return DB.colSync(_cid, C.notifications)
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
@@ -120,13 +135,14 @@ class _HRDashboardState extends State<HRDashboard> {
     _DashboardItem('Alerts',      Icons.notification_important, '/common/alert'),
     _DashboardItem('Directory',   Icons.people,                 '/hr/employee_directory'),
     _DashboardItem('Attendance',  Icons.event_available,        '/hr/attendance'),
-    _DashboardItem('Payroll',     Icons.attach_money,           '/hr/payroll_processing'),
-    _DashboardItem('Payslips',    Icons.receipt_long,           '/hr/payslip'),
+    _DashboardItem('Payroll',     Icons.attach_money,           '/hr/payroll'),
+    _DashboardItem('Authorization', Icons.verified_user_rounded, '/hr/authorization'),
+    _DashboardItem('Slip Approvals', Icons.receipt_long_rounded, '/hr/payment_slip_approvals'),
     _DashboardItem('Loans',       Icons.account_balance,        '/hr/loan_approval'),
     _DashboardItem('Credits',     Icons.trending_up,            '/hr/credits'),
     _DashboardItem('Expenses',    Icons.payments,               '/hr/expenses'),
     _DashboardItem('Balance',     Icons.account_balance_wallet, '/hr/balance_update'),
-    _DashboardItem('Notices',     Icons.notifications,          '/marketing/notices'),
+    _DashboardItem('Notices',     Icons.notifications,          '/hr/notices'),
     _DashboardItem('Messages',    Icons.message,                '/common/messages'),
     _DashboardItem('Complaints',  Icons.support_agent,          '/common/complaints'),
     _DashboardItem('Procurement', Icons.shopping_cart,          '/hr/procurement'),
@@ -242,7 +258,7 @@ class _HRDashboardState extends State<HRDashboard> {
               final it = filtered[i];
               final isMessages = it.title == 'Messages';
               return StreamBuilder<int>(
-                stream: isMessages ? _unreadMessagesStream() : const Stream<int>.empty(),
+                stream: isMessages ? _msgStream : const Stream<int>.empty(),
                 builder: (_, snap) {
                   final count = snap.data ?? 0;
                   return _DashTile(
@@ -268,13 +284,13 @@ class _HRDashboardState extends State<HRDashboard> {
       _NavItem('Attendance', Icons.event_available_rounded,
           onTap: () => Navigator.pushNamed(context, '/hr/attendance')),
       _NavItem('Payroll', Icons.attach_money_rounded,
-          onTap: () => Navigator.pushNamed(context, '/hr/payroll_processing')),
+          onTap: () => Navigator.pushNamed(context, '/hr/payroll')),
       _NavItem('Notifications', Icons.notifications,
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
-          badgeStream: _unreadNotificationsStream()),
+          badgeStream: _notifStream),
       _NavItem('Messages', Icons.message_rounded,
           onTap: () => Navigator.pushNamed(context, '/common/messages'),
-          badgeStream: _unreadMessagesStream()),
+          badgeStream: _msgStream),
     ];
 
     return SafeArea(
@@ -340,6 +356,14 @@ class _HROverviewHeader extends StatefulWidget {
 }
 
 class _HROverviewHeaderState extends State<_HROverviewHeader> {
+  String _cid = '';
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
   _Range _range = _Range.thisMonth;
 
   ({DateTime a, DateTime b}) _rangeDates(_Range r) {
@@ -358,19 +382,17 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
 
   // ====== Existing cards ======
   Stream<String> _employees() =>
-      FirebaseFirestore.instance.collection('users').snapshots().map((s) => '${s.docs.length}');
+      DB.colSync(_cid, C.users).snapshots().map((s) => '${s.docs.length}');
 
   // Actual pending complaints only
-  Stream<String> _pendingComplaints() => FirebaseFirestore.instance
-      .collection('complaints')
+  Stream<String> _pendingComplaints() => DB.colSync(_cid, C.complaints)
       .where('status', isEqualTo: 'pending')
       .snapshots()
       .map((s) => '${s.docs.length}');
 
   Stream<String> _expensesTotal() {
     final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('expenses')
+    return DB.colSync(_cid, C.expenses)
         .where('dueDate', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
         .snapshots()
@@ -387,8 +409,7 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
 
   Stream<String> _creditsTotal() {
     final r = _rangeDates(_range);
-    return FirebaseFirestore.instance
-        .collection('ledger')
+    return DB.colSync(_cid, C.ledger)
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('date', isLessThanOrEqualTo: Timestamp.fromDate(r.b))
         .where('credit', isGreaterThan: 0)
@@ -424,10 +445,9 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
         ts is Timestamp && ts.compareTo(fromTs) >= 0 && ts.compareTo(toTs) <= 0;
 
     // Drive computation off incentive updates
-    return FirebaseFirestore.instance.collection('marketing_incentives').snapshots().asyncMap((incSnap) async {
+    return DB.colSync(_cid, C.marketingIncentives).snapshots().asyncMap((incSnap) async {
       // Marketing users
-      final users = await FirebaseFirestore.instance
-          .collection('users')
+      final users = await DB.colSync(_cid, C.users)
           .where('department', isEqualTo: 'marketing')
           .get();
       final emails = <String>[
@@ -465,8 +485,7 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
       }
 
       // Salaries
-      final paySnap = await FirebaseFirestore.instance
-          .collection('payrolls')
+      final paySnap = await DB.colSync(_cid, C.payrolls)
           .where('period', isEqualTo: periodLabel)
           .get();
       final salaryByEmail = <String, double>{};
@@ -516,7 +535,7 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
     }
 
     // Use stable monthly doc; fall back to legacy
-    final ref = FirebaseFirestore.instance.collection('budgets').doc(key);
+    final ref = DB.colSync(_cid, C.budgets).doc(key);
     return ref.snapshots().asyncMap((snap) async {
       if (snap.exists) {
         final m = snap.data() ?? {};
@@ -531,8 +550,7 @@ class _HROverviewHeaderState extends State<_HROverviewHeader> {
       }
 
       // Legacy fallback by human-readable month
-      final q = await FirebaseFirestore.instance
-          .collection('budgets')
+      final q = await DB.colSync(_cid, C.budgets)
           .where('period', isEqualTo: display)
           .orderBy('createdAt', descending: true)
           .limit(1)
@@ -678,19 +696,31 @@ class _StatCard extends StatelessWidget {
       child: StreamBuilder<String>(
         stream: streamText,
         builder: (_, snap) {
-          final v = snap.hasData ? snap.data! : '—';
+          final loading = snap.connectionState == ConnectionState.waiting && !snap.hasData;
+          final v = snap.data ?? '—';
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AutoSizeText(
-                v,
-                maxLines: 1,
-                minFontSize: 14,
-                stepGranularity: 0.5,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _brandGreen, fontWeight: FontWeight.w900, fontSize: 20),
-              ),
+              loading
+                  ? SizedBox(
+                      height: 24,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _brandGreen.withOpacity(.5)),
+                        ),
+                      ),
+                    )
+                  : AutoSizeText(
+                      v,
+                      maxLines: 1,
+                      minFontSize: 14,
+                      stepGranularity: 0.5,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _brandGreen, fontWeight: FontWeight.w900, fontSize: 20),
+                    ),
               const SizedBox(height: 2),
               AutoSizeText(
                 label,

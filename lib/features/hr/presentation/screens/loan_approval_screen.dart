@@ -21,6 +21,8 @@ import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class LoanApprovalScreen extends StatefulWidget {
   const LoanApprovalScreen({super.key});
@@ -29,6 +31,7 @@ class LoanApprovalScreen extends StatefulWidget {
 }
 
 class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
+  String _cid = '';
   // Palette
   static const Color _board        = Color(0xFF80839A);
   static const Color _ink          = Color(0xFF173A9F);
@@ -37,7 +40,6 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
   static const Color _cyanPastel   = Color(0xFF9DEBFF);
   static const Color _accent       = Color(0xFFFFC857);
 
-  final _db   = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳', decimalDigits: 0);
   final _date  = DateFormat('d MMM, yyyy');
@@ -55,19 +57,18 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
   // ───────────────────────── Streams ─────────────────────────
   Stream<QuerySnapshot<Map<String, dynamic>>> _stream({required bool onlyPending}) {
-    Query<Map<String, dynamic>> q = _db.collection('loans').orderBy('requestedAt', descending: true);
+    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.loans).orderBy('requestedAt', descending: true);
     if (onlyPending) q = q.where('status', isEqualTo: 'pending');
     return q.snapshots();
   }
 
-  Stream<int> _countStatus(String status) {
-    return _db.collection('loans').where('status', isEqualTo: status).snapshots().map((s) => s.docs.length);
+  Stream<int> _countStatus(String status) async* {
+    yield* DB.colSync(_cid, C.loans).where('status', isEqualTo: status).snapshots().map((s) => s.docs.length);
   }
 
   /// Company “Total” = sum of principal for loans with status approved or disbursed.
   Stream<num> _sumApprovedPrincipal() {
-    return _db
-        .collection('loans')
+    return DB.colSync(_cid, C.loans)
         .where('status', whereIn: ['approved', 'disbursed', 'closed'])
         .snapshots()
         .map((s) => s.docs.fold<num>(
@@ -77,14 +78,23 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
   }
 
   /// Company “Repaid” = sum of all repayments (historically okay).
+  /// Company "Repaid" — sums repayments subcollections only within this company's loans.
   Stream<num> _sumAllRepaid() {
-    return _db.collectionGroup('repayments').snapshots()
-        .map((s) => s.docs.fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0)));
+    return DB.colSync(_cid, C.loans)
+        .where('status', whereIn: ['approved', 'disbursed', 'closed'])
+        .snapshots()
+        .asyncMap((loansSnap) async {
+      num total = 0;
+      for (final loan in loansSnap.docs) {
+        final repSnap = await DB.subColSync(_cid, C.loans, loan.id, C.repayments).get();
+        total += repSnap.docs.fold<num>(0, (s, d) => s + (d.data()['amount'] as num? ?? 0));
+      }
+      return total;
+    });
   }
 
   Stream<num> _sumDisbursed() {
-    return _db
-        .collection('loans')
+    return DB.colSync(_cid, C.loans)
         .where('status', whereIn: ['disbursed', 'closed'])
         .snapshots()
         .map((s) => s.docs.fold<num>(0, (sum, d) {
@@ -95,8 +105,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
 
   Stream<num> _loanRepaidStream(String loanId) {
-    return _db
-        .collection('loans').doc(loanId)
+    return DB.colSync(_cid, C.loans).doc(loanId)
         .collection('repayments')
         .snapshots()
         .map((s) => s.docs.fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0)));
@@ -105,8 +114,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
   // ───────────────────────── Derived totals (per agent) ─────────────────────────
   /// Accurate, backward-compatible outstanding computed from each approved/disbursed loan’s own repayments.
   Future<_AgentOutstandingTotals> _computeAgentOutstanding(String userId) async {
-    final loansSnap = await _db
-        .collection('loans')
+    final loansSnap = await DB.colSync(_cid, C.loans)
         .where('userId', isEqualTo: userId)
         .where('status', whereIn: ['approved', 'disbursed']) // ← only approved + disbursed
         .get();
@@ -138,7 +146,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
         String? notes,
         Map<String, dynamic>? extra,
       }) async {
-    await _db.collection('loans').doc(id).set({
+    await (await DB.col(C.loans)).doc(id).set({
       'status': status,
       'notes': notes,
       'decisionAt': FieldValue.serverTimestamp(),
@@ -190,8 +198,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
     }
 
     // Load repayable loans (approved/disbursed), oldest first
-    final loansSnap = await _db
-        .collection('loans')
+    final loansSnap = await DB.colSync(_cid, C.loans)
         .where('userId', isEqualTo: userId)
         .where('status', whereIn: ['approved', 'disbursed'])
         .orderBy('requestedAt')
@@ -231,7 +238,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
     // Apply FIFO
     double remaining = applyAmount;
-    final batch = _db.batch();
+    final batch = DB.firestore.batch();
     for (final b in buckets) {
       if (remaining <= 0) break;
       final applyHere = remaining > b.outstanding ? b.outstanding : remaining;
@@ -287,8 +294,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
   Future<Uint8List> _buildAgentReportPdf(String userId, String? userEmail) async {
     // Fetch loans
-    final loansSnap = await _db
-        .collection('loans')
+    final loansSnap = await DB.colSync(_cid, C.loans)
         .where('userId', isEqualTo: userId)
         .orderBy('requestedAt')
         .get();
@@ -331,7 +337,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
     repayRows.sort((a, b) => (a.date ?? DateTime(0)).compareTo(b.date ?? DateTime(0)));
 
-    final doc = pw.Document();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
     final small = pw.TextStyle(fontSize: 9);
 
     doc.addPage(
@@ -442,6 +448,14 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
     _scrollCtrl.dispose();
     super.dispose();
   }
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -943,7 +957,7 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
 
   // ─────────────────────── Agent loans popup ───────────────────────
   Future<void> _showAgentLoansDialog(String userId, String? userEmail) async {
-    final q = _db.collection('loans').where('userId', isEqualTo: userId).orderBy('requestedAt', descending: true);
+    final q = (await DB.col(C.loans)).where('userId', isEqualTo: userId).orderBy('requestedAt', descending: true);
 
     await showDialog(
       context: context,

@@ -25,6 +25,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 const _indigo = Color(0xFF0D47A1);
 const _chipBg = Color(0xFFEFF3FF);
@@ -38,6 +40,7 @@ class AddNewWorkOrderScreen extends StatefulWidget {
 }
 
 class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
+  String _cid = '';
   // Create form state
   final _formKey = GlobalKey<FormState>();
   final _buyerNameCtrl = TextEditingController();
@@ -59,6 +62,9 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadProducts();
     // Default buyer name from current user (as a convenience)
     final u = FirebaseAuth.instance.currentUser;
@@ -74,8 +80,7 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
   }
 
   Future<void> _loadProducts() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('products')
+    final snap = await DB.colSync(_cid, C.products)
         .orderBy('model_name')
         .get();
     setState(() => _products = snap.docs);
@@ -132,8 +137,7 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
           const Divider(height: 1),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('work_orders')
+              stream: DB.colSync(_cid, C.workOrders)
                   .where('agentEmail', isEqualTo: userEmail)
                   .snapshots(),
               builder: (ctx, snap) {
@@ -674,7 +678,7 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
 
   Widget _buildSourceDropdown() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('invoices').snapshots(),
+      stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.invoices).snapshots(),
       builder: (ctx, snap) {
         final base = const [
           DropdownMenuItem<String>(value: 'stock', child: Text('Stock (no invoice)')),
@@ -818,7 +822,7 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
     }
 
     // Load selected invoice and map its items
-    final doc = await FirebaseFirestore.instance.collection('invoices').doc(v).get();
+    final doc = await (await DB.col(C.invoices)).doc(v).get();
     final data = doc.data();
     if (data == null) return;
 
@@ -1269,11 +1273,11 @@ class _AddNewWorkOrderScreenState extends State<AddNewWorkOrderScreen> {
       'tracking_number': tracking, // REQUIRED
     };
 
-    final woRef = FirebaseFirestore.instance.collection('work_orders').doc(workNo);
-    final idxRef = FirebaseFirestore.instance.collection('tracking_index').doc(tracking);
+    final woRef = (await DB.col(C.workOrders)).doc(workNo);
+    final idxRef = (await DB.col(C.trackingIndex)).doc(tracking);
 
     try {
-      await FirebaseFirestore.instance.runTransaction((tx) async {
+      await DB.firestore.runTransaction((tx) async {
         final idxSnap = await tx.get(idxRef);
         if (idxSnap.exists) {
           throw StateError('TRACKING_TAKEN');

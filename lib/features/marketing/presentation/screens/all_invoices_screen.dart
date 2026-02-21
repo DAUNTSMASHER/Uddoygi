@@ -1,6 +1,7 @@
 // lib/features/marketing/presentation/screens/all_invoices_screen.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'payment_slip_screen.dart';
 
 /// ------- Brand tokens -------
 const Color _indigo  = Color(0xFF0D47A1);
@@ -23,6 +25,7 @@ class AllInvoicesScreen extends StatefulWidget {
 }
 
 class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
+  String _cid = '';
   String? agentEmail;
   String? agentUid;
 
@@ -35,6 +38,9 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadUserIdentity();
   }
 
@@ -123,7 +129,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       );
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('customers').doc(customerId).snapshots(),
+      stream: DB.colSync(_cid, C.customers).doc(customerId).snapshots(),
       builder: (ctx, snap) {
         final data = snap.data?.data();
         final url  = (data?['photoUrl'] ?? data?['image'] ?? '').toString();
@@ -194,7 +200,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
   // ---------- PDF ----------
   Future<void> _generatePdf(Map<String, dynamic> inv) async {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
 
     final itemsRaw = (inv['items'] as List?) ?? [];
     final items = itemsRaw.cast<Map>().map((e) => e.map((k, v) => MapEntry('$k', v))).toList();
@@ -433,6 +439,11 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
               const SizedBox(height: 16),
 
+              // ---------- Slip status in details ----------
+              _buildSlipStatusBanner(docId, inv),
+
+              const SizedBox(height: 12),
+
               // ---------- Actions ----------
               Row(
                 children: [
@@ -464,6 +475,9 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              // Payment slip button
+              _buildAddSlipButton(context, docId, inv),
             ],
           ),
         ),
@@ -581,8 +595,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                     StreamBuilder<QuerySnapshot>(
                       stream: (agentEmail == null)
                           ? const Stream.empty()
-                          : FirebaseFirestore.instance
-                          .collection('customers')
+                          : DB.colSync(_cid, C.customers)
                           .where('ownerEmail', isEqualTo: agentEmail)
                           .orderBy('createdAt', descending: true)
                           .snapshots(),
@@ -907,7 +920,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                       }
 
                       try {
-                        await FirebaseFirestore.instance.collection('invoices').doc(docId).update(updated);
+                        await DB.colSync(_cid, C.invoices).doc(docId).update(updated);
                         if (!mounted) return;
                         Navigator.of(context).pop();
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Invoice updated')));
@@ -986,7 +999,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     }
 
     // 🔥 Directly query ALL invoices belonging to the logged-in agent.
-    final invoicesRef = FirebaseFirestore.instance.collection('invoices');
+    final invoicesRef = DB.colSync(_cid, C.invoices);
 
     Filter ownerFilter;
     if (agentEmail != null && agentUid != null) {
@@ -1072,6 +1085,17 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                   0, (sum, d) => sum + ((d.data()['grandTotal'] as num?) ?? 0),
                 );
 
+                // Pending = total of invoices without verified payment
+                final pendingAmount = filtered.fold<num>(0, (sum, d) {
+                  final m      = d.data();
+                  final slip   = (m['slipStatus'] as String?) ?? '';
+                  final pay    = m['payment'];
+                  final taken  = (pay is Map && pay['taken'] == true) ||
+                      (m['status']?.toString().toLowerCase() ?? '').contains('payment taken');
+                  if (taken || slip == 'verified') return sum;
+                  return sum + ((m['grandTotal'] as num?) ?? 0);
+                });
+
                 if (filtered.isEmpty) return _emptyState();
 
                 return Column(
@@ -1079,6 +1103,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                     _statsHeader(
                       count: paidOnly.length,
                       total: totalPaidAmount.toDouble(),
+                      pending: pendingAmount.toDouble(),
                     ),
                     Expanded(
                       child: ListView.builder(
@@ -1219,7 +1244,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
-  Widget _statsHeader({required int count, required double total}) {
+  Widget _statsHeader({required int count, required double total, double pending = 0}) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       padding: const EdgeInsets.all(12),
@@ -1230,29 +1255,172 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       ),
       child: Row(
         children: [
-          _statBox('Invoices', '$count'),
-          const SizedBox(width: 12),
-          _statBox('Total Amount', '৳${_money(total)}'),
+          _statBox('Paid', '$count'),
+          const SizedBox(width: 8),
+          _statBox('Received', '৳${_money(total)}'),
+          const SizedBox(width: 8),
+          _statBox('Pending', '৳${_money(pending)}', warn: pending > 0),
         ],
       ),
     );
   }
 
-  Widget _statBox(String label, String value) {
+  Widget _statBox(String label, String value, {bool warn = false}) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(color: Colors.white.withOpacity(.92), borderRadius: BorderRadius.circular(12)),
         child: Column(
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-            const SizedBox(height: 6),
-            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: _indigo)),
+            Text(label, style: const TextStyle(fontSize: 11, color: Colors.black87)),
+            const SizedBox(height: 4),
+            Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900,
+                    color: warn ? Colors.orange.shade700 : _indigo)),
           ],
         ),
       ),
     );
   }
+
+  // ---------- Slip status banner (inside details sheet) ----------
+  Widget _buildSlipStatusBanner(String docId, Map<String, dynamic> inv) {
+    final slipStatus    = (inv['slipStatus'] as String?) ?? '';
+    final slipSubmitted = (inv['slipSubmitted'] as bool?) ?? false;
+    final total         = ((inv['grandTotal'] as num?) ?? 0).toDouble();
+    final payment       = inv['payment'];
+    final paid          = (payment is Map && payment['taken'] == true)
+        ? ((payment['amount'] as num?)?.toDouble() ?? total)
+        : 0.0;
+    final pending = total - paid;
+
+    if (slipStatus == 'verified') {
+      return _bannerTile(Icons.verified_rounded, 'Payment Verified by HR',
+          'This payment has been confirmed. Invoice marked as Payment Taken.',
+          Colors.green.shade600);
+    }
+    if (slipStatus == 'rejected') {
+      return _bannerTile(Icons.cancel_rounded, 'Slip Rejected by HR',
+          'Your slip was rejected. Please upload a new valid payment slip.',
+          Colors.red.shade600);
+    }
+    if (slipSubmitted || slipStatus == 'pending_hr') {
+      return _bannerTile(Icons.hourglass_top_rounded, 'Slip Pending HR Approval',
+          'Your payment slip has been submitted and is awaiting HR verification.',
+          Colors.orange.shade700);
+    }
+    if (pending > 0) {
+      return _bannerTile(Icons.pending_actions_rounded,
+          'Payment Pending: ৳${_money(pending)}',
+          'No verified payment slip found. Upload a slip to confirm payment.',
+          Colors.blueGrey.shade600);
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _bannerTile(IconData icon, String title, String sub, Color color) =>
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Row(children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(fontSize: 13,
+                  fontWeight: FontWeight.w700, color: color)),
+              const SizedBox(height: 2),
+              Text(sub, style: const TextStyle(fontSize: 11, color: Colors.black45)),
+            ],
+          )),
+        ]),
+      );
+
+  Widget _buildAddSlipButton(BuildContext ctx, String docId, Map<String, dynamic> inv) {
+    final slipStatus   = (inv['slipStatus'] as String?) ?? '';
+    final paymentTaken = ((inv['payment'] is Map &&
+        (inv['payment'] as Map)['taken'] == true) ||
+        (inv['status']?.toString().toLowerCase() ?? '').contains('payment taken'));
+
+    if (paymentTaken && slipStatus == 'verified') return const SizedBox.shrink();
+
+    final total = ((inv['grandTotal'] as num?) ?? 0).toDouble();
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.upload_file_rounded, size: 18),
+        label: Text(slipStatus == 'rejected'
+            ? 'Re-submit Payment Slip'
+            : 'Upload Payment Slip'),
+        onPressed: () {
+          Navigator.of(ctx).pop();
+          Navigator.push(
+            ctx,
+            MaterialPageRoute(builder: (_) => PaymentSlipScreen(
+              invoiceId:    docId,
+              invoiceNo:    (inv['invoiceNo'] ?? '').toString(),
+              invoiceTotal: total,
+            )),
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _indigo,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      ),
+    );
+  }
+
+  // ---------- Slip status badge ----------
+  Widget _slipBadge(Map<String, dynamic> inv) {
+    final slipStatus    = (inv['slipStatus'] as String?) ?? '';
+    final slipSubmitted = (inv['slipSubmitted'] as bool?) ?? false;
+
+    if (slipStatus == 'verified') {
+      return _miniPill(Icons.verified_rounded, 'Slip Verified', Colors.green.shade600);
+    }
+    if (slipStatus == 'rejected') {
+      return _miniPill(Icons.cancel_rounded, 'Slip Rejected', Colors.red.shade600);
+    }
+    if (slipSubmitted || slipStatus == 'pending_hr') {
+      return _miniPill(Icons.hourglass_top_rounded, 'Slip Pending HR', Colors.orange.shade700);
+    }
+    // Show pending payment amount
+    final total   = ((inv['grandTotal'] as num?) ?? 0).toDouble();
+    final payment = inv['payment'];
+    final paid    = (payment is Map && payment['taken'] == true)
+        ? ((payment['amount'] as num?)?.toDouble() ?? total)
+        : 0.0;
+    final pending = total - paid;
+    if (pending > 0) {
+      return _miniPill(Icons.pending_actions_rounded,
+          'Pending ৳${_money(pending)}', Colors.blueGrey.shade600);
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _miniPill(IconData icon, String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 11, color: color),
+      const SizedBox(width: 4),
+      Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+    ]),
+  );
 
   // ---------- Responsive card ----------
   Widget _invoiceCard(String docId, Map<String, dynamic> inv) {
@@ -1279,9 +1447,21 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     // right-top country label (emoji flag + up to 3 words)
     final countrySmall = _countryLabelShort(inv);
 
+    // slip status
+    final slipStatus    = (inv['slipStatus'] as String?) ?? '';
+    final slipSubmitted = (inv['slipSubmitted'] as bool?) ?? false;
+    final paymentTaken  = (inv['payment'] is Map &&
+        (inv['payment'] as Map)['taken'] == true) ||
+        status.toLowerCase().contains('payment taken');
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: slipStatus == 'verified'
+            ? const BorderSide(color: Color(0xFF16A34A), width: 1.5)
+            : BorderSide.none,
+      ),
       elevation: 1,
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -1327,7 +1507,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                                 const Icon(Icons.local_shipping_outlined,
                                     size: 16, color: Colors.black54),
                                 const SizedBox(width: 6),
-                                // tracking expands, ellipsizes
                                 Expanded(
                                   child: Text(
                                     tracking.isEmpty ? 'No Tracking' : tracking,
@@ -1340,7 +1519,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                // total qty (compact text)
                                 Text(
                                   'Qty: $totalQty',
                                   maxLines: 1,
@@ -1361,7 +1539,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            // Country (small)
                             Text(
                               countrySmall.isEmpty ? '🌐' : countrySmall,
                               textAlign: TextAlign.right,
@@ -1370,7 +1547,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
                             ),
                             const SizedBox(height: 10),
-                            // Amount (big, responsive)
                             Text(
                               '৳${_money(total)}',
                               maxLines: 1,
@@ -1392,15 +1568,53 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                   const Divider(height: 1),
                   const SizedBox(height: 8),
 
-                  // Bottom full-width status
-                  Align(alignment: Alignment.centerLeft, child: _statusPill(status)),
-
-                  // Optional: small meta row (date)
-                  const SizedBox(height: 6),
-                  Text(
-                    _niceDate(date),
-                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  // Status + slip badge row
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _statusPill(status),
+                      _slipBadge(inv),
+                    ],
                   ),
+
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Text(
+                      _niceDate(date),
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                    const Spacer(),
+                    // Payment Slip button — only when payment not yet taken/verified
+                    if (!paymentTaken && slipStatus != 'verified')
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => PaymentSlipScreen(
+                            invoiceId:    docId,
+                            invoiceNo:    (inv['invoiceNo'] ?? '').toString(),
+                            invoiceTotal: total,
+                          )),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: _indigo,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.upload_file_rounded,
+                                size: 13, color: Colors.white),
+                            const SizedBox(width: 5),
+                            const Text('Add Slip',
+                                style: TextStyle(fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white)),
+                          ]),
+                        ),
+                      ),
+                  ]),
                 ],
               );
             },

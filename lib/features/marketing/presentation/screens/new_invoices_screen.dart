@@ -14,6 +14,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 const Color _indigo = Color(0xFF0D47A1);
 const Color _accent = Color(0xFF448AFF);
@@ -28,6 +30,7 @@ class NewInvoicesScreen extends StatefulWidget {
 }
 
 class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
+  String _cid = '';
   final _formKey = GlobalKey<FormState>();
 
   // Session / Agent
@@ -100,6 +103,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     _loadAgent();
     _loadProducts();
     _addItem();
@@ -107,7 +113,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
 // Add this helper inside _NewInvoicesScreenState
 
   Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _customersStream() {
-    final col = FirebaseFirestore.instance.collection('customers');
+    final col = DB.colSync(_cid, C.customers);
 
     // use UID — this matches “customers added by this agent”
     final uid = FirebaseAuth.instance.currentUser?.uid ?? _uid;
@@ -162,14 +168,14 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     _uid = user?.uid;
     _agentEmail = user?.email;
     if (_uid != null) {
-      final udoc = await FirebaseFirestore.instance.collection('users').doc(_uid).get();
+      final udoc = await (await DB.col(C.users)).doc(_uid).get();
       _agentName = (udoc.data()?['fullName'] as String?) ?? (user?.displayName ?? '');
     }
     if (mounted) setState(() {});
   }
 
   Future<void> _loadProducts() async {
-    final snapshot = await FirebaseFirestore.instance.collection('products').orderBy('model_name').get();
+    final snapshot = await (await DB.col(C.products)).orderBy('model_name').get();
     if (mounted) setState(() => _products = snapshot.docs);
   }
 
@@ -577,7 +583,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     };
 
     try {
-      await FirebaseFirestore.instance.collection('invoices').doc(invoiceNo).set(payload);
+      await (await DB.col(C.invoices)).doc(invoiceNo).set(payload);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('✅ Invoice saved (Tracking: $tracking)')),
@@ -606,7 +612,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     String? paymentMethod,
     String? paymentRef,
   }) async {
-    final doc = pw.Document();
+    final doc = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
 
     final blue = PdfColor.fromInt(0xFF0D47A1);
     final light = PdfColor.fromInt(0xFFEFF3FF);

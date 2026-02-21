@@ -1,23 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class PayrollDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Stream all payroll records
-  Stream<QuerySnapshot> getAllPayrolls() {
-    return _firestore.collection('payrolls').snapshots();
+  Stream<QuerySnapshot> getAllPayrolls() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.payrolls).snapshots();
   }
 
-  // Get payrolls by user ID
-  Stream<QuerySnapshot> getUserPayrolls(String userId) {
-    return _firestore
-        .collection('payrolls')
-        .where('userId', isEqualTo: userId)
-        .orderBy('month', descending: true)
-        .snapshots();
-  }
+  Stream<QuerySnapshot> getUserPayrolls(String userId) =>
+      DB.stream(C.payrolls,
+          query: (c) => c
+              .where('userId', isEqualTo: userId)
+              .orderBy('month', descending: true));
 
-  // Add a payroll record
   Future<void> addPayroll({
     required String userId,
     required String month,
@@ -25,9 +23,11 @@ class PayrollDataSource {
     required double bonus,
     required double deductions,
     required double netSalary,
-    required String status, // 'processed', 'pending'
+    required String status,
   }) async {
-    await _firestore.collection('payrolls').add({
+    final _cid = await _getCid();
+    final col = DB.colSync(_cid, C.payrolls);
+    await col.add({
       'userId': userId,
       'month': month,
       'baseSalary': baseSalary,
@@ -39,13 +39,13 @@ class PayrollDataSource {
     });
   }
 
-  // Update a payroll record
   Future<void> updatePayroll(String docId, Map<String, dynamic> data) async {
-    await _firestore.collection('payrolls').doc(docId).update(data);
+    final ref = await DB.doc(C.payrolls, docId);
+    await ref.update(data);
   }
 
-  // Delete a payroll record
   Future<void> deletePayroll(String docId) async {
-    await _firestore.collection('payrolls').doc(docId).delete();
+    final ref = await DB.doc(C.payrolls, docId);
+    await ref.delete();
   }
 }

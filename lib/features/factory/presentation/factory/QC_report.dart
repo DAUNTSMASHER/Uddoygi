@@ -1,12 +1,14 @@
 // lib/features/factory/presentation/screens/qc_report_screen.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'qc_report_details_screen.dart';
 
-const Color _darkBlue = Color(0xFF0D47A1);
+const Color _darkBlue = Color(0xFF40062D);
 
 class QCReportScreen extends StatefulWidget {
   const QCReportScreen({Key? key}) : super(key: key);
@@ -16,7 +18,7 @@ class QCReportScreen extends StatefulWidget {
 }
 
 class _QCReportScreenState extends State<QCReportScreen> {
-  final _firestore = FirebaseFirestore.instance;
+  String _cid = '';
   DateTime _selectedDate = DateTime.now();
 
   Future<void> _pickDate() async {
@@ -38,32 +40,32 @@ class _QCReportScreenState extends State<QCReportScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add QC Entry'),
+        title: const Text('QC এন্ট্রি যোগ করুন'),
         content: SingleChildScrollView(
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildTextField('Model Name', (v) => modelName = v, validator: _required),
+                _buildTextField('মডেলের নাম', (v) => modelName = v, validator: _required),
                 const SizedBox(height: 8),
-                _buildTextField('Base', (v) => base = v, validator: _required),
+                _buildTextField('বেস', (v) => base = v, validator: _required),
                 const SizedBox(height: 8),
-                _buildTextField('Colour', (v) => colour = v, validator: _required),
+                _buildTextField('রঙ', (v) => colour = v, validator: _required),
                 const SizedBox(height: 8),
-                _buildTextField('Curl', (v) => curl = v, validator: _required),
+                _buildTextField('কার্ল', (v) => curl = v, validator: _required),
                 const SizedBox(height: 8),
-                _buildTextField('Density', (v) => density = v, validator: _required),
+                _buildTextField('ঘনত্ব', (v) => density = v, validator: _required),
                 const SizedBox(height: 8),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'পরিমাণ', border: OutlineInputBorder()),
                   keyboardType: TextInputType.number,
                   onChanged: (v) => quantity = int.tryParse(v),
-                  validator: (v) => (v == null || int.tryParse(v) == null) ? 'Enter a number' : null,
+                  validator: (v) => (v == null || int.tryParse(v) == null) ? 'সংখ্যা লিখুন' : null,
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'Remarks', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: 'মন্তব্য', border: OutlineInputBorder()),
                   maxLines: 3,
                   onChanged: (v) => remarks = v.trim(),
                   validator: _required,
@@ -71,7 +73,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Text('QC Date: ${DateFormat.yMd().format(qcDate)}'),
+                    Text('QC তারিখ: ${DateFormat.yMd().format(qcDate)}'),
                     const Spacer(),
                     TextButton(
                       onPressed: () async {
@@ -83,7 +85,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
                         );
                         if (pick != null) setState(() => qcDate = pick);
                       },
-                      child: const Text('Change'),
+                      child: const Text('পরিবর্তন'),
                     ),
                   ],
                 ),
@@ -92,12 +94,12 @@ class _QCReportScreenState extends State<QCReportScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('বাতিল')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: _darkBlue),
             onPressed: () async {
               if (!_formKey.currentState!.validate()) return;
-              await _firestore.collection('qc_reports').add({
+              await DB.colSync(_cid, C.qcReports).add({
                 'agentEmail': FirebaseAuth.instance.currentUser?.email,
                 'productType': 'wig',
                 'modelName': modelName,
@@ -111,9 +113,9 @@ class _QCReportScreenState extends State<QCReportScreen> {
                 'timestamp': Timestamp.now(),
               });
               Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QC entry added')));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QC এন্ট্রি যোগ হয়েছে')));
             },
-            child: const Text('Submit'),
+            child: const Text('জমা দিন'),
           ),
         ],
       ),
@@ -131,39 +133,39 @@ class _QCReportScreenState extends State<QCReportScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit QC Entry'),
+        title: const Text('QC এন্ট্রি সম্পাদনা'),
         content: SingleChildScrollView(
           child: Form(
             key: _formKey,
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              _buildTextField('Model Name', (v) => modelName = v, initial: data['modelName'], validator: _required),
+              _buildTextField('মডেলের নাম', (v) => modelName = v, initial: data['modelName'], validator: _required),
               const SizedBox(height: 8),
-              _buildTextField('Base', (v) => base = v, initial: data['base'], validator: _required),
+              _buildTextField('বেস', (v) => base = v, initial: data['base'], validator: _required),
               const SizedBox(height: 8),
-              _buildTextField('Colour', (v) => colour = v, initial: data['colour'], validator: _required),
+              _buildTextField('রঙ', (v) => colour = v, initial: data['colour'], validator: _required),
               const SizedBox(height: 8),
-              _buildTextField('Curl', (v) => curl = v, initial: data['curl'], validator: _required),
+              _buildTextField('কার্ল', (v) => curl = v, initial: data['curl'], validator: _required),
               const SizedBox(height: 8),
-              _buildTextField('Density', (v) => density = v, initial: data['density'], validator: _required),
+              _buildTextField('ঘনত্ব', (v) => density = v, initial: data['density'], validator: _required),
               const SizedBox(height: 8),
               TextFormField(
                 initialValue: quantity.toString(),
-                decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'পরিমাণ', border: OutlineInputBorder()),
                 keyboardType: TextInputType.number,
                 onChanged: (v) => quantity = int.tryParse(v) ?? quantity,
-                validator: (v) => (v == null || int.tryParse(v) == null) ? 'Enter a number' : null,
+                validator: (v) => (v == null || int.tryParse(v) == null) ? 'সংখ্যা লিখুন' : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 initialValue: remarks,
-                decoration: const InputDecoration(labelText: 'Remarks', border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: 'মন্তব্য', border: OutlineInputBorder()),
                 maxLines: 3,
                 onChanged: (v) => remarks = v.trim(),
                 validator: _required,
               ),
               const SizedBox(height: 12),
               Row(children: [
-                Text('QC Date: ${DateFormat.yMd().format(qcDate)}'),
+                Text('QC তারিখ: ${DateFormat.yMd().format(qcDate)}'),
                 const Spacer(),
                 TextButton(
                   onPressed: () async {
@@ -175,19 +177,19 @@ class _QCReportScreenState extends State<QCReportScreen> {
                     );
                     if (pick != null) setState(() => qcDate = pick);
                   },
-                  child: const Text('Change'),
+                  child: const Text('পরিবর্তন'),
                 ),
               ]),
             ]),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('বাতিল')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: _darkBlue),
             onPressed: () async {
               if (!_formKey.currentState!.validate()) return;
-              await _firestore.collection('qc_reports').doc(doc.id).update({
+              await DB.colSync(_cid, C.qcReports).doc(doc.id).update({
                 'modelName': modelName,
                 'base': base,
                 'colour': colour,
@@ -198,9 +200,9 @@ class _QCReportScreenState extends State<QCReportScreen> {
                 'qcDate': Timestamp.fromDate(qcDate),
               });
               Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QC entry updated')));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('QC এন্ট্রি আপডেট হয়েছে')));
             },
-            child: const Text('Save'),
+            child: const Text('সংরক্ষণ'),
           ),
         ],
       ),
@@ -217,13 +219,21 @@ class _QCReportScreenState extends State<QCReportScreen> {
     );
   }
 
-  String? _required(String? v) => (v == null || v.isEmpty) ? 'Required' : null;
+  String? _required(String? v) => (v == null || v.isEmpty) ? 'আবশ্যক' : null;
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
     final userEmail = FirebaseAuth.instance.currentUser?.email;
     if (userEmail == null) {
-      return const Scaffold(body: Center(child: Text('Please sign in')));
+      return const Scaffold(body: Center(child: Text('অনুগ্রহ করে সাইন ইন করুন')));
     }
 
     final startOfDay = Timestamp.fromDate(
@@ -234,18 +244,23 @@ class _QCReportScreenState extends State<QCReportScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('QC Report'), backgroundColor: _darkBlue),
+      appBar: AppBar(
+        title: const Text('QC রিপোর্ট', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: _darkBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(children: [
           // Add / View all
           Row(children: [
-            Expanded(child: _actionCard(icon: Icons.add, label: 'Add QC', onTap: _showAddQCDialog)),
+            Expanded(child: _actionCard(icon: Icons.add, label: 'QC যোগ করুন', onTap: _showAddQCDialog)),
             const SizedBox(width: 12),
             Expanded(
               child: _actionCard(
                 icon: Icons.list,
-                label: 'View All QC',
+                label: 'সব QC দেখুন',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => QCReportDetailsScreen(productionId: null)),
@@ -256,7 +271,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
           const SizedBox(height: 16),
           // Date selector + recent
           Row(children: [
-            Text('Date: ${DateFormat.yMMMMd().format(_selectedDate)}',
+            Text('তারিখ: ${DateFormat.yMMMMd().format(_selectedDate)}',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const Spacer(),
             IconButton(icon: const Icon(Icons.calendar_today), onPressed: _pickDate),
@@ -264,8 +279,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
           const Divider(),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _firestore
-                  .collection('qc_reports')
+              stream: DB.colSync(_cid, C.qcReports)
                   .where('agentEmail', isEqualTo: userEmail)
                   .where('qcDate', isGreaterThanOrEqualTo: startOfDay)
                   .where('qcDate', isLessThanOrEqualTo: endOfDay)
@@ -276,7 +290,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty) return const Center(child: Text('No QC reports for this date.'));
+                if (docs.isEmpty) return const Center(child: Text('এই তারিখে কোনো QC রিপোর্ট নেই।'));
                 return ListView.builder(
                   itemCount: docs.length,
                   itemBuilder: (ctx, i) {
@@ -287,12 +301,12 @@ class _QCReportScreenState extends State<QCReportScreen> {
                       margin: const EdgeInsets.symmetric(vertical: 6),
                       child: ListTile(
                         title: Text(d['modelName'] ?? '—', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('On: ${qcDate != null ? DateFormat.yMd().format(qcDate) : '—'}\nRemarks: ${d['remarks'] ?? ''}'),
+                        subtitle: Text('তারিখ: ${qcDate != null ? DateFormat.yMd().format(qcDate) : '—'}\nমন্তব্য: ${d['remarks'] ?? ''}'),
                         isThreeLine: true,
                         trailing: Wrap(spacing: 8, children: [
-                          TextButton(child: const Text('Edit'), onPressed: () => _showEditQCDialog(doc)),
+                          TextButton(child: const Text('সম্পাদনা'), onPressed: () => _showEditQCDialog(doc)),
                           TextButton(
-                            child: const Text('Details'),
+                            child: const Text('বিস্তারিত'),
                             onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => QCReportDetailsScreen(productionId: doc.id)),

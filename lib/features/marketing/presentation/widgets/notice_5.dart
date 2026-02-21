@@ -2,6 +2,8 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -48,6 +50,7 @@ class CommentsPanel extends StatefulWidget {
 }
 
 class _CommentsPanelState extends State<CommentsPanel> {
+  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   final _controller = TextEditingController();
@@ -78,6 +81,9 @@ class _CommentsPanelState extends State<CommentsPanel> {
   @override
   void initState() {
     super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
     if (widget.commentsStreamOverride == null) {
       _bindLiveFirstPage();
     } else {
@@ -99,7 +105,7 @@ class _CommentsPanelState extends State<CommentsPanel> {
   }
 
   void _bindLiveFirstPage() {
-    final base = FirebaseFirestore.instance
+    final base = DB.firestore
         .collection(widget.noticesCollection)
         .doc(widget.noticeId)
         .collection(widget.commentsSubcollection);
@@ -125,7 +131,7 @@ class _CommentsPanelState extends State<CommentsPanel> {
         _lastOlderDoc = liveDocs.last;
       }
 
-      // If live page is shorter than pageSize, there might be no more (but we’ll verify on first "See more" click).
+      // If live page is shorter than widget.pageSize, there might be no more (but we’ll verify on first "See more" click).
       _hasMore = true;
 
       if (mounted) setState(() {});
@@ -137,7 +143,7 @@ class _CommentsPanelState extends State<CommentsPanel> {
     setState(() => _loadingMore = true);
 
     try {
-      final base = FirebaseFirestore.instance
+      final base = DB.firestore
           .collection(widget.noticesCollection)
           .doc(widget.noticeId)
           .collection(widget.commentsSubcollection);
@@ -206,7 +212,7 @@ class _CommentsPanelState extends State<CommentsPanel> {
       if (widget.onPostComment != null) {
         await widget.onPostComment!(text);
       } else {
-        await FirebaseFirestore.instance
+        await DB.firestore
             .collection(widget.noticesCollection)
             .doc(widget.noticeId)
             .collection(widget.commentsSubcollection)

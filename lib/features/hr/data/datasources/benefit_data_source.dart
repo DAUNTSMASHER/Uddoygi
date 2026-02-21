@@ -1,29 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 
 class BenefitDataSource {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<String> _getCid() => LocalStorageService.getSavedCompanyId().then((v) => v ?? '');
 
-  // Stream all benefits
-  Stream<QuerySnapshot> getAllBenefits() {
-    return _firestore.collection('benefits').snapshots();
+  Stream<QuerySnapshot> getAllBenefits() async* {
+    final cid = await _getCid();
+    yield* DB.colSync(cid, C.benefits).snapshots();
   }
 
-  // Get benefits by user
-  Stream<QuerySnapshot> getUserBenefits(String userId) {
-    return _firestore
-        .collection('benefits')
-        .where('userId', isEqualTo: userId)
-        .snapshots();
-  }
+  Stream<QuerySnapshot> getUserBenefits(String userId) =>
+      DB.stream(C.benefits, query: (c) => c.where('userId', isEqualTo: userId));
 
-  // Add a new benefit record
   Future<void> addBenefit({
     required String userId,
     required String benefitType,
     required double amount,
-    required String status, // 'active', 'inactive'
+    required String status,
   }) async {
-    await _firestore.collection('benefits').add({
+    final _cid = await _getCid();
+    final col = DB.colSync(_cid, C.benefits);
+    await col.add({
       'userId': userId,
       'benefitType': benefitType,
       'amount': amount,
@@ -32,13 +30,13 @@ class BenefitDataSource {
     });
   }
 
-  // Update a benefit record
   Future<void> updateBenefit(String docId, Map<String, dynamic> data) async {
-    await _firestore.collection('benefits').doc(docId).update(data);
+    final ref = await DB.doc(C.benefits, docId);
+    await ref.update(data);
   }
 
-  // Delete a benefit record
   Future<void> deleteBenefit(String docId) async {
-    await _firestore.collection('benefits').doc(docId).delete();
+    final ref = await DB.doc(C.benefits, docId);
+    await ref.delete();
   }
 }

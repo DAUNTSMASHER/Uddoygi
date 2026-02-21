@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/profile.dart';
 
@@ -9,14 +11,21 @@ const Color _greenMid    = Color(0xFF10B981);
 const Color _ink         = _brandGreen;
 const Color _divider     = Color(0x1A065F46); // 10% green
 
-class HRDrawer extends StatelessWidget {
+class HRDrawer extends StatefulWidget {
   const HRDrawer({Key? key}) : super(key: key);
 
+  @override
+  State<HRDrawer> createState() => _HRDrawerState();
+}
+
+class _HRDrawerState extends State<HRDrawer> {
+  String _cid = '';
+
   Stream<int> _unreadNotificationsStream() {
+    if (_cid.isEmpty) return const Stream<int>.empty();
     final mail = FirebaseAuth.instance.currentUser?.email ?? '';
     if (mail.isEmpty) return const Stream<int>.empty();
-    return FirebaseFirestore.instance
-        .collection('notifications')
+    return DB.colSync(_cid, C.notifications)
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
@@ -24,14 +33,22 @@ class HRDrawer extends StatelessWidget {
   }
 
   Stream<int> _unreadMessagesStream() {
+    if (_cid.isEmpty) return const Stream<int>.empty();
     final mail = FirebaseAuth.instance.currentUser?.email ?? '';
     if (mail.isEmpty) return const Stream<int>.empty();
-    return FirebaseFirestore.instance
-        .collection('messages')
+    return DB.colSync(_cid, C.messages)
         .where('to', isEqualTo: mail)
         .where('read', isEqualTo: false)
         .snapshots()
         .map((s) => s.docs.length);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
   }
 
   @override
@@ -42,7 +59,7 @@ class HRDrawer extends StatelessWidget {
     return Drawer(
       backgroundColor: Colors.white,
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+        stream: DB.colSync(_cid, C.users).doc(uid).snapshots(),
         builder: (ctx, snap) {
           if (snap.hasError) {
             return const Center(child: Text('Error loading profile'));
@@ -183,6 +200,10 @@ class HRDrawer extends StatelessWidget {
               _divider(),
 
               _SectionLabel('Payroll'),
+              _NavTile(title: 'Payroll Overview', icon: Icons.payments_rounded, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/payroll');
+              }),
               _NavTile(title: 'Payroll Processing', icon: Icons.attach_money, onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/hr/payroll_processing');
@@ -190,6 +211,14 @@ class HRDrawer extends StatelessWidget {
               _NavTile(title: 'Payslips', icon: Icons.receipt_long, onTap: () {
                 Navigator.pop(context);
                 Navigator.pushNamed(context, '/hr/payslip');
+              }),
+              _NavTile(title: 'Authorization', icon: Icons.verified_user_rounded, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/authorization');
+              }),
+              _NavTile(title: 'Slip Approvals', icon: Icons.receipt_long_rounded, onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/hr/payment_slip_approvals');
               }),
               _NavTile(title: 'Salary Management', icon: Icons.money, onTap: () {
                 Navigator.pop(context);
@@ -288,9 +317,7 @@ class HRDrawer extends StatelessWidget {
                 title: const Text('Logout', style: TextStyle(fontSize: 14, color: Colors.redAccent)),
                 onTap: () async {
                   Navigator.pop(context);
-                  try {
-                    await FirebaseAuth.instance.signOut();
-                  } catch (_) {}
+                  await LocalStorageService.performLogout();
                   if (context.mounted) {
                     Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
                   }
