@@ -1,10 +1,18 @@
 // lib/push/fcm_register.dart
-import 'dart:io' show Platform;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
+
+String get _platformName {
+  if (kIsWeb) return 'web';
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android: return 'android';
+    case TargetPlatform.iOS:     return 'ios';
+    default:                     return 'other';
+  }
+}
 
 Future<void> _claimTokenForUser(String uid, String token) async {
   // FCM tokens live at root users/{uid}/fcmTokens — NOT company-scoped.
@@ -23,7 +31,7 @@ Future<void> _claimTokenForUser(String uid, String token) async {
   // 2) Ensure it is present for THIS user (root-level, not company-scoped)
   await DB.fcmTokensCol(uid).doc(token).set({
     'token':     token,
-    'platform':  Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'other',
+    'platform':  _platformName,
     'updatedAt': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
 }

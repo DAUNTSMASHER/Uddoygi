@@ -244,54 +244,89 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildBody() {
     return CustomScrollView(
       slivers: [
-        // ── Overview header ──────────────────────────────────────────────
+        // ── Summary hero card ────────────────────────────────────────────
         SliverToBoxAdapter(
-          child: _SectionHeader(
-            icon: Icons.insights_rounded,
-            title: 'Overview',
-            trailing: _isRefreshing
-                ? const SizedBox(
-                    width: 12, height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: _p500))
-                : GestureDetector(
-                    onTap: () async {
-                      setState(() => _isRefreshing = true);
-                      await Future.delayed(const Duration(milliseconds: 600));
-                      if (mounted) setState(() => _isRefreshing = false);
-                    },
-                    child: Container(
-                      width: 28, height: 28,
-                      decoration: BoxDecoration(
-                          color: _p100, borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.refresh_rounded, size: 14, color: _p500),
-                    ),
-                  ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                      color: _p100, borderRadius: BorderRadius.circular(6)),
+                  child: const Icon(Icons.insights_rounded, size: 12, color: _p500),
+                ),
+                const SizedBox(width: 6),
+                Text('Overview',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, fontWeight: FontWeight.w800, color: _p700)),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () async {
+                    setState(() => _isRefreshing = true);
+                    await Future.delayed(const Duration(milliseconds: 600));
+                    if (mounted) setState(() => _isRefreshing = false);
+                  },
+                  child: _isRefreshing
+                      ? const Padding(
+                          padding: EdgeInsets.only(right: 12),
+                          child: SizedBox(
+                              width: 12, height: 12,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: _p500)),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Container(
+                            width: 26, height: 26,
+                            decoration: BoxDecoration(
+                                color: _p100,
+                                borderRadius: BorderRadius.circular(7)),
+                            child: const Icon(Icons.refresh_rounded,
+                                size: 13, color: _p500),
+                          ),
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
 
-        // ── Summary (hero + orbit pills) ─────────────────────────────────
+        // ── Summary (single big hero card) ───────────────────────────────
         const SliverToBoxAdapter(child: AdminDashboardSummary()),
 
         // ── Quick Actions header ─────────────────────────────────────────
         SliverToBoxAdapter(
-          child: _SectionHeader(
-            icon: Icons.bolt_rounded,
-            title: 'Quick Actions',
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Row(children: [
+              Container(
+                width: 22, height: 22,
+                decoration: BoxDecoration(
+                    color: _p100, borderRadius: BorderRadius.circular(6)),
+                child: const Icon(Icons.bolt_rounded, size: 12, color: _p500),
+              ),
+              const SizedBox(width: 6),
+              Text('Quick Actions',
+                  style: GoogleFonts.inter(
+                      fontSize: 13, fontWeight: FontWeight.w800, color: _p700)),
+            ]),
           ),
         ),
 
-        // ── Quick action 3-column grid ───────────────────────────────────
+        // ── Quick action 4-column grid ───────────────────────────────────
         _cid.isEmpty
             ? const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator(color: _p500)))
             : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    childAspectRatio: 1.05,
+                    crossAxisCount: 4,
+                    crossAxisSpacing: 7,
+                    mainAxisSpacing: 7,
+                    childAspectRatio: 0.88,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -402,7 +437,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 }
 
-// ── Action tile — 3-column grid, dark purple card style ───────────────────────
+// ── Action tile — 4-column grid, white card with dark-purple label ─────────────
 class _ActionTile extends StatefulWidget {
   final _DashboardItem item;
   final Future<DateTime> Function(String) getLastSeen;
@@ -425,20 +460,20 @@ class _ActionTileState extends State<_ActionTile> {
   final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _subs = [];
   final Map<int, int> _perQ = {};
 
-  // Cycle through slightly different dark-purple gradients per tile
-  static const _gradients = [
-    [Color(0xFF1E0040), Color(0xFF3B0764)],
-    [Color(0xFF2E1065), Color(0xFF4C1D95)],
-    [Color(0xFF1E1B4B), Color(0xFF312E81)],
-    [Color(0xFF0F172A), Color(0xFF1E1B4B)],
-    [Color(0xFF2A0A4B), Color(0xFF4C1D95)],
-    [Color(0xFF1A0533), Color(0xFF2E1065)],
+  // One icon-box colour per tile (cycles through purple shades)
+  static const _iconColors = [
+    Color(0xFF3B0764),
+    Color(0xFF4C1D95),
+    Color(0xFF312E81),
+    Color(0xFF1E1B4B),
+    Color(0xFF2A0A4B),
+    Color(0xFF2E1065),
+    Color(0xFF1E0040),
+    Color(0xFF1A0533),
   ];
 
-  List<Color> get _grad {
-    final g = _gradients[widget.item.keyId.hashCode.abs() % _gradients.length];
-    return g;
-  }
+  Color get _iconBg =>
+      _iconColors[widget.item.keyId.hashCode.abs() % _iconColors.length];
 
   @override
   void initState() {
@@ -484,44 +519,28 @@ class _ActionTileState extends State<_ActionTile> {
   @override
   Widget build(BuildContext context) {
     final badgeStream = widget.noticeBadgeStream;
-    final grad = _grad;
 
     return GestureDetector(
       onTap: widget.onTap,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: grad,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFEDE9FE), width: 1),
+          boxShadow: const [
             BoxShadow(
-              color: _p900.withValues(alpha: 0.35),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+              color: Color(0x0A000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
             ),
           ],
         ),
         child: Stack(
           children: [
-            // Decorative ring
-            Positioned(
-              right: -10, bottom: -10,
-              child: Container(
-                width: 50, height: 50,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
-                ),
-              ),
-            ),
-
             // Badge (top-right)
             if (badgeStream != null)
               Positioned(
-                top: 6, right: 6,
+                top: 5, right: 5,
                 child: StreamBuilder<int>(
                   stream: badgeStream,
                   builder: (_, s) {
@@ -534,36 +553,38 @@ class _ActionTileState extends State<_ActionTile> {
               )
             else if (_newCount > 0)
               Positioned(
-                top: 6, right: 6,
+                top: 5, right: 5,
                 child: _Dot(_newCount),
               ),
 
             // Content
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Icon box
                   Container(
-                    width: 32, height: 32,
+                    width: 34, height: 34,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(9),
+                      color: _iconBg,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(widget.item.icon,
-                        color: Colors.white, size: 16),
+                        color: Colors.white, size: 17),
                   ),
+                  const SizedBox(height: 6),
                   // Label
                   Text(
                     widget.item.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: _p900,
                       height: 1.2,
                     ),
                   ),

@@ -1,12 +1,47 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/features/hr/presentation/screens/balance_update_screen.dart
+//
+// HR Balance & Cash-Flow Screen
+// ─────────────────────────────────────────────────────────────────────────────
+// Three live data sources (all via StreamBuilder):
+//
+//  1. company_profile/main  → cashIn, cashOut  (running totals)
+//     Balance = cashIn − cashOut
+//
+//  2. cash_flow             → individual cash-in / cash-out / reversal entries
+//     Created by:
+//       • HR slip approval  → type: 'cash_in'
+//       • Payroll payment   → type: 'cash_out'
+//       • Payroll reversal  → type: 'reversal'
+//       • Procurement       → type: 'cash_out'
+//
+//  3. ledger + expenses     → kept for the period-scoped Credit/Expense charts
+//
+// Currency:
+//   • All running totals are stored in BDT (company base currency).
+//   • Foreign-currency slips are converted at the live rate before approval;
+//     the confirmed BDT amount is what gets written to cashIn.
+//   • Each cash_flow entry stores its original currency + converted BDT amount.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/services/document_extractor/currency_converter.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:fl_chart/fl_chart.dart';
+
+// ── Palette ───────────────────────────────────────────────────────────────────
+const Color _brand   = Color(0xFF065F46);
+const Color _mid     = Color(0xFF059669);
+const Color _surface = Color(0xFFF0FDF4);
+const Color _cashIn  = Color(0xFF16A34A);
+const Color _cashOut = Color(0xFFDC2626);
+const Color _neutral = Color(0xFF2563EB);
+const Color _warn    = Color(0xFFEA580C);
 
 class BalanceUpdateScreen extends StatefulWidget {
   const BalanceUpdateScreen({super.key});
@@ -15,65 +50,54 @@ class BalanceUpdateScreen extends StatefulWidget {
   State<BalanceUpdateScreen> createState() => _BalanceUpdateScreenState();
 }
 
-class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
+class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
+    with SingleTickerProviderStateMixin {
   String _cid = '';
-  // ---------- UI helpers ----------
-  final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳');
-  final _dateFmt = DateFormat('yyyy-MM-dd');
+  late TabController _tabs;
 
-  // Filters (default = this month)
+  final _money   = NumberFormat('#,##0.00');
+  final _dateFmt = DateFormat('d MMM yyyy');
+
+  // Period filter (for ledger/expense charts)
   late DateTime _periodStart;
   late DateTime _periodEnd;
 
-  // Form inputs (kept for compatibility; UI removed)
-  static const _updateTypes = ['Add', 'Subtract'];
-  static const _accountTypes = ['Cash', 'Bank', 'Wallet'];
-  String _updateType = _updateTypes.first;
-  String _accountType = _accountTypes.first;
-  final _amountController = TextEditingController();
-  final _noteController = TextEditingController();
-  DateTime _selectedDate = DateTime.now();
-  String _expenseCategory = 'Other';
-
-  static const _expenseCategories = <String>[
-    'Rent', 'Utilities', 'Payroll', 'Supplies', 'Maintenance', 'Transport', 'Marketing', 'Other'
-  ];
-
-  // Distinct color palette for charts
+  // Colour palette for charts
   static const List<Color> _palette = [
-    Colors.indigo,
-    Colors.blue,
-    Colors.teal,
-    Colors.green,
-    Colors.lime,
-    Colors.orange,
-    Colors.deepOrange,
-    Colors.red,
-    Colors.pink,
-    Colors.purple,
-    Colors.brown,
-    Colors.cyan,
+    Color(0xFF065F46), Color(0xFF2563EB), Color(0xFFEA580C),
+    Color(0xFF7C3AED), Color(0xFF0369A1), Color(0xFF16A34A),
+    Color(0xFFDC2626), Color(0xFFD97706), Color(0xFF0891B2),
+    Color(0xFF9333EA), Color(0xFF15803D), Color(0xFF1D4ED8),
   ];
 
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 4, vsync: this);
     LocalStorageService.getSavedCompanyId().then((id) {
       if (mounted) setState(() => _cid = id ?? '');
     });
     final now = DateTime.now();
     _periodStart = DateTime(now.year, now.month, 1);
-    _periodEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+    _periodEnd   = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
   }
 
   @override
   void dispose() {
-    _amountController.dispose();
-    _noteController.dispose();
+    _tabs.dispose();
     super.dispose();
   }
 
-  // ---------- Queries (respecting date range) ----------
+  // ── Queries ───────────────────────────────────────────────────────────────
+  Stream<DocumentSnapshot> get _profileStream =>
+      DB.colSync(_cid, C.companyProfile).doc('main').snapshots();
+
+  Stream<QuerySnapshot> get _cashFlowStream =>
+      DB.colSync(_cid, C.cashFlow)
+          .orderBy('createdAt', descending: true)
+          .limit(200)
+          .snapshots();
+
   Query _ledgerQuery() => DB.colSync(_cid, C.ledger)
       .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(_periodStart))
       .where('date', isLessThanOrEqualTo: Timestamp.fromDate(_periodEnd))
@@ -84,346 +108,120 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
       .where('dueDate', isLessThanOrEqualTo: Timestamp.fromDate(_periodEnd))
       .orderBy('dueDate', descending: true);
 
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).copyWith(
-      textTheme: Theme.of(context).textTheme.apply(fontSizeFactor: 1.15),
-      appBarTheme: const AppBarTheme(backgroundColor: Colors.indigo, foregroundColor: Colors.white),
-      colorScheme: Theme.of(context).colorScheme.copyWith(primary: Colors.indigo),
-    );
-
-    return Theme(
-      data: theme,
-      child: Scaffold(
-        backgroundColor: Colors.white,
+    return Scaffold(
+      backgroundColor: _surface,
         appBar: AppBar(
-          title: const Text('Balance & Summary',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.history),
-              tooltip: 'Recent Updates',
-              onPressed: _openHistoryDialog,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_brand, _mid],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
             ),
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Export Summary PDF',
-              onPressed: generatePdfReport,
-            ),
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        title: const Text('Balance & Cash Flow',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_rounded),
+            tooltip: 'Export PDF',
+            onPressed: _exportPdf,
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabs,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          labelStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          tabs: const [
+            Tab(text: 'Overview'),
+            Tab(text: 'Credits'),
+            Tab(text: 'Transactions'),
+            Tab(text: 'Analytics'),
           ],
         ),
-
-        // History FAB (replaces add/subtract)
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: Colors.indigo,
-          icon: const Icon(Icons.history),
-          label: const Text('History'),
-          onPressed: _openHistoryDialog,
-        ),
-
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              // Period picker
-              _PeriodPicker(
-                label: 'Period: ${DateFormat('MMM yyyy').format(_periodStart)}',
-                onTap: _pickPeriod,
-              ),
-              const SizedBox(height: 12),
-
-              // Summary (combine 2 streams)
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: _ledgerQuery().snapshots(),
-                  builder: (context, ledgerSnap) {
-                    return StreamBuilder<QuerySnapshot>(
-                      stream: _expensesQuery().snapshots(),
-                      builder: (context, expenseSnap) {
-                        if (ledgerSnap.connectionState == ConnectionState.waiting ||
-                            expenseSnap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-
-                        final ledgerDocs = ledgerSnap.data?.docs ?? [];
-                        final expenseDocs = expenseSnap.data?.docs ?? [];
-
-                        // Totals + groupings
-                        num totalCredit = 0;
-                        final Map<String, num> creditByAccount = {};
-                        for (final d in ledgerDocs) {
-                          final m = d.data() as Map<String, dynamic>;
-                          final c = _n(m['credit']);
-                          totalCredit += c;
-                          final acc = (m['account'] as String?)?.trim().isNotEmpty == true
-                              ? (m['account'] as String)
-                              : 'Other';
-                          creditByAccount[acc] = (creditByAccount[acc] ?? 0) + c;
-                        }
-
-                        num totalExpense = 0;
-                        final Map<String, num> expenseByCategory = {};
-                        for (final d in expenseDocs) {
-                          final m = d.data() as Map<String, dynamic>;
-                          final amt = _n(m['amount']);
-                          final cat = (m['category'] as String?)?.trim().isNotEmpty == true
-                              ? (m['category'] as String)
-                              : 'Other';
-                          totalExpense += amt;
-                          expenseByCategory[cat] = (expenseByCategory[cat] ?? 0) + amt;
-                        }
-
-                        final profit = totalCredit - totalExpense;
-
-                        return ListView(
-                          children: [
-                            // Big summary cards
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _summaryCard('Total Credit', _money.format(totalCredit),
-                                      Icons.arrow_downward, Colors.green),
-                                ),
-                                Expanded(
-                                  child: _summaryCard('Total Expense',
-                                      _money.format(totalExpense), Icons.arrow_upward, Colors.red),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            _ProfitCard(value: _money.format(profit), positive: profit >= 0),
-                            const SizedBox(height: 16),
-
-                            // ---------- ONE CHART PER ROW ----------
-                            _ChartCard(
-                              title: 'Credit by Account (Pie)',
-                              child: _PieCard(
-                                data: creditByAccount,
-                                total: totalCredit.toDouble(),
-                                palette: _palette,
-                                money: _money,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-
-                            _ChartCard(
-                              title: 'Expense by Category (Pie)',
-                              child: _PieCard(
-                                data: expenseByCategory,
-                                total: totalExpense.toDouble(),
-                                palette: _palette,
-                                money: _money,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-
-                            _ChartCard(
-                              title: 'Credit (৳) by Account',
-                              child: _BarCard(
-                                data: creditByAccount,
-                                palette: _palette,
-                                money: _money,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-
-                            _ChartCard(
-                              title: 'Expense (৳) by Category',
-                              child: _BarCard(
-                                data: expenseByCategory,
-                                palette: _palette,
-                                money: _money,
-                              ),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Existing minimal bars (kept)
-                            _CategoryBreakdown(
-                              byCategory: expenseByCategory,
-                              total: totalExpense,
-                              money: _money,
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Recent activity (period-scoped)
-                            Text('Recent Credits (Ledger)',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium!
-                                    .copyWith(fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            _ActivityList(
-                              items: ledgerDocs
-                                  .take(5)
-                                  .map((d) => _ActivityItem.fromLedger(d, _dateFmt, _money))
-                                  .toList(),
-                            ),
-                            const SizedBox(height: 14),
-                            Text('Recent Expenses',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium!
-                                    .copyWith(fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            _ActivityList(
-                              items: expenseDocs
-                                  .take(5)
-                                  .map((d) => _ActivityItem.fromExpense(d, _dateFmt, _money))
-                                  .toList(),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
+      body: _cid.isEmpty
+          ? const Center(child: CircularProgressIndicator(color: _brand))
+          : TabBarView(
+              controller: _tabs,
+                children: [
+                _OverviewTab(
+                  cid:          _cid,
+                  profileStream: _profileStream,
+                  cashFlowStream: _cashFlowStream,
+                  money:        _money,
+                  dateFmt:      _dateFmt,
+                ),
+                _CreditsTab(
+                  cid:    _cid,
+                  money:  _money,
+                  dateFmt: _dateFmt,
+                ),
+                _TransactionsTab(
+                  cashFlowStream: _cashFlowStream,
+                  money:          _money,
+                  dateFmt:        _dateFmt,
+                ),
+                _AnalyticsTab(
+                  cid:          _cid,
+                  periodStart:  _periodStart,
+                  periodEnd:    _periodEnd,
+                  ledgerQuery:  _ledgerQuery,
+                  expensesQuery: _expensesQuery,
+                  money:        _money,
+                  palette:      _palette,
+                  onPickPeriod: _pickPeriod,
+                ),
+              ],
+            ),
     );
   }
 
-  // ---------- Recent updates (global) ----------
-  Future<void> _openHistoryDialog() async {
-    try {
-      final ledger = await DB.colSync(_cid, C.ledger)
-          .orderBy('date', descending: true)
-          .limit(20)
-          .get();
-
-      final expenses = await DB.colSync(_cid, C.expenses)
-          .orderBy('dueDate', descending: true)
-          .limit(20)
-          .get();
-
-      final items = <_HistoryItem>[];
-
-      for (final d in ledger.docs) {
-        final m = d.data() as Map<String, dynamic>;
-        items.add(
-          _HistoryItem(
-            when: (m['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            title: (m['account'] ?? 'Account').toString(),
-            subtitle: (m['description'] ?? '').toString(),
-            amount: _n(m['credit']).toDouble(),
-            isCredit: true,
-          ),
-        );
-      }
-      for (final d in expenses.docs) {
-        final m = d.data() as Map<String, dynamic>;
-        items.add(
-          _HistoryItem(
-            when: (m['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            title: (m['vendor'] ?? 'Expense').toString(),
-            subtitle: (m['category'] ?? '').toString(),
-            amount: _n(m['amount']).toDouble(),
-            isCredit: false,
-          ),
-        );
-      }
-
-      items.sort((a, b) => b.when.compareTo(a.when));
-      final limited = items.take(30).toList();
-
-      if (!mounted) return;
-      showModalBottomSheet(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-        ),
-        builder: (_) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.7,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Recent Updates',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: limited.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        final it = limited[i];
-                        final color = it.isCredit ? Colors.green : Colors.red;
-                        final icon = it.isCredit ? Icons.trending_up : Icons.trending_down;
-                        return ListTile(
-                          leading: Icon(icon, color: color),
-                          title: Text(it.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                          subtitle:
-                          Text('${_dateFmt.format(it.when)} • ${it.subtitle}'.trim()),
-                          trailing: Text(
-                            _money.format(it.amount),
-                            style: TextStyle(fontWeight: FontWeight.bold, color: color),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Failed to load history: $e')));
-    }
-  }
-
-  // ---------- Period picker ----------
+  // ── Period picker ─────────────────────────────────────────────────────────
   Future<void> _pickPeriod() async {
-    final now = DateTime.now();
+    final now       = DateTime.now();
     final thisStart = DateTime(now.year, now.month, 1);
     final lastStart = DateTime(now.year, now.month - 1, 1);
-    final lastEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+    final lastEnd   = DateTime(now.year, now.month, 0, 23, 59, 59);
 
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Choose Period', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const Text('Choose Period',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
-            _PeriodOption(
-              icon: Icons.today,
-              label: 'This Month',
-              onTap: () {
+            _PeriodOption(icon: Icons.today, label: 'This Month', onTap: () {
                 setState(() {
                   _periodStart = thisStart;
-                  _periodEnd = DateTime(thisStart.year, thisStart.month + 1, 0, 23, 59, 59);
+                _periodEnd   = DateTime(
+                    thisStart.year, thisStart.month + 1, 0, 23, 59, 59);
                 });
                 Navigator.pop(context);
-              },
-            ),
+            }),
             const SizedBox(height: 8),
-            _PeriodOption(
-              icon: Icons.history,
-              label: 'Last Month',
-              onTap: () {
+            _PeriodOption(icon: Icons.history, label: 'Last Month', onTap: () {
                 setState(() {
                   _periodStart = lastStart;
-                  _periodEnd = lastEnd;
+                _periodEnd   = lastEnd;
                 });
                 Navigator.pop(context);
-              },
-            ),
+            }),
             const SizedBox(height: 8),
             _PeriodOption(
               icon: Icons.calendar_month_outlined,
@@ -436,7 +234,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
                   firstDate: DateTime(2000),
                   lastDate: DateTime.now(),
                 );
-                if (s == null) return;
+                if (s == null || !mounted) return;
                 final e = await showDatePicker(
                   context: context,
                   initialDate: _periodEnd,
@@ -446,7 +244,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
                 if (e == null) return;
                 setState(() {
                   _periodStart = DateTime(s.year, s.month, s.day);
-                  _periodEnd = DateTime(e.year, e.month, e.day, 23, 59, 59);
+                  _periodEnd   = DateTime(e.year, e.month, e.day, 23, 59, 59);
                 });
               },
             ),
@@ -457,657 +255,1603 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen> {
     );
   }
 
-  // ---------- Export PDF (summary only) ----------
-  Future<void> generatePdfReport() async {
-    final ledgerSnap = await _ledgerQuery().get();
-    final expenseSnap = await _expensesQuery().get();
+  // ── PDF export ────────────────────────────────────────────────────────────
+  Future<void> _exportPdf() async {
+    final profileSnap  = await DB.colSync(_cid, C.companyProfile).doc('main').get();
+    final cashFlowSnap = await DB.colSync(_cid, C.cashFlow)
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .get();
 
-    num totalCredit = 0;
-    for (final d in ledgerSnap.docs) {
-      final m = d.data() as Map<String, dynamic>;
-      totalCredit += _n(m['credit']);
-    }
+    final pd = profileSnap.data() as Map<String, dynamic>? ?? {};
+    final cashIn  = _n(pd['cashIn']);
+    final cashOut = _n(pd['cashOut']);
+    final balance = cashIn - cashOut;
 
-    num totalExpense = 0;
-    for (final d in expenseSnap.docs) {
-      final m = d.data() as Map<String, dynamic>;
-      totalExpense += _n(m['amount']);
-    }
-    final profit = totalCredit - totalExpense;
-
-    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageTheme: pw.PageTheme(margin: const pw.EdgeInsets.all(24)),
-        header: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text('Balance Summary',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 2),
-            pw.Text(
-              'Period: ${_dateFmt.format(_periodStart)} → ${_dateFmt.format(_periodEnd)}',
-              style: const pw.TextStyle(color: PdfColors.grey700, fontSize: 12),
-            ),
-            pw.Divider(),
-          ],
-        ),
-        build: (_) {
-          final widgets = <pw.Widget>[];
-
-          widgets.add(pw.Text('Totals',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
-          widgets.add(pw.SizedBox(height: 6));
-          widgets.add(pw.Text('Total Credit: ${_fmt(totalCredit)}'));
-          widgets.add(pw.Text('Total Expense: ${_fmt(totalExpense)}'));
-          widgets.add(pw.Text('Profit: ${_fmt(profit)}'));
-          widgets.add(pw.SizedBox(height: 12));
-
-          widgets.add(pw.Text('Recent Credits (Ledger)',
-              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)));
-          widgets.add(pw.SizedBox(height: 6));
-          widgets.add(
-            pw.Table.fromTextArray(
-              headers: ['Date', 'Account', 'Description', 'Credit'],
-              data: ledgerSnap.docs.take(10).map((doc) {
-                final m = doc.data() as Map<String, dynamic>;
-                return [
-                  _safeDate(m['date']),
-                  (m['account'] ?? '').toString(),
-                  (m['description'] ?? '').toString(),
-                  _fmt(_n(m['credit'])),
-                ];
-              }).toList(),
-            ),
-          );
-          widgets.add(pw.SizedBox(height: 12));
-
-          widgets.add(pw.Text('Recent Expenses',
-              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)));
-          widgets.add(pw.SizedBox(height: 6));
-          widgets.add(
-            pw.Table.fromTextArray(
-              headers: ['Date', 'Vendor', 'Category', 'Amount'],
-              data: expenseSnap.docs.take(10).map((doc) {
-                final m = doc.data() as Map<String, dynamic>;
-                return [
-                  _safeDate(m['dueDate']),
-                  (m['vendor'] ?? '').toString(),
-                  (m['category'] ?? '').toString(),
-                  _fmt(_n(m['amount'])),
-                ];
-              }).toList(),
-            ),
-          );
-
-          return widgets;
-        },
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base:       pw.Font.times(),
+        bold:       pw.Font.timesBold(),
+        italic:     pw.Font.timesItalic(),
+        boldItalic: pw.Font.timesBoldItalic(),
       ),
     );
 
-    await Printing.layoutPdf(onLayout: (format) => pdf.save());
+    final now     = DateTime.now();
+    final dateFmt = DateFormat('d MMMM yyyy');
+    final numFmt  = NumberFormat('#,##0.00');
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(36, 36, 36, 48),
+      header: (_) => pw.Column(children: [
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: const pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFF065F46)),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+              pw.Text('BALANCE & CASH FLOW REPORT',
+                  style: pw.TextStyle(
+                      font: pw.Font.timesBold(), fontSize: 14,
+                      color: PdfColors.white)),
+              pw.Text('Generated: ${dateFmt.format(now)}',
+                  style: pw.TextStyle(
+                      font: pw.Font.times(), fontSize: 9,
+                      color: PdfColors.white)),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 12),
+      ]),
+      build: (_) => [
+        // Summary row
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+          children: [
+            _pdfKpi(pw.Font.timesBold(), pw.Font.times(),
+                'Cash In (BDT)', numFmt.format(cashIn),
+                const PdfColor.fromInt(0xFF16A34A)),
+            _pdfKpi(pw.Font.timesBold(), pw.Font.times(),
+                'Cash Out (BDT)', numFmt.format(cashOut),
+                const PdfColor.fromInt(0xFFDC2626)),
+            _pdfKpi(pw.Font.timesBold(), pw.Font.times(),
+                'Balance (BDT)', numFmt.format(balance),
+                balance >= 0
+                    ? const PdfColor.fromInt(0xFF2563EB)
+                    : const PdfColor.fromInt(0xFFDC2626)),
+          ],
+        ),
+        pw.SizedBox(height: 16),
+        pw.Text('Transaction History',
+            style: pw.TextStyle(
+                font: pw.Font.timesBold(), fontSize: 13)),
+        pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+          headers: ['Date', 'Type', 'Description', 'Currency', 'Amount (BDT)'],
+          headerStyle: pw.TextStyle(
+              font: pw.Font.timesBold(), fontSize: 9,
+              color: PdfColors.white),
+          headerDecoration: const pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFF065F46)),
+          cellStyle: pw.TextStyle(font: pw.Font.times(), fontSize: 8),
+          data: cashFlowSnap.docs.map((doc) {
+            final d    = doc.data() as Map<String, dynamic>;
+            final date = d['createdAt'] is Timestamp
+                ? dateFmt.format((d['createdAt'] as Timestamp).toDate())
+                : '—';
+            final type = (d['type'] as String? ?? '').toUpperCase();
+            final desc = d['description'] as String? ??
+                         d['invoiceNo'] as String? ?? '—';
+            final ccy  = d['currency'] as String? ?? 'BDT';
+            final amt  = _n(d['amount']);
+            return [date, type, desc, ccy, numFmt.format(amt)];
+              }).toList(),
+            ),
+      ],
+    ));
+
+    await Printing.layoutPdf(onLayout: (_) => pdf.save());
   }
 
-  // ---------- helpers ----------
   static num _n(dynamic v) {
     if (v == null) return 0;
     if (v is num) return v;
     if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
     return 0;
   }
+}
 
-  static String _fmt(num n) => n.toStringAsFixed(2);
+pw.Widget _pdfKpi(pw.Font bold, pw.Font regular,
+    String label, String value, PdfColor color) =>
+    pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(
+            color: const PdfColor.fromInt(0xFFE2E8F0), width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(
+                  font: regular, fontSize: 8,
+                  color: const PdfColor.fromInt(0xFF64748B))),
+          pw.SizedBox(height: 4),
+          pw.Text(value,
+              style: pw.TextStyle(font: bold, fontSize: 14, color: color)),
+        ],
+      ),
+    );
 
-  String _safeDate(dynamic v) {
-    if (v is Timestamp) return _dateFmt.format(v.toDate());
-    return '-';
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 1 — OVERVIEW
+// Hero balance card + last 5 cash-in and cash-out entries
+// ─────────────────────────────────────────────────────────────────────────────
+class _OverviewTab extends StatelessWidget {
+  final String                   cid;
+  final Stream<DocumentSnapshot> profileStream;
+  final Stream<QuerySnapshot>    cashFlowStream;
+  final NumberFormat             money;
+  final DateFormat               dateFmt;
+
+  const _OverviewTab({
+    required this.cid,
+    required this.profileStream,
+    required this.cashFlowStream,
+    required this.money,
+    required this.dateFmt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: profileStream,
+      builder: (ctx, profileSnap) {
+        final pd      = profileSnap.data?.data() as Map<String, dynamic>? ?? {};
+        final cashIn  = _n(pd['cashIn']);
+        final cashOut = _n(pd['cashOut']);
+        final balance = cashIn - cashOut;
+        final isPos   = balance >= 0;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: cashFlowStream,
+          builder: (ctx2, cfSnap) {
+            final cfDocs = cfSnap.data?.docs ?? [];
+
+            // Period-scoped totals from cash_flow
+            final now   = DateTime.now();
+            final mStart = DateTime(now.year, now.month, 1);
+            double monthIn  = 0;
+            double monthOut = 0;
+            for (final d in cfDocs) {
+              final m  = d.data() as Map<String, dynamic>;
+              final ts = m['createdAt'];
+              if (ts is! Timestamp) continue;
+              final dt = ts.toDate();
+              if (dt.isBefore(mStart)) continue;
+              final amt = _n(m['amount']).toDouble();
+              final t   = m['type'] as String? ?? '';
+              if (t == 'cash_in') {
+                monthIn += amt;
+              } else if (t == 'cash_out') {
+                monthOut += amt;
+              } else if (t == 'reversal') {
+                monthOut -= amt; // reversal reduces cash_out
+              }
+            }
+
+            // Last payment slip approval
+            final lastSlip = cfDocs
+                .where((d) =>
+                    (d.data() as Map<String, dynamic>)['type'] == 'cash_in')
+                .firstOrNull;
+            final lastSlipData =
+                lastSlip?.data() as Map<String, dynamic>? ?? {};
+
+            return RefreshIndicator(
+              color: _brand,
+              onRefresh: () async {},
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // ── Hero balance card ────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isPos
+                            ? [const Color(0xFF065F46), const Color(0xFF059669)]
+                            : [const Color(0xFF991B1B), const Color(0xFFDC2626)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                            color: (isPos ? _brand : _cashOut)
+                                .withValues(alpha: 0.3),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6)),
+                      ],
+      ),
+      child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+                        Row(children: [
+                          const Icon(Icons.account_balance_wallet_rounded,
+                              color: Colors.white70, size: 18),
+                          const SizedBox(width: 8),
+                          const Text('Current Balance',
+                              style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              isPos ? 'Positive' : 'Negative',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ]),
+                        const SizedBox(height: 10),
+                        Text(
+                          'BDT ${money.format(balance)}',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Cash In − Cash Out',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 11),
+                        ),
+                        const SizedBox(height: 16),
+                        // Cash-in / Cash-out sub-row
+                        Row(children: [
+                          Expanded(
+                            child: _HeroSubStat(
+                              label: 'Total Cash In',
+                              value: 'BDT ${money.format(cashIn)}',
+                              icon: Icons.arrow_downward_rounded,
+                              color: const Color(0xFF86EFAC),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _HeroSubStat(
+                              label: 'Total Cash Out',
+                              value: 'BDT ${money.format(cashOut)}',
+                              icon: Icons.arrow_upward_rounded,
+                              color: const Color(0xFFFCA5A5),
+                            ),
+                          ),
+                        ]),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ── This month mini-cards ────────────────────────────────
+                  Row(children: [
+                    Expanded(
+                      child: _MiniStatCard(
+                        label: 'This Month In',
+                        value: 'BDT ${money.format(monthIn)}',
+                        icon: Icons.south_west_rounded,
+                        color: _cashIn,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _MiniStatCard(
+                        label: 'This Month Out',
+                        value: 'BDT ${money.format(monthOut)}',
+                        icon: Icons.north_east_rounded,
+                        color: _cashOut,
+                      ),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 20),
+
+                  // ── Last approved slip ───────────────────────────────────
+                  if (lastSlipData.isNotEmpty) ...[
+                    _SectionHeader('Last Payment Received'),
+          const SizedBox(height: 8),
+                    _LastSlipCard(data: lastSlipData, money: money, dateFmt: dateFmt),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // ── Recent cash-in entries ───────────────────────────────
+                  _SectionHeader('Recent Cash In'),
+                  const SizedBox(height: 8),
+                  ...cfDocs
+                      .where((d) =>
+                          (d.data() as Map<String, dynamic>)['type'] ==
+                          'cash_in')
+                      .take(5)
+                      .map((d) => _CfTile(
+                            data:   d.data() as Map<String, dynamic>,
+                            money:  money,
+                            dateFmt: dateFmt,
+                          )),
+
+                  const SizedBox(height: 20),
+
+                  // ── Recent cash-out entries ──────────────────────────────
+                  _SectionHeader('Recent Cash Out'),
+                  const SizedBox(height: 8),
+                  ...cfDocs
+                      .where((d) {
+                        final t = (d.data() as Map<String, dynamic>)['type']
+                            as String? ?? '';
+                        return t == 'cash_out' || t == 'reversal';
+                      })
+                      .take(5)
+                      .map((d) => _CfTile(
+                            data:   d.data() as Map<String, dynamic>,
+                            money:  money,
+                            dateFmt: dateFmt,
+                          )),
+
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 2 — TRANSACTIONS (full cash_flow feed)
+// ─────────────────────────────────────────────────────────────────────────────
+class _TransactionsTab extends StatefulWidget {
+  final Stream<QuerySnapshot> cashFlowStream;
+  final NumberFormat          money;
+  final DateFormat            dateFmt;
+
+  const _TransactionsTab({
+    required this.cashFlowStream,
+    required this.money,
+    required this.dateFmt,
+  });
+
+  @override
+  State<_TransactionsTab> createState() => _TransactionsTabState();
+}
+
+class _TransactionsTabState extends State<_TransactionsTab> {
+  String _filter = 'all'; // all | cash_in | cash_out | reversal
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+          children: [
+        // Filter chips
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              _FilterChip('All',      'all',      _filter, (v) => setState(() => _filter = v)),
+              const SizedBox(width: 8),
+              _FilterChip('Cash In',  'cash_in',  _filter, (v) => setState(() => _filter = v)),
+              const SizedBox(width: 8),
+              _FilterChip('Cash Out', 'cash_out', _filter, (v) => setState(() => _filter = v)),
+              const SizedBox(width: 8),
+              _FilterChip('Reversal', 'reversal', _filter, (v) => setState(() => _filter = v)),
+            ]),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: widget.cashFlowStream,
+            builder: (ctx, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: CircularProgressIndicator(color: _brand));
+              }
+              var docs = snap.data?.docs ?? [];
+              if (_filter != 'all') {
+                docs = docs
+                    .where((d) =>
+                        (d.data() as Map<String, dynamic>)['type'] == _filter)
+                    .toList();
+              }
+              if (docs.isEmpty) {
+                return Center(
+        child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+                      const Icon(Icons.receipt_long_rounded,
+                          size: 56, color: Colors.black12),
+            const SizedBox(height: 12),
+                      Text(
+                        _filter == 'all'
+                            ? 'No transactions yet'
+                            : 'No ${_filter.replaceAll('_', ' ')} transactions',
+                        style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black38),
+            ),
+          ],
+        ),
+                );
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.all(12),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, i) => _CfTile(
+                  data:    docs[i].data() as Map<String, dynamic>,
+                  money:   widget.money,
+                  dateFmt: widget.dateFmt,
+                  expanded: true,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 2 — CREDITS  (all cash_in entries with live USD→BDT conversion)
+// ─────────────────────────────────────────────────────────────────────────────
+class _CreditsTab extends StatefulWidget {
+  final String     cid;
+  final NumberFormat money;
+  final DateFormat   dateFmt;
+  const _CreditsTab({
+    required this.cid,
+    required this.money,
+    required this.dateFmt,
+  });
+  @override
+  State<_CreditsTab> createState() => _CreditsTabState();
+}
+
+class _CreditsTabState extends State<_CreditsTab> {
+  // Converted BDT amounts keyed by doc-id
+  final Map<String, double> _bdtAmounts = {};
+  final Map<String, bool>   _converting = {};
+
+  Future<void> _ensureConverted(String docId, double amount, String currency) async {
+    if (currency.toUpperCase() == 'BDT') {
+      if (_bdtAmounts[docId] != amount) {
+        if (mounted) setState(() => _bdtAmounts[docId] = amount);
+      }
+      return;
+    }
+    if (_bdtAmounts.containsKey(docId) || (_converting[docId] ?? false)) return;
+    if (mounted) setState(() => _converting[docId] = true);
+    try {
+      final result = await CurrencyConverter.convert(
+        amount: amount,
+        from:   currency,
+        to:     'BDT',
+      );
+      if (mounted) {
+        setState(() {
+          _bdtAmounts[docId] = result.convertedAmount;
+          _converting[docId] = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _converting[docId] = false);
+    }
   }
 
-  Widget _summaryCard(String title, String value, IconData icon, Color color) {
+  @override
+  Widget build(BuildContext context) {
+    final creditsStream = DB.colSync(widget.cid, C.cashFlow)
+        .where('type', isEqualTo: 'cash_in')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: creditsStream,
+      builder: (ctx, snap) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+          return const Center(child: CircularProgressIndicator(color: _brand));
+        }
+        final docs = snap.data?.docs ?? [];
+
+        // Trigger conversions for any non-BDT entries
+        for (final doc in docs) {
+          final d   = doc.data() as Map<String, dynamic>;
+          final amt = _n(d['amount']).toDouble();
+          final ccy = (d['currency'] as String? ?? 'BDT').toUpperCase();
+          _ensureConverted(doc.id, amt, ccy);
+        }
+
+        // Compute total credits in BDT
+        double totalBdt = 0;
+        for (final doc in docs) {
+          final d   = doc.data() as Map<String, dynamic>;
+          final amt = _n(d['amount']).toDouble();
+          final ccy = (d['currency'] as String? ?? 'BDT').toUpperCase();
+          if (ccy == 'BDT') {
+            totalBdt += amt;
+          } else {
+            totalBdt += _bdtAmounts[doc.id] ?? 0;
+          }
+        }
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.account_balance_wallet_rounded,
+                    size: 64, color: _brand.withValues(alpha: 0.2)),
+                const SizedBox(height: 16),
+                const Text('No credits yet',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black38)),
+                const SizedBox(height: 6),
+                const Text('Approved payment slips will appear here',
+                    style: TextStyle(fontSize: 12, color: Colors.black26)),
+              ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+            // ── Summary hero ──────────────────────────────────────────────
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF065F46), Color(0xFF059669)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                      color: _brand.withValues(alpha: 0.25),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5)),
+                ],
+              ),
+              child: Row(children: [
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.trending_up_rounded,
+                      color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 16),
+        Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Total Credits (BDT)',
+                          style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '৳ ${widget.money.format(totalBdt)}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5),
+                      ),
+                    ],
+                  ),
+                ),
+        Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('${docs.length}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900)),
+                    const Text('entries',
+                        style: TextStyle(
+                            color: Colors.white70, fontSize: 11)),
+                  ],
+                ),
+              ]),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── List ──────────────────────────────────────────────────────
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) {
+                  final doc  = docs[i];
+                  final d    = doc.data() as Map<String, dynamic>;
+                  final amt  = _n(d['amount']).toDouble();
+                  final ccy  = (d['currency'] as String? ?? 'BDT').toUpperCase();
+                  final bdtAmt = _bdtAmounts[doc.id];
+                  final converting = _converting[doc.id] ?? false;
+                  return _CreditEntryCard(
+                    data:       d,
+                    money:      widget.money,
+                    dateFmt:    widget.dateFmt,
+                    originalAmt: amt,
+                    originalCcy: ccy,
+                    bdtAmount:   bdtAmt,
+                    converting:  converting,
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── Credit entry card (rich display with BDT conversion) ──────────────────────
+class _CreditEntryCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final NumberFormat         money;
+  final DateFormat           dateFmt;
+  final double               originalAmt;
+  final String               originalCcy;
+  final double?              bdtAmount;
+  final bool                 converting;
+
+  const _CreditEntryCard({
+    required this.data,
+    required this.money,
+    required this.dateFmt,
+    required this.originalAmt,
+    required this.originalCcy,
+    required this.bdtAmount,
+    required this.converting,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final invoiceNo  = data['invoiceNo']  as String? ?? '';
+    final desc       = data['description'] as String? ?? '';
+    final approvedBy = data['approvedByName'] as String? ??
+                       data['approvedBy']     as String? ?? '';
+    final edited     = data['amountEdited'] as bool? ?? false;
+    final date       = data['createdAt'] is Timestamp
+        ? dateFmt.format((data['createdAt'] as Timestamp).toDate())
+        : '—';
+    final isForeign  = originalCcy != 'BDT';
+    final displayBdt = bdtAmount ?? (isForeign ? null : originalAmt);
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 5),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _cashIn.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
       ),
       child: Column(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
+        crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+          Row(children: [
+            // Icon
+        Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.south_west_rounded,
+                  color: _cashIn, size: 20),
+            ),
+            const SizedBox(width: 12),
+            // Title
+        Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Text('Cash In',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: _cashIn)),
+                    if (edited) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _warn.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('HR edited',
+                            style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: _warn)),
+                      ),
+                    ],
+                    if (isForeign) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _neutral.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text('$originalCcy→BDT',
+                            style: const TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: _neutral)),
+                      ),
+                    ],
+                  ]),
+                  if (invoiceNo.isNotEmpty)
+                    Text('Invoice #$invoiceNo',
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w700)),
+                  if (desc.isNotEmpty)
+                    Text(desc,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.black45)),
+                  Text(
+                    approvedBy.isNotEmpty
+                        ? 'By $approvedBy  •  $date'
+                        : date,
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black38),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Amount column
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // BDT amount (primary)
+                if (converting)
+                  const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: _brand),
+                  )
+                else if (displayBdt != null)
+                  Text(
+                    '৳ ${money.format(displayBdt)}',
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: _cashIn),
+                  )
+                else
+                  Text(
+                    '$originalCcy ${money.format(originalAmt)}',
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: _cashIn),
+                  ),
+                // Original foreign amount (secondary)
+                if (isForeign && displayBdt != null)
+                  Text(
+                    '$originalCcy ${money.format(originalAmt)}',
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black38),
+                  ),
+              ],
+            ),
+          ]),
         ],
       ),
     );
   }
 }
 
-/// ---------- History model ----------
-class _HistoryItem {
-  final DateTime when;
-  final String title;
-  final String subtitle;
-  final double amount;
-  final bool isCredit;
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 3 — TRANSACTIONS (full cash_flow feed)  [was TAB 2]
+// ─────────────────────────────────────────────────────────────────────────────
 
-  _HistoryItem({
-    required this.when,
-    required this.title,
-    required this.subtitle,
-    required this.amount,
-    required this.isCredit,
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 4 — ANALYTICS (ledger + expenses charts, period-scoped)
+// ─────────────────────────────────────────────────────────────────────────────
+class _AnalyticsTab extends StatelessWidget {
+  final String       cid;
+  final DateTime     periodStart;
+  final DateTime     periodEnd;
+  final Query Function() ledgerQuery;
+  final Query Function() expensesQuery;
+  final NumberFormat money;
+  final List<Color>  palette;
+  final VoidCallback onPickPeriod;
+
+  const _AnalyticsTab({
+    required this.cid,
+    required this.periodStart,
+    required this.periodEnd,
+    required this.ledgerQuery,
+    required this.expensesQuery,
+    required this.money,
+    required this.palette,
+    required this.onPickPeriod,
   });
-}
-
-/// ---------- Profit Card ----------
-class _ProfitCard extends StatelessWidget {
-  final String value;
-  final bool positive;
-
-  const _ProfitCard({required this.value, required this.positive, super.key});
 
   @override
   Widget build(BuildContext context) {
-    final color = positive ? Colors.green : Colors.red;
-    final icon = positive ? Icons.trending_up : Icons.trending_down;
+    return StreamBuilder<QuerySnapshot>(
+      stream: ledgerQuery().snapshots(),
+      builder: (ctx, ledgerSnap) {
+        return StreamBuilder<QuerySnapshot>(
+          stream: expensesQuery().snapshots(),
+          builder: (ctx2, expSnap) {
+            if (ledgerSnap.connectionState == ConnectionState.waiting ||
+                expSnap.connectionState == ConnectionState.waiting) {
+              return const Center(
+                  child: CircularProgressIndicator(color: _brand));
+            }
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 10),
-            Text('Profit',
-                style: Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
-            const Spacer(),
-            Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-      ),
+            final ledgerDocs  = ledgerSnap.data?.docs ?? [];
+            final expenseDocs = expSnap.data?.docs ?? [];
+
+            num totalCredit = 0;
+            final Map<String, num> creditByAccount = {};
+            for (final d in ledgerDocs) {
+              final m = d.data() as Map<String, dynamic>;
+              final c = _n(m['credit']);
+              totalCredit += c;
+              final acc = (m['account'] as String?)?.trim().isNotEmpty == true
+                  ? m['account'] as String
+                  : 'Other';
+              creditByAccount[acc] = (creditByAccount[acc] ?? 0) + c;
+            }
+
+            num totalExpense = 0;
+            final Map<String, num> expenseByCategory = {};
+            for (final d in expenseDocs) {
+              final m = d.data() as Map<String, dynamic>;
+              final amt = _n(m['amount']);
+              totalExpense += amt;
+              final cat = (m['category'] as String?)?.trim().isNotEmpty == true
+                  ? m['category'] as String
+                  : 'Other';
+              expenseByCategory[cat] = (expenseByCategory[cat] ?? 0) + amt;
+            }
+
+            final profit = totalCredit - totalExpense;
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Period picker
+                GestureDetector(
+                  onTap: onPickPeriod,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.calendar_month_rounded,
+                          color: _brand, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                    child: Text(
+                          'Period: ${DateFormat('MMM yyyy').format(periodStart)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                      ),
+                      const Icon(Icons.arrow_drop_down_rounded,
+                          color: _brand),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Summary row
+                Row(children: [
+                  Expanded(
+                    child: _MiniStatCard(
+                      label: 'Ledger Credit',
+                      value: money.format(totalCredit),
+                      icon: Icons.trending_up_rounded,
+                      color: _cashIn,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MiniStatCard(
+                      label: 'Expenses',
+                      value: money.format(totalExpense),
+                      icon: Icons.trending_down_rounded,
+                      color: _cashOut,
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 10),
+                _MiniStatCard(
+                  label: 'Profit (Credit − Expense)',
+                  value: money.format(profit),
+                  icon: profit >= 0
+                      ? Icons.arrow_circle_up_rounded
+                      : Icons.arrow_circle_down_rounded,
+                  color: profit >= 0 ? _cashIn : _cashOut,
+                ),
+                const SizedBox(height: 16),
+
+                if (creditByAccount.isNotEmpty) ...[
+                  _ChartCard(
+                    title: 'Credit by Account',
+                    child: _PieCard(
+                        data: creditByAccount,
+                        total: totalCredit.toDouble(),
+                        palette: palette,
+                        money: money),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                if (expenseByCategory.isNotEmpty) ...[
+                  _ChartCard(
+                    title: 'Expense by Category',
+                    child: _PieCard(
+                        data: expenseByCategory,
+                        total: totalExpense.toDouble(),
+                        palette: palette,
+                        money: money),
+                  ),
+                  const SizedBox(height: 12),
+                  _ChartCard(
+                    title: 'Expense Breakdown (Bar)',
+                    child: _BarCard(
+                        data: expenseByCategory,
+                        palette: palette,
+                        money: money),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
 
-/// ---------- Chart container ----------
-class _ChartCard extends StatelessWidget {
-  final String title;
-  final Widget child;
-  const _ChartCard({required this.title, required this.child, super.key});
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED WIDGETS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HeroSubStat extends StatelessWidget {
+  final String   label;
+  final String   value;
+  final IconData icon;
+  final Color    color;
+  const _HeroSubStat(
+      {required this.label,
+      required this.value,
+      required this.icon,
+      required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0.5,
-      margin: const EdgeInsets.symmetric(vertical: 12), // spacing top & bottom
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(value,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ]),
+      );
+}
+
+class _MiniStatCard extends StatelessWidget {
+  final String   label;
+  final String   value;
+  final IconData icon;
+  final Color    color;
+  const _MiniStatCard(
+      {required this.label,
+      required this.value,
+      required this.icon,
+      required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+          boxShadow: [
+            BoxShadow(
+                color: color.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black45,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 3),
+                Text(value,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: color),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ]),
+      );
+}
 
-            // Dynamic height: chart fills remaining space,
-            // adapts to Pie vs Bar automatically
-            AspectRatio(
-              aspectRatio: 0.8, // Pie looks balanced; Bar won’t overflow
-              child: child,
+class _LastSlipCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final NumberFormat         money;
+  final DateFormat           dateFmt;
+  const _LastSlipCard(
+      {required this.data, required this.money, required this.dateFmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final amount   = _n(data['amount']).toDouble();
+    final currency = data['currency'] as String? ?? 'BDT';
+    final invoiceNo = data['invoiceNo'] as String? ?? '—';
+    final approvedBy = data['approvedByName'] as String? ??
+        data['approvedBy'] as String? ?? '—';
+    final date = data['createdAt'] is Timestamp
+        ? dateFmt.format((data['createdAt'] as Timestamp).toDate())
+        : '—';
+    final edited = data['amountEdited'] as bool? ?? false;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _cashIn.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+              color: _cashIn.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(children: [
+        Container(
+          width: 44, height: 44,
+          decoration: BoxDecoration(
+            color: _cashIn.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.check_circle_rounded,
+              color: _cashIn, size: 24),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Invoice #$invoiceNo',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 13)),
+              Text('$date  •  Approved by $approvedBy',
+                  style: const TextStyle(
+                      fontSize: 11, color: Colors.black45)),
+              if (edited)
+                const Text('Amount adjusted by HR',
+                    style: TextStyle(
+                        fontSize: 10, color: _warn,
+                        fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('$currency ${money.format(amount)}',
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: _cashIn)),
+            const Text('Cash In',
+                style: TextStyle(fontSize: 10, color: Colors.black38)),
+          ],
+        ),
+      ]),
+    );
+  }
+}
+
+// ── Cash-flow tile ────────────────────────────────────────────────────────────
+class _CfTile extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final NumberFormat         money;
+  final DateFormat           dateFmt;
+  final bool                 expanded;
+  const _CfTile({
+    required this.data,
+    required this.money,
+    required this.dateFmt,
+    this.expanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final type      = data['type'] as String? ?? '';
+    final amount    = _n(data['amount']).toDouble();
+    final currency  = data['currency'] as String? ?? 'BDT';
+    final desc      = data['description'] as String? ?? '';
+    final invoiceNo = data['invoiceNo'] as String? ?? '';
+    final date      = data['createdAt'] is Timestamp
+        ? dateFmt.format((data['createdAt'] as Timestamp).toDate())
+        : '—';
+    final edited    = data['amountEdited'] as bool? ?? false;
+    final approvedBy = data['approvedByName'] as String? ??
+        data['approvedBy'] as String? ?? '';
+
+    Color   tileColor;
+    Color   iconBg;
+    IconData icon;
+    String  typeLabel;
+
+    switch (type) {
+      case 'cash_in':
+        tileColor = _cashIn;
+        iconBg    = const Color(0xFFDCFCE7);
+        icon      = Icons.south_west_rounded;
+        typeLabel = 'Cash In';
+        break;
+      case 'reversal':
+        tileColor = _neutral;
+        iconBg    = const Color(0xFFDBEAFE);
+        icon      = Icons.undo_rounded;
+        typeLabel = 'Reversal';
+        break;
+      default: // cash_out
+        tileColor = _cashOut;
+        iconBg    = const Color(0xFFFEE2E2);
+        icon      = Icons.north_east_rounded;
+        typeLabel = 'Cash Out';
+    }
+
+        return Container(
+      padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tileColor.withValues(alpha: 0.15)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+              color: iconBg, borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, color: tileColor, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Text(typeLabel,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: tileColor)),
+                if (edited) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _warn.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('HR edited',
+                        style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: _warn)),
+                  ),
+                ],
+              ]),
+              if (invoiceNo.isNotEmpty)
+                Text('Invoice #$invoiceNo',
+                    style: const TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w700)),
+              if (desc.isNotEmpty)
+                Text(desc,
+                    style: const TextStyle(
+                        fontSize: 11, color: Colors.black45),
+                    maxLines: expanded ? 3 : 1,
+                    overflow: TextOverflow.ellipsis),
+              if (expanded && approvedBy.isNotEmpty)
+                Text('By $approvedBy  •  $date',
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black38)),
+              if (!expanded)
+                Text(date,
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black38)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              '${type == 'cash_in' ? '+' : type == 'reversal' ? '±' : '−'}'
+              '$currency ${money.format(amount)}',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: tileColor),
             ),
           ],
         ),
+      ]),
+    );
+  }
+}
+
+// ── Filter chip ───────────────────────────────────────────────────────────────
+class _FilterChip extends StatelessWidget {
+  final String   label;
+  final String   value;
+  final String   selected;
+  final void Function(String) onSelect;
+  const _FilterChip(this.label, this.value, this.selected, this.onSelect);
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = value == selected;
+    return GestureDetector(
+      onTap: () => onSelect(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? _brand : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: isSelected ? _brand : Colors.black12),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isSelected ? Colors.white : Colors.black54)),
       ),
     );
   }
 }
 
+// ── Section header ────────────────────────────────────────────────────────────
+class _SectionHeader extends StatelessWidget {
+  final String text;
+  const _SectionHeader(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: Colors.black54,
+          letterSpacing: 0.3));
+}
 
-/// ---------- Pie Chart (true pie, readable labels, no overflow legend) ----------
+// ── Chart card wrapper ────────────────────────────────────────────────────────
+class _ChartCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _ChartCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 13)),
+            const SizedBox(height: 12),
+            AspectRatio(aspectRatio: 0.9, child: child),
+          ],
+        ),
+      );
+}
+
+// ── Pie chart ─────────────────────────────────────────────────────────────────
 class _PieCard extends StatelessWidget {
   final Map<String, num> data;
-  final double total;
-  final List<Color> palette;
-  final NumberFormat money;
-
-  const _PieCard({
-    super.key,
-    required this.data,
-    required this.total,
-    required this.palette,
-    required this.money,
-  });
-
-  Color _labelColorFor(Color c) {
-    final luminance = c.computeLuminance();
-    return luminance > 0.5 ? Colors.black : Colors.white;
-  }
+  final double           total;
+  final List<Color>      palette;
+  final NumberFormat     money;
+  const _PieCard(
+      {required this.data,
+      required this.total,
+      required this.palette,
+      required this.money});
 
   @override
   Widget build(BuildContext context) {
     if (data.isEmpty || total <= 0) {
       return const Center(child: Text('No data'));
     }
-
-    final entries = data.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-
+    final entries = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     final sections = <PieChartSectionData>[];
     for (int i = 0; i < entries.length; i++) {
-      final value = entries[i].value.toDouble();
-      final pct = (value / total * 100);
-      final color = palette[i % palette.length];
-
-      final showTitle = pct >= 6.0;
-
-      sections.add(
-        PieChartSectionData(
-          value: value,
-          color: color,
-          radius: 80,
-          title: showTitle ? '${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}%' : '',
-          titlePositionPercentageOffset: 0.58,
-          titleStyle: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: _labelColorFor(color),
-            shadows: const [Shadow(blurRadius: 2, color: Colors.black26)],
-          ),
-        ),
-      );
+      final v   = entries[i].value.toDouble();
+      final pct = v / total * 100;
+      final col = palette[i % palette.length];
+      sections.add(PieChartSectionData(
+        value: v,
+        color: col,
+        radius: 80,
+        title: pct >= 6 ? '${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}%' : '',
+        titlePositionPercentageOffset: 0.58,
+        titleStyle: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
+      ));
     }
-
-    return Column(
-      children: [
-        Expanded(
-          child: PieChart(
-            PieChartData(
-              sections: sections,
-              sectionsSpace: 2,
-              centerSpaceRadius: 0,   // true pie (no donut)
-              startDegreeOffset: 270, // start at top
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Non-overflowing legend: one row per item with ellipsis
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: List.generate(entries.length, (i) {
-            final label = entries[i].key;
-            final value = entries[i].value.toDouble();
-            final pct = value / total * 100;
-            final color = palette[i % palette.length];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: _LegendRow(
-                color: color,
-                text: '$label • ${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}% (${money.format(value)})',
+    return Column(children: [
+      Expanded(
+        child: PieChart(PieChartData(
+            sections: sections,
+            sectionsSpace: 2,
+            centerSpaceRadius: 0,
+            startDegreeOffset: 270)),
+      ),
+      const SizedBox(height: 8),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(entries.length, (i) {
+          final label = entries[i].key;
+          final v     = entries[i].value.toDouble();
+          final pct   = v / total * 100;
+          final col   = palette[i % palette.length];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(children: [
+              Container(
+                  width: 10, height: 10,
+                  decoration: BoxDecoration(
+                      color: col, shape: BoxShape.circle)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  '$label  •  ${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}%  (${money.format(v)})',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
               ),
-            );
-          }),
-        ),
-      ],
-    );
+            ]),
+          );
+        }),
+      ),
+    ]);
   }
 }
 
-/// ---------- Legend row (safe width) ----------
-class _LegendRow extends StatelessWidget {
-  final Color color;
-  final String text;
-  const _LegendRow({required this.color, required this.text, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// ---------- Vertical Bar Chart ----------
+// ── Bar chart ─────────────────────────────────────────────────────────────────
 class _BarCard extends StatelessWidget {
   final Map<String, num> data;
-  final List<Color> palette;
-  final NumberFormat money;
-
-  const _BarCard({
-    super.key,
-    required this.data,
-    required this.palette,
-    required this.money,
-  });
+  final List<Color>      palette;
+  final NumberFormat     money;
+  const _BarCard(
+      {required this.data, required this.palette, required this.money});
 
   @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) {
-      return const Center(child: Text('No data'));
-    }
-
-    final entries = data.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    final maxY = entries.map((e) => e.value.toDouble()).fold<double>(0, (p, n) => n > p ? n : p);
+    if (data.isEmpty) return const Center(child: Text('No data'));
+    final entries = data.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final maxY = entries
+        .map((e) => e.value.toDouble())
+        .fold<double>(0, (p, n) => n > p ? n : p);
     final groups = <BarChartGroupData>[];
-
     for (int i = 0; i < entries.length; i++) {
-      final v = entries[i].value.toDouble();
-      final color = palette[i % palette.length];
-      groups.add(
-        BarChartGroupData(
-          x: i,
-          barRods: [
-            BarChartRodData(
-              toY: v,
-              width: 18,
-              borderRadius: BorderRadius.circular(6),
-              color: color,
-            )
-          ],
-        ),
-      );
-    }
-
-    return BarChart(
-      BarChartData(
-        maxY: (maxY * 1.2).clamp(1, double.infinity),
-        gridData: FlGridData(show: true, drawVerticalLine: false),
-        borderData: FlBorderData(show: false),
-        barGroups: groups,
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 44,
-              getTitlesWidget: (value, meta) {
-                String label;
-                if (value >= 1e7) {
-                  label = '${(value / 1e7).toStringAsFixed(1)}cr';
-                } else if (value >= 1e5) {
-                  label = '${(value / 1e5).toStringAsFixed(1)}L';
-                } else if (value >= 1e3) {
-                  label = '${(value / 1e3).toStringAsFixed(0)}k';
-                } else {
-                  label = value.toStringAsFixed(0);
-                }
-                return Text(label, style: const TextStyle(fontSize: 10));
-              },
-            ),
+      groups.add(BarChartGroupData(
+        x: i,
+        barRods: [
+          BarChartRodData(
+            toY: entries[i].value.toDouble(),
+            width: 18,
+            borderRadius: BorderRadius.circular(6),
+            color: palette[i % palette.length],
           ),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                final i = value.toInt();
-                if (i < 0 || i >= entries.length) return const SizedBox.shrink();
-                final label = entries[i].key;
-                return Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: SizedBox(
-                    width: 64,
-                    child: Text(
-                      label,
+        ],
+      ));
+    }
+    return BarChart(BarChartData(
+      maxY: (maxY * 1.2).clamp(1, double.infinity),
+      gridData: FlGridData(show: true, drawVerticalLine: false),
+      borderData: FlBorderData(show: false),
+      barGroups: groups,
+      titlesData: FlTitlesData(
+        leftTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 44,
+            getTitlesWidget: (v, _) {
+              String l;
+              if (v >= 1e7) l = '${(v / 1e7).toStringAsFixed(1)}cr';
+              else if (v >= 1e5) l = '${(v / 1e5).toStringAsFixed(1)}L';
+              else if (v >= 1e3) l = '${(v / 1e3).toStringAsFixed(0)}k';
+              else l = v.toStringAsFixed(0);
+              return Text(l, style: const TextStyle(fontSize: 10));
+            },
+          ),
+        ),
+        rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false)),
+        topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false)),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            getTitlesWidget: (v, _) {
+              final i = v.toInt();
+              if (i < 0 || i >= entries.length) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: SizedBox(
+                  width: 64,
+                  child: Text(entries[i].key,
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
-                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-        barTouchData: BarTouchData(
-          enabled: true,
-          touchTooltipData: BarTouchTooltipData(
-            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final label = entries[group.x].key;
-              return BarTooltipItem(
-                '$label\n${money.format(rod.toY)}',
-                const TextStyle(fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.w600)),
+                ),
               );
             },
           ),
         ),
       ),
-    );
-  }
-}
-
-/// ---------- Category breakdown (minimal “graph”) ----------
-class _CategoryBreakdown extends StatelessWidget {
-  final Map<String, num> byCategory;
-  final num total;
-  final NumberFormat money;
-
-  const _CategoryBreakdown({
-    super.key,
-    required this.byCategory,
-    required this.total,
-    required this.money,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (total <= 0 || byCategory.isEmpty) {
-      return Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: const Padding(
-          padding: EdgeInsets.all(14),
-          child: Text('No expenses in this period.'),
-        ),
-      );
-    }
-
-    final entries = byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Expense by Category', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
-            ...entries.map((e) {
-              final pct = (e.value / total).clamp(0, 1).toDouble();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Container(
-                            height: 14,
-                            decoration: BoxDecoration(
-                              color: Colors.indigo.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          FractionallySizedBox(
-                            widthFactor: pct,
-                            child: Container(
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: Colors.indigo,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 160,
-                      child: Text('${e.key} • ${money.format(e.value)}',
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// ---------- Recent activity list (period-scoped) ----------
-class _ActivityList extends StatelessWidget {
-  final List<_ActivityItem> items;
-  const _ActivityList({required this.items, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(14),
-          child: Text('No recent activity.'),
-        ),
-      );
-    }
-    return Column(
-      children: items.map((i) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.black12),
-          ),
-          child: ListTile(
-            leading: Icon(i.icon, color: i.color),
-            title: Text(i.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text(i.subtitle),
-            trailing:
-            Text(i.trailing, style: TextStyle(fontWeight: FontWeight.bold, color: i.color)),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _ActivityItem {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final String trailing;
-
-  _ActivityItem(
-      {required this.icon,
-        required this.color,
-        required this.title,
-        required this.subtitle,
-        required this.trailing});
-
-  static _ActivityItem fromLedger(
-      QueryDocumentSnapshot d, DateFormat fmt, NumberFormat money) {
-    final m = d.data() as Map<String, dynamic>;
-    final date = (m['date'] as Timestamp?)?.toDate();
-    return _ActivityItem(
-      icon: Icons.trending_up,
-      color: Colors.green,
-      title: (m['account'] ?? 'Account').toString(),
-      subtitle: '${fmt.format(date ?? DateTime.now())} • ${(m['description'] ?? '').toString()}',
-      trailing: money.format(_n(m['credit'])),
-    );
-  }
-
-  static _ActivityItem fromExpense(
-      QueryDocumentSnapshot d, DateFormat fmt, NumberFormat money) {
-    final m = d.data() as Map<String, dynamic>;
-    final date = (m['dueDate'] as Timestamp?)?.toDate();
-    return _ActivityItem(
-      icon: Icons.trending_down,
-      color: Colors.red,
-      title: (m['vendor'] ?? 'Expense').toString(),
-      subtitle: '${fmt.format(date ?? DateTime.now())} • ${(m['category'] ?? '').toString()}',
-      trailing: money.format(_n(m['amount'])),
-    );
-  }
-
-  static num _n(dynamic v) {
-    if (v == null) return 0;
-    if (v is num) return v;
-    if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
-    return 0;
-  }
-}
-
-/// ---------- Tiny UI atoms ----------
-class _PeriodPicker extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-  const _PeriodPicker({required this.label, required this.onTap, super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Colors.black26),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          child: Row(
-            children: [
-              const Icon(Icons.calendar_month, color: Colors.indigo),
-              const SizedBox(width: 10),
-              Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
-              const Icon(Icons.arrow_drop_down, color: Colors.indigo),
-            ],
+      barTouchData: BarTouchData(
+        enabled: true,
+        touchTooltipData: BarTouchTooltipData(
+          getTooltipItem: (group, _, rod, __) => BarTooltipItem(
+            '${entries[group.x].key}\n${money.format(rod.toY)}',
+            const TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
+// ── Period option ─────────────────────────────────────────────────────────────
 class _PeriodOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
+  final IconData     icon;
+  final String       label;
   final VoidCallback onTap;
-  const _PeriodOption({required this.icon, required this.label, required this.onTap, super.key});
+  const _PeriodOption(
+      {required this.icon, required this.label, required this.onTap});
   @override
-  Widget build(BuildContext context) {
-    return ListTile(
+  Widget build(BuildContext context) => ListTile(
       onTap: onTap,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.black12)),
-      leading: Icon(icon, color: Colors.indigo),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Colors.black12)),
+        leading: Icon(icon, color: _brand),
+        title:
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
       trailing: const Icon(Icons.chevron_right),
     );
   }
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+num _n(dynamic v) {
+  if (v == null) return 0;
+  if (v is num) return v;
+  if (v is String) return num.tryParse(v.replaceAll(',', '')) ?? 0;
+  return 0;
 }

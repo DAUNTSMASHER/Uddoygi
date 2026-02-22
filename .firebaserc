@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "uddyogi"
+  },
+  "targets": {
+    "uddyogi": {
+      "hosting": {
+        "main": ["uddyogi"],
+        "hr":   ["uddyogi-hr"]
+      }
+    }
   }
 }

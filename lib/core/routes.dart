@@ -75,6 +75,18 @@ import 'package:uddoygi/features/hr/presentation/screens/welfare_screen.dart';
 import 'package:uddoygi/features/hr/presentation/screens/ROI.dart';
 import 'package:uddoygi/features/hr/presentation/screens/budget.dart';
 
+// 💳 PipraPay / Payments
+import 'package:uddoygi/features/payments/presentation/screens/piprapay_dashboard.dart';
+import 'package:uddoygi/features/payments/presentation/screens/hr_payment_dispatch_screen.dart';
+import 'package:uddoygi/features/payments/presentation/screens/employee_payment_info_screen.dart';
+import 'package:uddoygi/features/payments/presentation/screens/employee_payment_methods_screen.dart';
+import 'package:uddoygi/features/payments/presentation/screens/hr_bank_accounts_screen.dart';
+import 'package:uddoygi/features/payments/presentation/screens/piprapay_settings_screen.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
+
+// 🖥️ HR Web Shell
+import 'package:uddoygi/features/hr/presentation/widgets/hr_web_shell.dart';
+
 // 🟠 Marketing Screens
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_dashboard.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/customers_screen.dart';
@@ -86,6 +98,7 @@ import 'package:uddoygi/features/marketing/presentation/screens/new_invoices_scr
 import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/sales_report_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_notice.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/renumeration_dashboard.dart';
 
 // 🟣 Marketing Work Order Screens
 import 'package:uddoygi/features/marketing/presentation/work_order/add_new_wo.dart';
@@ -160,37 +173,63 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/rnd/loan':       (context) => const RndProjectsScreen(),
   '/admin/all-buyers': (context) => const AdminAllBuyersPage(),
 
-  // 🟢 HR
-  '/hr/dashboard': (context) => const HRDashboard(),
-  '/hr/employee_directory': (context) => const EmployeeDirectoryScreen(),
-  '/hr/shift_tracker': (context) => const ShiftTrackerScreen(),
-  '/hr/recruitment': (context) => const RecruitmentScreen(),
-  '/hr/attendance': (context) => const AttendanceScreen(),
-  '/hr/leave_management': (context) => const LeaveManagementScreen(),
-  '/hr/payroll':              (context) => const PayrollOverviewScreen(),
-  '/hr/payroll/review':       (context) => const ReviewPayrollScreen(),
-  '/hr/payroll_processing': (context) => const PayrollProcessingScreen(),
-  '/hr/payslip':              (context) => const PayslipScreen(),
-  '/employee/payslip':        (context) => const EmployeePayslipScreen(),
-  '/hr/authorization':          (context) => const HrAuthorizationScreen(),
-  '/hr/salary_certificate':     (context) => const HrSalaryCertificateScreen(),
-  '/hr/appointment_letter':     (context) => const HrAppointmentLetterScreen(),
-  '/hr/payment_slip_approvals': (context) => const HrPaymentSlipApprovalScreen(),
-  '/hr/salary_management': (context) => const SalaryManagementScreen(),
-  '/hr/benefits_compensation': (context) => const BenefitsCompensationScreen(),
-  '/hr/loan_approval': (context) => const LoanApprovalScreen(),
-  '/hr/incentives': (context) => const IncentivehrScreen(),
-  '/hr/credits': (context) => const GeneralLedgerScreen(),
-  '/hr/accounts_payable': (context) => const AccountsPayableScreen(),
-  '/hr/expenses': (context) => const ExpensesScreen(),
-  '/hr/balance_update': (context) => const BalanceUpdateScreen(),
-  '/hr/tax': (context) => const TaxScreen(),
-  '/hr/procurement': (context) => const ProcurementScreen(),
-  '/hr/budget_forecast': (context) => const BudgetForecastScreen(),
-  '/hr/notices': (context) => const HRNoticeScreen(),
-  '/hr/welfare': (context) => const HRWelfareScreen(),
-  '/hr/roi':     (context) => const ROIPage(),
-  '/hr/budget':  (context) => const BudgetPage(),
+  // 🟢 HR — all screens are wrapped in _HrRoute for desktop sidebar support
+  '/hr/dashboard':              (ctx) => const HRDashboard(),
+  '/hr/employee_directory':     (ctx) => _HrRoute(title: 'Employee Directory',    child: const EmployeeDirectoryScreen()),
+  '/hr/shift_tracker':          (ctx) => _HrRoute(title: 'Shift Tracker',          child: const ShiftTrackerScreen()),
+  '/hr/recruitment':            (ctx) => _HrRoute(title: 'Recruitment',            child: const RecruitmentScreen()),
+  '/hr/attendance':             (ctx) => _HrRoute(title: 'Attendance',             child: const AttendanceScreen()),
+  '/hr/leave_management':       (ctx) => _HrRoute(title: 'Leave Management',       child: const LeaveManagementScreen()),
+  '/hr/payroll':                (ctx) => _HrRoute(title: 'Payroll Overview',        child: const PayrollOverviewScreen()),
+  '/hr/payroll/review':         (ctx) => _HrRoute(title: 'Review Payroll',          child: const ReviewPayrollScreen()),
+  '/hr/payroll_processing':     (ctx) => _HrRoute(title: 'Payroll Processing',      child: const PayrollProcessingScreen()),
+  '/hr/payslip':                (ctx) => _HrRoute(title: 'Payslips',               child: const PayslipScreen()),
+  '/employee/payslip':          (ctx) => const EmployeePayslipScreen(),
+  '/hr/authorization':          (ctx) => _HrRoute(title: 'Authorization',          child: const HrAuthorizationScreen()),
+  '/hr/salary_certificate':     (ctx) => _HrRoute(title: 'Salary Certificate',     child: const HrSalaryCertificateScreen()),
+  '/hr/appointment_letter':     (ctx) => _HrRoute(title: 'Appointment Letter',     child: const HrAppointmentLetterScreen()),
+  '/hr/payment_slip_approvals': (ctx) => _HrRoute(title: 'Slip Approvals',         child: const HrPaymentSlipApprovalScreen()),
+  '/hr/salary_management':      (ctx) => _HrRoute(title: 'Salary Management',      child: const SalaryManagementScreen()),
+  '/hr/benefits_compensation':  (ctx) => _HrRoute(title: 'Benefits & Compensation',child: const BenefitsCompensationScreen()),
+  '/hr/loan_approval':          (ctx) => _HrRoute(title: 'Loan Approval',          child: const LoanApprovalScreen()),
+  '/hr/incentives':             (ctx) => _HrRoute(title: 'Incentives',             child: const IncentivehrScreen()),
+  '/hr/credits':                (ctx) => _HrRoute(title: 'Credits',                child: const GeneralLedgerScreen()),
+  '/hr/accounts_payable':       (ctx) => _HrRoute(title: 'Accounts Payable',       child: const AccountsPayableScreen()),
+  '/hr/expenses':               (ctx) => _HrRoute(title: 'Expenses',               child: const ExpensesScreen()),
+  '/hr/balance_update':         (ctx) => _HrRoute(title: 'Balance Update',         child: const BalanceUpdateScreen()),
+  '/hr/tax':                    (ctx) => _HrRoute(title: 'Tax',                    child: const TaxScreen()),
+  '/hr/procurement':            (ctx) => _HrRoute(title: 'Procurement',            child: const ProcurementScreen()),
+  '/hr/budget_forecast':        (ctx) => _HrRoute(title: 'Budget Forecast',        child: const BudgetForecastScreen()),
+  '/hr/notices':                (ctx) => _HrRoute(title: 'Notices',                child: const HRNoticeScreen()),
+  '/hr/welfare':                (ctx) => _HrRoute(title: 'Welfare',                child: const HRWelfareScreen()),
+  '/hr/roi':                    (ctx) => _HrRoute(title: 'ROI',                    child: const ROIPage()),
+  '/hr/budget':                 (ctx) => _HrRoute(title: 'Budget',                 child: const BudgetPage()),
+
+  // 💳 Payments / PipraPay
+  '/payments/piprapay':               (ctx) => _HrRoute(title: 'PipraPay',          child: const PipraPayDashboard()),
+  '/payments/dispatch':               (ctx) => _HrRoute(title: 'Pay Dispatch',       child: const HrPaymentDispatchScreen()),
+  '/payments/my-payment-info':        (ctx) => const EmployeePaymentInfoScreen(),
+  '/common/salary/payment-methods':   (ctx) => const EmployeePaymentMethodsScreen(),
+  '/payments/bank-accounts': (ctx) {
+    final cid = ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
+    return _HrRoute(
+      title: 'Accounts',
+      child: _CidLoader(
+        builder: (c) => HrBankAccountsScreen(cid: c),
+        fallbackCid: cid,
+      ),
+    );
+  },
+  '/payments/piprapay/settings': (ctx) {
+    final cid = ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
+    return _HrRoute(
+      title: 'PipraPay Settings',
+      child: _CidLoader(
+        builder: (c) => PipraPaySettingsScreen(cid: c),
+        fallbackCid: cid,
+      ),
+    );
+  },
 
   // 🟠 Marketing
   '/marketing/dashboard': (context) => const MarketingDashboard(),
@@ -209,13 +248,16 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/purchase_orders/new': (context) => const AddNewPurchaseOrderScreen(),
   '/marketing/incoming_products': (context) => const IncomingProductsScreen(),
   '/marketing/qc_report': (context) => MarketingQCReportScreen(),
+  '/marketing/renumeration': (context) => const RenumerationDashboard(),
 
   // 🟣 Factory
   '/factory/dashboard': (context) => const FactoryDashboard(),
   '/factory/notices': (context) => const FactoryNoticeScreen(),
   '/factory/attendance':    (context) => const FactoryAttendanceScreen(),
+  '/factory/salary_overtime': (context) => const SalaryScreen(),
   '/marketing/attendance':  (context) => const FactoryAttendanceScreen(),
   '/admin/attendance':      (context) => const FactoryAttendanceScreen(),
+  '/admin/salary':          (context) => const SalaryScreen(),
 
   // 🔁 Common
   '/common/messages': (context) => const MessagesScreen(),
@@ -223,3 +265,56 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/common/complaints': (context) => const ComplaintScreen(),
   '/common/salary': (context) => const SalaryScreen(),
 };
+
+// ── Helper: auto-loads companyId from local storage ──────────────────────────
+class _CidLoader extends StatefulWidget {
+  final Widget Function(String cid) builder;
+  final String fallbackCid;
+  const _CidLoader({required this.builder, this.fallbackCid = ''});
+  @override
+  State<_CidLoader> createState() => _CidLoaderState();
+}
+
+class _CidLoaderState extends State<_CidLoader> {
+  String _cid = '';
+  bool   _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fallbackCid.isNotEmpty) {
+      _cid    = widget.fallbackCid;
+      _loaded = true;
+    } else {
+      LocalStorageService.getSavedCompanyId().then((id) {
+        if (mounted) setState(() { _cid = id ?? ''; _loaded = true; });
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return widget.builder(_cid);
+  }
+}
+
+// ── Helper: wraps HR screens with desktop sidebar on wide screens ─────────────
+// On desktop (≥ 900 px): renders child inside HrWebShell (sidebar + top bar).
+// On mobile: passes child through unchanged.
+class _HrRoute extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _HrRoute({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+    if (!isDesktop) return child;
+    return HrWebShell(title: title, child: child);
+  }
+}

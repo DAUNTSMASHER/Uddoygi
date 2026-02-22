@@ -1,6 +1,5 @@
 // lib/features/hr/presentation/screens/loan_approval_screen.dart
 // HR-facing board to review/approve/reject/disburse employee loans.
-// Clean dark board, neon chips, Firestore realtime.
 // PER-AGENT repayments are FIFO across all loans.
 // Includes PDF export (loans + repayments by date) saved to App Documents + share.
 // Auto-hides agents that have zero outstanding across all repayable loans.
@@ -12,9 +11,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-// PDF + Share + Storage
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -24,61 +23,104 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
+// ── Palette ───────────────────────────────────────────────────────────────────
+const Color _primary   = Color(0xFF065F46); // HR deep green
+const Color _primaryMd = Color(0xFF059669); // medium green
+const Color _primaryLt = Color(0xFFD1FAE5); // light green tint
+const Color _surface   = Color(0xFFF7F9FC); // page background
+const Color _card      = Color(0xFFFFFFFF); // card background
+const Color _fg        = Color(0xFF0F172A); // primary text
+const Color _muted     = Color(0xFF64748B); // secondary text
+const Color _border    = Color(0xFFE2E8F0); // card border
+const Color _danger    = Color(0xFFDC2626);
+const Color _warn      = Color(0xFFF97316);
+const Color _info      = Color(0xFF2563EB);
+
+// ── Status colours ────────────────────────────────────────────────────────────
+Color _statusColor(String s) {
+  switch (s) {
+    case 'pending':   return _warn;
+    case 'approved':  return _info;
+    case 'rejected':  return _danger;
+    case 'disbursed': return _primaryMd;
+    case 'closed':    return _muted;
+    case 'withdrawn': return _muted;
+    default:          return _muted;
+  }
+}
+
+IconData _statusIcon(String s) {
+  switch (s) {
+    case 'pending':   return Icons.hourglass_top_rounded;
+    case 'approved':  return Icons.thumb_up_rounded;
+    case 'rejected':  return Icons.cancel_rounded;
+    case 'disbursed': return Icons.payments_rounded;
+    case 'closed':    return Icons.check_circle_rounded;
+    default:          return Icons.help_rounded;
+  }
+}
+
 class LoanApprovalScreen extends StatefulWidget {
   const LoanApprovalScreen({super.key});
   @override
   State<LoanApprovalScreen> createState() => _LoanApprovalScreenState();
 }
 
-class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
+class _LoanApprovalScreenState extends State<LoanApprovalScreen>
+    with SingleTickerProviderStateMixin {
   String _cid = '';
-  // Palette
-  static const Color _board        = Color(0xFF80839A);
-  static const Color _ink          = Color(0xFF173A9F);
-  static const Color _lime         = Color(0xFFF1FF60);
-  static const Color _purplePastel = Color(0xFFCDB9FF);
-  static const Color _cyanPastel   = Color(0xFF9DEBFF);
-  static const Color _accent       = Color(0xFFFFC857);
 
-  final _auth = FirebaseAuth.instance;
+  final _auth  = FirebaseAuth.instance;
   final _money = NumberFormat.currency(locale: 'en_BD', symbol: '৳', decimalDigits: 0);
-  final _date  = DateFormat('d MMM, yyyy');
+  final _date  = DateFormat('d MMM yyyy');
 
-  int    _tabIndex = 0; // 0: Pending, 1: All
+  late TabController _tabs;
   String _search    = '';
   String _statusAll = 'all';
 
-  // Scrollbar needs a controller
   final ScrollController _scrollCtrl = ScrollController();
+  final Map<String, num> _loanRepaidCache  = {};
+  final Map<String, num> _agentRepaidCache = {};
 
-  // warm caches to avoid “jump” on first snapshot
-  final Map<String, num> _loanRepaidCache  = {}; // loanId -> repaid
-  final Map<String, num> _agentRepaidCache = {}; // userId -> repaid (best-effort)
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: 2, vsync: this);
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
 
-  // ───────────────────────── Streams ─────────────────────────
+  @override
+  void dispose() {
+    _tabs.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Streams ───────────────────────────────────────────────────────────────
   Stream<QuerySnapshot<Map<String, dynamic>>> _stream({required bool onlyPending}) {
-    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.loans).orderBy('requestedAt', descending: true);
+    Query<Map<String, dynamic>> q =
+        DB.colSync(_cid, C.loans).orderBy('requestedAt', descending: true);
     if (onlyPending) q = q.where('status', isEqualTo: 'pending');
     return q.snapshots();
   }
 
   Stream<int> _countStatus(String status) async* {
-    yield* DB.colSync(_cid, C.loans).where('status', isEqualTo: status).snapshots().map((s) => s.docs.length);
+    yield* DB.colSync(_cid, C.loans)
+        .where('status', isEqualTo: status)
+        .snapshots()
+        .map((s) => s.docs.length);
   }
 
-  /// Company “Total” = sum of principal for loans with status approved or disbursed.
   Stream<num> _sumApprovedPrincipal() {
     return DB.colSync(_cid, C.loans)
         .where('status', whereIn: ['approved', 'disbursed', 'closed'])
         .snapshots()
         .map((s) => s.docs.fold<num>(
-      0,
-          (sum, d) => sum + (d.data()['amount'] as num? ?? 0),
-    ));
+              0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0)));
   }
 
-  /// Company “Repaid” = sum of all repayments (historically okay).
-  /// Company "Repaid" — sums repayments subcollections only within this company's loans.
   Stream<num> _sumAllRepaid() {
     return DB.colSync(_cid, C.loans)
         .where('status', whereIn: ['approved', 'disbursed', 'closed'])
@@ -86,8 +128,10 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
         .asyncMap((loansSnap) async {
       num total = 0;
       for (final loan in loansSnap.docs) {
-        final repSnap = await DB.subColSync(_cid, C.loans, loan.id, C.repayments).get();
-        total += repSnap.docs.fold<num>(0, (s, d) => s + (d.data()['amount'] as num? ?? 0));
+        final repSnap =
+            await DB.subColSync(_cid, C.loans, loan.id, C.repayments).get();
+        total += repSnap.docs
+            .fold<num>(0, (s, d) => s + (d.data()['amount'] as num? ?? 0));
       }
       return total;
     });
@@ -99,24 +143,24 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
         .snapshots()
         .map((s) => s.docs.fold<num>(0, (sum, d) {
       final m = d.data();
-      return sum + ((m['disbursedAmount'] ?? m['amount']) as num? ?? 0);
+              return sum +
+                  ((m['disbursedAmount'] ?? m['amount']) as num? ?? 0);
     }));
   }
 
-
   Stream<num> _loanRepaidStream(String loanId) {
-    return DB.colSync(_cid, C.loans).doc(loanId)
+    return DB.colSync(_cid, C.loans)
+        .doc(loanId)
         .collection('repayments')
         .snapshots()
-        .map((s) => s.docs.fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0)));
+        .map((s) =>
+            s.docs.fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0)));
   }
 
-  // ───────────────────────── Derived totals (per agent) ─────────────────────────
-  /// Accurate, backward-compatible outstanding computed from each approved/disbursed loan’s own repayments.
   Future<_AgentOutstandingTotals> _computeAgentOutstanding(String userId) async {
     final loansSnap = await DB.colSync(_cid, C.loans)
         .where('userId', isEqualTo: userId)
-        .where('status', whereIn: ['approved', 'disbursed']) // ← only approved + disbursed
+        .where('status', whereIn: ['approved', 'disbursed'])
         .get();
 
     double repayablePrincipal = 0;
@@ -125,13 +169,15 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
     for (final ld in loansSnap.docs) {
       final principal = (ld.data()['amount'] as num? ?? 0).toDouble();
       repayablePrincipal += principal;
-
       final repaysSnap = await ld.reference.collection('repayments').get();
-      final thisLoanRepaid = repaysSnap.docs.fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0)).toDouble();
+      final thisLoanRepaid = repaysSnap.docs
+          .fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0))
+          .toDouble();
       repaid += thisLoanRepaid;
     }
 
-    final outstanding = (repayablePrincipal - repaid).clamp(0, double.infinity).toDouble();
+    final outstanding =
+        (repayablePrincipal - repaid).clamp(0, double.infinity).toDouble();
     return _AgentOutstandingTotals(
       repayablePrincipal: repayablePrincipal,
       repaid: repaid,
@@ -139,13 +185,9 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
     );
   }
 
-  // ───────────────────────── Actions ─────────────────────────
-  Future<void> _updateStatus(
-      String id,
-      String status, {
-        String? notes,
-        Map<String, dynamic>? extra,
-      }) async {
+  // ── Actions ───────────────────────────────────────────────────────────────
+  Future<void> _updateStatus(String id, String status,
+      {String? notes, Map<String, dynamic>? extra}) async {
     await (await DB.col(C.loans)).doc(id).set({
       'status': status,
       'notes': notes,
@@ -170,24 +212,18 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
   Future<void> _disburse(String id, double defaultAmount) async {
     final res = await _askDisburse(defaultAmount);
     if (res == null) return;
-    await _updateStatus(
-      id,
-      'disbursed',
+    await _updateStatus(id, 'disbursed',
       notes: res.note,
       extra: {
         'disbursedAmount': res.amount,
         'disbursedAt': FieldValue.serverTimestamp(),
         'disbursedBy': _auth.currentUser?.email ?? 'hr',
-      },
-    );
+        });
     _toast('Marked Disbursed');
   }
 
-  // PER-AGENT repayment: apply one amount across ALL loans (FIFO)
-  Future<void> _repayForUser({
-    required String userId,
-    required String? userEmail,
-  }) async {
+  Future<void> _repayForUser(
+      {required String userId, required String? userEmail}) async {
     final res = await _askRepayment(0);
     if (res == null) return;
 
@@ -197,23 +233,22 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
       return;
     }
 
-    // Load repayable loans (approved/disbursed), oldest first
     final loansSnap = await DB.colSync(_cid, C.loans)
         .where('userId', isEqualTo: userId)
         .where('status', whereIn: ['approved', 'disbursed'])
         .orderBy('requestedAt')
         .get();
 
-    // Compute outstanding across repayable loans
     double totalOutstanding = 0;
     final List<_LoanOutstanding> buckets = [];
     for (final loanDoc in loansSnap.docs) {
       final principal = (loanDoc.data()['amount'] as num? ?? 0).toDouble();
-
-      final repaysSnap = await loanDoc.reference.collection('repayments').get();
-      final alreadyRepaid = repaysSnap.docs.fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0));
-
-      final outstanding = (principal - alreadyRepaid).clamp(0, double.infinity).toDouble();
+      final repaysSnap =
+          await loanDoc.reference.collection('repayments').get();
+      final alreadyRepaid = repaysSnap.docs
+          .fold<num>(0, (sum, d) => sum + (d.data()['amount'] as num? ?? 0));
+      final outstanding =
+          (principal - alreadyRepaid).clamp(0, double.infinity).toDouble();
       if (outstanding > 0) {
         buckets.add(_LoanOutstanding(loanDoc.reference, outstanding));
         totalOutstanding += outstanding;
@@ -225,24 +260,17 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
       return;
     }
 
-    // Cap the amount to the outstanding
-    // Validate against outstanding (reject if over)
     if (inputAmount > totalOutstanding) {
-      _toast('Amount exceeds outstanding of ${_money.format(totalOutstanding)}. Enter a value \u2264 outstanding.');
+      _toast(
+          'Amount exceeds outstanding of ${_money.format(totalOutstanding)}.');
       return;
     }
 
-// Use the user-entered amount (now guaranteed valid)
-    final double applyAmount = inputAmount;
-
-
-    // Apply FIFO
-    double remaining = applyAmount;
+    double remaining = inputAmount;
     final batch = DB.firestore.batch();
     for (final b in buckets) {
       if (remaining <= 0) break;
       final applyHere = remaining > b.outstanding ? b.outstanding : remaining;
-
       final repayRef = b.ref.collection('repayments').doc();
       batch.set(repayRef, {
         'amount': applyHere,
@@ -250,80 +278,81 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
         'addedAt': FieldValue.serverTimestamp(),
         'addedBy': _auth.currentUser?.email ?? 'hr',
         'userLevel': true,
-        'userId': userId,       // ✅ always store for new repayments
-        'userEmail': userEmail, // ✅ always store for new repayments
+        'userId': userId,
+        'userEmail': userEmail,
       });
-
       remaining -= applyHere;
     }
     await batch.commit();
 
-    // update local cache to avoid visual delay until stream refresh
-    _agentRepaidCache[userId] = ((_agentRepaidCache[userId] ?? 0) + applyAmount);
+    _agentRepaidCache[userId] =
+        ((_agentRepaidCache[userId] ?? 0) + inputAmount);
 
-    // Close loans that are fully paid now
     for (final b in buckets) {
       final loanSnap = await b.ref.get();
-      final principal = (loanSnap.data()?['amount'] as num? ?? 0).toDouble();
+      final principal =
+          (loanSnap.data()?['amount'] as num? ?? 0).toDouble();
       final repaysSnap = await b.ref.collection('repayments').get();
-      final repaid = repaysSnap.docs.fold<num>(0, (t, d) => t + (d.data()['amount'] as num? ?? 0));
+      final repaid = repaysSnap.docs
+          .fold<num>(0, (t, d) => t + (d.data()['amount'] as num? ?? 0));
       if (repaid >= principal) {
         await b.ref.update({'status': 'closed'});
       }
     }
 
-    _toast('Repayment of ${_money.format(applyAmount)} recorded for ${userEmail ?? userId}');
+    _toast('Repayment of ${_money.format(inputAmount)} recorded.');
   }
 
-  // ────────────────────── PDF export ──────────────────────
+  // ── PDF export ─────────────────────────────────────────────────────────────
   Future<void> _exportAgentReport(_AgentAggregate a) async {
     try {
       final bytes = await _buildAgentReportPdf(a.userId, a.email);
-      final filename = 'Agent_${a.email ?? a.userId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      final savedPath = await _savePdfToAppDocs(bytes: bytes, filename: filename);
+      final filename =
+          'Agent_${a.email ?? a.userId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final savedPath =
+          await _savePdfToAppDocs(bytes: bytes, filename: filename);
       _toast('PDF saved at $savedPath');
       await Printing.sharePdf(bytes: bytes, filename: filename);
     } catch (e, st) {
-      if (kDebugMode) {
-        // ignore: avoid_print
-        print('PDF error: $e\n$st');
-      }
+      if (kDebugMode) print('PDF error: $e\n$st');
       _toast('Failed to create PDF: $e');
     }
   }
 
-  Future<Uint8List> _buildAgentReportPdf(String userId, String? userEmail) async {
-    // Fetch loans
+  Future<Uint8List> _buildAgentReportPdf(
+      String userId, String? userEmail) async {
     final loansSnap = await DB.colSync(_cid, C.loans)
         .where('userId', isEqualTo: userId)
         .orderBy('requestedAt')
         .get();
 
-    // Build rows
     final List<_LoanRow> loanRows = [];
     final List<_RepayRow> repayRows = [];
 
     for (final ld in loansSnap.docs) {
       final m = ld.data();
       final loanAmount = (m['amount'] as num? ?? 0).toDouble();
-      final requestedAt = (m['requestedAt'] is Timestamp) ? (m['requestedAt'] as Timestamp).toDate() : null;
+      final requestedAt = (m['requestedAt'] is Timestamp)
+          ? (m['requestedAt'] as Timestamp).toDate()
+          : null;
       final status = (m['status'] ?? 'pending') as String;
-      final type   = (m['type'] ?? 'Loan') as String;
+      final type = (m['type'] ?? 'Loan') as String;
 
-      final repSnap = await ld.reference.collection('repayments').orderBy('addedAt').get();
+      final repSnap = await ld.reference
+          .collection('repayments')
+          .orderBy('addedAt')
+          .get();
       num repaid = 0;
       for (final r in repSnap.docs) {
         final rm = r.data();
         final amt = (rm['amount'] as num? ?? 0).toDouble();
         repaid += amt;
-        final addedAt = (rm['addedAt'] is Timestamp) ? (rm['addedAt'] as Timestamp).toDate() : null;
+        final addedAt = (rm['addedAt'] is Timestamp)
+            ? (rm['addedAt'] as Timestamp).toDate()
+            : null;
         final note = (rm['note'] ?? '') as String? ?? '';
         repayRows.add(_RepayRow(
-          date: addedAt,
-          amount: amt,
-          note: note,
-          loanType: type,
-        ));
+            date: addedAt, amount: amt, note: note, loanType: type));
       }
 
       loanRows.add(_LoanRow(
@@ -331,24 +360,28 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
         amount: loanAmount,
         date: requestedAt,
         status: status,
-        repaid: repaid.toDouble(),
-      ));
+          repaid: repaid.toDouble()));
     }
 
-    repayRows.sort((a, b) => (a.date ?? DateTime(0)).compareTo(b.date ?? DateTime(0)));
+    repayRows.sort((a, b) =>
+        (a.date ?? DateTime(0)).compareTo(b.date ?? DateTime(0)));
 
-    final doc = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
+    final doc = pw.Document(
+        theme: pw.ThemeData.withFont(
+            base: pw.Font.times(),
+            bold: pw.Font.timesBold(),
+            italic: pw.Font.timesItalic(),
+            boldItalic: pw.Font.timesBoldItalic()));
     final small = pw.TextStyle(fontSize: 9);
 
-    doc.addPage(
-      pw.MultiPage(
-        build: (_) => [
-          pw.Text('Agent Loan Report', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+    doc.addPage(pw.MultiPage(build: (_) => [
+      pw.Text('Agent Loan Report',
+          style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.Text(userEmail ?? userId, style: small),
           pw.SizedBox(height: 12),
-
-          pw.Text('Loans', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+      pw.Text('Loans',
+          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Table.fromTextArray(
             headers: ['Type', 'Amount', 'Requested', 'Status', 'Repaid', 'Outstanding'],
@@ -365,310 +398,287 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
             }).toList(),
             cellStyle: small,
             headerStyle: small.copyWith(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(color: PdfColor(0.90, 0.90, 0.90)),
+        headerDecoration:
+            const pw.BoxDecoration(color: PdfColor(0.90, 0.90, 0.90)),
             border: null,
           ),
-
           pw.SizedBox(height: 16),
-          pw.Text('Repayments (by date / installment)', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+      pw.Text('Repayments (by date)',
+          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           if (repayRows.isEmpty)
             pw.Text('No repayments yet.', style: small)
           else
             pw.Table.fromTextArray(
               headers: ['Date', 'Amount', 'Loan', 'Note'],
-              data: repayRows.map((r) => [
+          data: repayRows
+              .map((r) => [
                 r.date != null ? _date.format(r.date!) : '—',
                 _money.format(r.amount),
                 r.loanType,
                 r.note,
-              ]).toList(),
+                  ])
+              .toList(),
               cellStyle: small,
               headerStyle: small.copyWith(fontWeight: pw.FontWeight.bold),
-              headerDecoration: const pw.BoxDecoration(color: PdfColor(0.90, 0.90, 0.90)),
+          headerDecoration:
+              const pw.BoxDecoration(color: PdfColor(0.90, 0.90, 0.90)),
               border: null,
-              cellAlignments: {
-                0: pw.Alignment.centerLeft,
-                1: pw.Alignment.centerRight,
-                2: pw.Alignment.centerLeft,
-                3: pw.Alignment.centerLeft,
-              },
-            ),
-        ],
-      ),
-    );
+        ),
+    ]));
 
     return await doc.save();
   }
 
-  /// Safer save path: App Documents (works on Android 10/11/12+ without special permissions).
-  Future<String> _savePdfToAppDocs({
-    required Uint8List bytes,
-    required String filename,
-  }) async {
+  Future<String> _savePdfToAppDocs(
+      {required Uint8List bytes, required String filename}) async {
     if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      if (!status.isGranted && !status.isLimited) {
-        // proceed anyway; app docs works without it
+      await Permission.storage.request();
       }
-    }
-
     final dir = await getApplicationDocumentsDirectory();
     final fullPath = p.join(dir.path, filename);
-    final file = File(fullPath);
-    await file.writeAsBytes(bytes, flush: true);
+    await File(fullPath).writeAsBytes(bytes, flush: true);
     return fullPath;
   }
 
-  // ────────────────────── UI helpers ──────────────────────
-  void _toast(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
-
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'pending':   return const Color(0xFFFFB020);
-      case 'approved':  return const Color(0xFF5AB2FF);
-      case 'rejected':  return const Color(0xFFFF5A7A);
-      case 'disbursed': return const Color(0xFF65D38B);
-      case 'closed':    return Colors.grey;
-      case 'withdrawn': return Colors.grey;
-      default:          return Colors.white70;
-    }
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  void _toast(String s) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(s, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+      backgroundColor: _primary,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
   String _initials(String? email) {
     final core = (email ?? 'U').split('@').first;
-    final parts = core.split(RegExp(r'[\W_]+')).where((e) => e.isNotEmpty).toList();
+    final parts =
+        core.split(RegExp(r'[\W_]+')).where((e) => e.isNotEmpty).toList();
     if (parts.isEmpty) return core[0].toUpperCase();
-    return (parts.first[0] + (parts.length > 1 ? parts.last[0] : '')).toUpperCase();
+    return (parts.first[0] +
+            (parts.length > 1 ? parts.last[0] : ''))
+        .toUpperCase();
   }
 
-  // ───────────────────────── Build ─────────────────────────
-  @override
-  void dispose() {
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-  @override
-  void initState() {
-    super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
-  }
-
-
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-
-    // Safe text scaling (no deprecated APIs)
-    final rawFactor = MediaQuery.textScaleFactorOf(context);
-    final clampedFactor = rawFactor.clamp(1.0, 1.2);
-    final textScaler = TextScaler.linear(clampedFactor);
-
-    final topKpis = SizedBox(
-      height: 80,
-      child: ScrollConfiguration(
-        behavior: const _NoGlowBehavior(),
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          children: [
-            _ChipKpi(
-              color: _lime,
-              icon: Icons.timer_outlined,
-              label: 'Pending',
-              stream: _countStatus('pending').map((n) => '$n'),
-            ),
-            const SizedBox(width: 10),
-            _ChipKpi(
-              color: _purplePastel,
-              icon: Icons.task_alt_outlined,
-              label: 'Approved',
-              stream: _countStatus('approved').map((n) => '$n'),
-            ),
-            const SizedBox(width: 10),
-            _ChipKpi(
-              color: _cyanPastel,
-              icon: Icons.payments_outlined,
-              label: 'Disbursed',
-              stream: _sumDisbursed().map((s) => _money.format(s)),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    return MediaQuery(
-      data: media.copyWith(textScaler: textScaler),
-      child: Scaffold(
-        backgroundColor: _board,
+    return Scaffold(
+      backgroundColor: _surface,
         appBar: AppBar(
-          backgroundColor: _board,
-          elevation: 0,
+        backgroundColor: _primary,
           foregroundColor: Colors.white,
-          title: const Text('Loan Approvals', style: TextStyle(fontWeight: FontWeight.w800)),
+        elevation: 0,
+        title: Text('Loan Approvals',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w800, fontSize: 17)),
           actions: [
             IconButton(
               tooltip: 'Refresh',
               onPressed: () => setState(() {}),
-              icon: const Icon(Icons.refresh),
-            ),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabs,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          labelStyle: GoogleFonts.inter(
+              fontWeight: FontWeight.w700, fontSize: 13),
+          tabs: const [
+            Tab(text: 'Pending'),
+            Tab(text: 'All Loans'),
           ],
         ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-
-              // Company balance — exactly three: Total (approved+disbursed), Repaid, Due
+      ),
+      body: Column(children: [
+        // ── Balance card ──────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: _CompanyBalanceCard(
                   money: _money,
                   approvedPrincipalStream: _sumApprovedPrincipal(),
                   totalRepaidStream: _sumAllRepaid(),
                 ),
               ),
-              const SizedBox(height: 12),
 
-              // KPI chips
-              topKpis,
-
-              // Segmented
+        // ── KPI row ───────────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: _ink.withOpacity(.9),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  padding: const EdgeInsets.all(6),
-                  child: Row(
-                    children: [
-                      _Segment(
-                        text: 'Pending',
-                        selected: _tabIndex == 0,
-                        onTap: () => setState(() => _tabIndex = 0),
-                      ),
-                      _Segment(
-                        text: 'All',
-                        selected: _tabIndex == 1,
-                        onTap: () => setState(() => _tabIndex = 1),
-                      ),
-                    ],
-                  ),
-                ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(children: [
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.hourglass_top_rounded,
+                label: 'Pending',
+                color: _warn,
+                stream: _countStatus('pending').map((n) => '$n'),
               ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.thumb_up_rounded,
+                label: 'Approved',
+                color: _info,
+                stream: _countStatus('approved').map((n) => '$n'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _KpiCard(
+                icon: Icons.payments_rounded,
+                label: 'Disbursed',
+                color: _primaryMd,
+                stream: _sumDisbursed().map((s) => _money.format(s)),
+              ),
+            ),
+          ]),
+        ),
 
-              // Search & (All) status filter
+        // ── Search + filter ───────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                child: Row(
-                  children: [
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(children: [
                     Expanded(
                       child: TextField(
                         onChanged: (v) => setState(() => _search = v.trim()),
-                        style: const TextStyle(color: Colors.white),
+                style: GoogleFonts.inter(fontSize: 14, color: _fg),
                         decoration: InputDecoration(
-                          hintText: _tabIndex == 1 ? 'Search agent email / id' : 'Search email / id / type',
-                          hintStyle: const TextStyle(color: Colors.white60),
-                          prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                  hintText: 'Search by name or email…',
+                  hintStyle: GoogleFonts.inter(
+                      color: _muted, fontSize: 13),
+                  prefixIcon:
+                      const Icon(Icons.search_rounded, color: _muted, size: 20),
                           filled: true,
-                          fillColor: _ink.withOpacity(.9),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  fillColor: _card,
+                  contentPadding:
+                      const EdgeInsets.symmetric(vertical: 12),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_tabIndex == 1) ...[
-                      const SizedBox(width: 10),
-                      DropdownButtonHideUnderline(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: _ink.withOpacity(.9),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: DropdownButton<String>(
-                            value: _statusAll,
-                            dropdownColor: _ink,
-                            iconEnabledColor: Colors.white70,
-                            items: const [
-                              DropdownMenuItem(value: 'all', child: Text('All', style: TextStyle(color: Colors.white))),
-                              DropdownMenuItem(value: 'pending', child: Text('Pending', style: TextStyle(color: Colors.white))),
-                              DropdownMenuItem(value: 'approved', child: Text('Approved', style: TextStyle(color: Colors.white))),
-                              DropdownMenuItem(value: 'rejected', child: Text('Rejected', style: TextStyle(color: Colors.white))),
-                              DropdownMenuItem(value: 'disbursed', child: Text('Disbursed', style: TextStyle(color: Colors.white))),
-                              DropdownMenuItem(value: 'withdrawn', child: Text('Withdrawn', style: TextStyle(color: Colors.white))),
-                              DropdownMenuItem(value: 'closed', child: Text('Closed', style: TextStyle(color: Colors.white))),
-                            ],
-                            onChanged: (v) => setState(() => _statusAll = v ?? 'all'),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                    borderSide: const BorderSide(color: _border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: _primary, width: 1.5),
+                  ),
                 ),
               ),
+            ),
+            // Status filter (All tab only)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              child: _tabs.index == 1
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 10),
+                        child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                          color: _card,
+                            borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _border),
+                          ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _statusAll,
+                            style: GoogleFonts.inter(
+                                color: _fg, fontSize: 13),
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'all',
+                                  child: Text('All Status')),
+                              DropdownMenuItem(
+                                  value: 'pending',
+                                  child: Text('Pending')),
+                              DropdownMenuItem(
+                                  value: 'approved',
+                                  child: Text('Approved')),
+                              DropdownMenuItem(
+                                  value: 'rejected',
+                                  child: Text('Rejected')),
+                              DropdownMenuItem(
+                                  value: 'disbursed',
+                                  child: Text('Disbursed')),
+                              DropdownMenuItem(
+                                  value: 'closed',
+                                  child: Text('Closed')),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _statusAll = v ?? 'all'),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+                ),
+          ]),
+              ),
 
-              const SizedBox(height: 6),
+        // ── Tab content ───────────────────────────────────────────────
               Expanded(
-                child: Scrollbar(
-                  controller: _scrollCtrl,
-                  thumbVisibility: true,
-                  thickness: 4,
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _stream(onlyPending: _tabIndex == 0),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+          child: TabBarView(
+            controller: _tabs,
+            children: [
+              _buildPendingTab(),
+              _buildAllTab(),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ── Pending tab ───────────────────────────────────────────────────────────
+  Widget _buildPendingTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _stream(onlyPending: true),
+      builder: (context, snap) {
                       if (!snap.hasData) {
                         return const Center(
-                          child: Text('No data available.', style: TextStyle(color: Colors.white60)),
-                        );
-                      }
+              child: CircularProgressIndicator(color: _primary));
+        }
 
-                      final allDocs = snap.data!.docs;
-
-                      if (_tabIndex == 0) {
-                        // ── Pending tab: per-loan cards ──
-                        final filtered = allDocs.where((d) {
-                          final m   = d.data();
-                          final st  = (m['status'] ?? '').toString();
-                          if (st != 'pending') return false;
-                          final em  = (m['userEmail'] ?? '').toString().toLowerCase();
-                          final uid = (m['userId'] ?? '').toString().toLowerCase();
-                          final ty  = (m['type'] ?? '').toString().toLowerCase();
-                          final q   = _search.toLowerCase();
-                          final passSearch = q.isEmpty || em.contains(q) || uid.contains(q) || ty.contains(q);
-                          return passSearch;
+        final filtered = snap.data!.docs.where((d) {
+          final m = d.data();
+          if ((m['status'] ?? '') != 'pending') return false;
+          final q = _search.toLowerCase();
+          if (q.isEmpty) return true;
+          return (m['userEmail'] ?? '').toString().toLowerCase().contains(q) ||
+              (m['userId'] ?? '').toString().toLowerCase().contains(q) ||
+              (m['type'] ?? '').toString().toLowerCase().contains(q);
                         }).toList();
 
                         if (filtered.isEmpty) {
-                          return const Center(
-                            child: Text('No loans match your filters.', style: TextStyle(color: Colors.white60)),
+          return _EmptyState(
+            icon: Icons.inbox_rounded,
+            title: 'No pending loans',
+            subtitle: 'All loan requests have been reviewed.',
                           );
                         }
 
                         return ListView.separated(
                           controller: _scrollCtrl,
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                           itemCount: filtered.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (_, i) {
                             final doc = filtered[i];
                             final m = doc.data();
-                            final amount  = (m['amount'] as num? ?? 0).toDouble();
-                            final months  = (m['durationMonths'] as num? ?? 0).toInt();
-                            final status  = (m['status'] ?? 'pending') as String;
-                            final email   = (m['userEmail'] ?? '') as String?;
-                            final userId  = (m['userId'] ?? '') as String?;
-                            final type    = (m['type'] ?? 'Loan') as String;
+            final amount = (m['amount'] as num? ?? 0).toDouble();
+            final months = (m['durationMonths'] as num? ?? 0).toInt();
+            final status = (m['status'] ?? 'pending') as String;
+            final email = (m['userEmail'] ?? '') as String?;
+            final userId = (m['userId'] ?? '') as String?;
+            final type = (m['type'] ?? 'Loan') as String;
                             final purpose = (m['purpose'] ?? '') as String? ?? '';
                             final created = (m['requestedAt'] is Timestamp)
                                 ? (m['requestedAt'] as Timestamp).toDate()
@@ -677,77 +687,95 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
                             return _LoanCard(
                               loanId: doc.id,
                               money: _money,
-                              title: '$type • ${_money.format(amount)}',
-                              subtitle: '${email ?? '—'}  •  ${months}m${created != null ? '  •  ${_date.format(created)}' : ''}',
+              date: _date,
+              type: type,
+              amount: amount,
+              durationMonths: months,
                               purpose: purpose,
                               status: status,
-                              statusColor: _statusColor(status),
-                              initials: _initials(email),
-                              principal: amount,
+              email: email,
                               userId: userId ?? '',
-                              userEmail: email,
+              createdAt: created,
+              initials: _initials(email),
                               onApprove: status == 'pending' ? () => _approve(doc.id) : null,
-                              onReject: (status == 'pending' || status == 'approved') ? () => _reject(doc.id) : null,
-                              onDisburse: (status == 'pending' || status == 'approved') ? () => _disburse(doc.id, amount) : null,
+              onReject: (status == 'pending' || status == 'approved')
+                  ? () => _reject(doc.id)
+                  : null,
+              onDisburse: (status == 'pending' || status == 'approved')
+                  ? () => _disburse(doc.id, amount)
+                  : null,
                               onRepayAgent: (userId != null && userId.isNotEmpty)
                                   ? () => _repayForUser(userId: userId, userEmail: email)
                                   : null,
-
                               repaidStream: _loanRepaidStream(doc.id),
                               initialRepaid: _loanRepaidCache[doc.id],
                               onRepaidChanged: (v) => _loanRepaidCache[doc.id] = v,
                             );
                           },
                         );
-                      } else {
-                        // ── All tab: group by agent ──
-                        final filtered = allDocs.where((d) {
-                          final m   = d.data();
-                          final st  = (m['status'] ?? '').toString();
-                          final em  = (m['userEmail'] ?? '').toString().toLowerCase();
-                          final uid = (m['userId'] ?? '').toString().toLowerCase();
-                          final q   = _search.toLowerCase();
+      },
+    );
+  }
+
+  // ── All tab ───────────────────────────────────────────────────────────────
+  Widget _buildAllTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _stream(onlyPending: false),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(color: _primary));
+        }
+
+        final filtered = snap.data!.docs.where((d) {
+          final m = d.data();
+          final st = (m['status'] ?? '').toString();
+          final q = _search.toLowerCase();
                           final passStatus = _statusAll == 'all' || st == _statusAll;
-                          final passSearch = q.isEmpty || em.contains(q) || uid.contains(q);
+          final passSearch = q.isEmpty ||
+              (m['userEmail'] ?? '').toString().toLowerCase().contains(q) ||
+              (m['userId'] ?? '').toString().toLowerCase().contains(q);
                           return passStatus && passSearch;
                         }).toList();
 
                         if (filtered.isEmpty) {
-                          return const Center(
-                            child: Text('No agents match your filters.', style: TextStyle(color: Colors.white60)),
-                          );
-                        }
+          return _EmptyState(
+            icon: Icons.search_off_rounded,
+            title: 'No results',
+            subtitle: 'Try adjusting your search or filter.',
+          );
+        }
 
-                        // Build agent aggregates (principal + counts)
+        // Group by agent
                         final Map<String, _AgentAggregate> byAgent = {};
                         for (final d in filtered) {
                           final m = d.data();
                           final userId = (m['userId'] ?? '').toString();
-                          final email  = (m['userEmail'] ?? '') as String?;
-                          final amt    = (m['amount'] as num? ?? 0).toDouble();
+          final email = (m['userEmail'] ?? '') as String?;
+          final amt = (m['amount'] as num? ?? 0).toDouble();
                           final status = (m['status'] ?? '') as String;
                           final key = userId.isNotEmpty ? userId : (email ?? '');
-                          byAgent.putIfAbsent(key, () => _AgentAggregate(userId: userId, email: email));
+          byAgent.putIfAbsent(
+              key, () => _AgentAggregate(userId: userId, email: email));
                           final agg = byAgent[key]!;
-                          agg.totalPrincipal += amt; // display purpose
+          agg.totalPrincipal += amt;
                           if (status == 'approved' || status == 'disbursed') {
-                            agg.repayablePrincipal += amt; // only approved + disbursed
+            agg.repayablePrincipal += amt;
                           }
                           agg.loanIds.add(d.id);
                           agg.loanCount += 1;
                         }
 
                         final agents = byAgent.values.toList()
-                          ..sort((a, b) => (b.totalPrincipal.compareTo(a.totalPrincipal)));
+          ..sort((a, b) => b.totalPrincipal.compareTo(a.totalPrincipal));
 
                         return ListView.separated(
                           controller: _scrollCtrl,
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                           itemCount: agents.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
                           itemBuilder: (_, i) {
                             final a = agents[i];
-
                             return _AgentRowCard(
                               email: a.email ?? a.userId,
                               initials: _initials(a.email),
@@ -756,66 +784,65 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
                               money: _money,
                               userId: a.userId,
                               userEmail: a.email,
-                              onRepayAgent: () => _repayForUser(userId: a.userId, userEmail: a.email),
-                              onViewLoans: () => _showAgentLoansDialog(a.userId, a.email),
+              onRepayAgent: () =>
+                  _repayForUser(userId: a.userId, userEmail: a.email),
+              onViewLoans: () =>
+                  _showAgentLoansDialog(a.userId, a.email),
                               onPrint: () => _exportAgentReport(a),
-
-                              // accurate totals from only approved/disbursed loans
                               outstandingFuture: _computeAgentOutstanding(a.userId),
-
-                              // 👉 auto-hide if fully cleared
                               autoHideWhenCleared: true,
                             );
                           },
                         );
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      },
     );
   }
 
-  // ─────────────────────── Dialogs ───────────────────────
+  // ── Dialogs ───────────────────────────────────────────────────────────────
   Future<String?> _askNote(String title) async {
     String note = '';
     return showDialog<String>(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        scrollable: true,
-        backgroundColor: _ink,
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title,
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w800, fontSize: 16)),
+        content: TextField(
               onChanged: (v) => note = v,
               maxLines: 3,
-              textInputAction: TextInputAction.done,
-              style: const TextStyle(color: Colors.white),
+          style: GoogleFonts.inter(fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Write a note…',
-                hintStyle: const TextStyle(color: Colors.white54),
+            hintStyle: GoogleFonts.inter(color: _muted),
                 filled: true,
-                fillColor: Colors.black.withOpacity(.25),
+            fillColor: _surface,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ],
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: _border)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: _border)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide:
+                    const BorderSide(color: _primary, width: 1.5)),
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogCtx).pop(null), child: const Text('Skip')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.black87),
-            onPressed: () => Navigator.of(dialogCtx).pop(note.trim().isEmpty ? null : note.trim()),
-            child: const Text('Save'),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: Text('Skip',
+                  style: GoogleFonts.inter(color: _muted))),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: _primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            onPressed: () => Navigator.pop(
+                ctx, note.trim().isEmpty ? null : note.trim()),
+            child: Text('Save', style: GoogleFonts.inter()),
           ),
         ],
       ),
@@ -827,332 +854,217 @@ class _LoanApprovalScreenState extends State<LoanApprovalScreen> {
     String note = '';
     return showDialog<_DisburseFormResult>(
       context: context,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: _ink,
-          title: const Text('Disburse Loan', style: TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+                color: _primaryLt,
+                borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.payments_rounded,
+                color: _primary, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Text('Disburse Loan',
+              style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800, fontSize: 16)),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _DialogField(
+            label: 'Amount (BDT)',
                 initialValue: amountText,
                 keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
                 onChanged: (v) => amountText = v,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Amount (BDT)',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  filled: true, fillColor: Colors.black.withOpacity(.25),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                initialValue: '',
+          _DialogField(
+            label: 'Note (optional)',
                 onChanged: (v) => note = v,
                 maxLines: 2,
-                textInputAction: TextInputAction.done,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Note (optional)',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  filled: true, fillColor: Colors.black.withOpacity(.25),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-            ],
           ),
+        ]),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.black87),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel',
+                  style: GoogleFonts.inter(color: _muted))),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: _primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
               onPressed: () {
-                final raw = amountText.trim().replaceAll(',', '');
-                final amt = double.tryParse(raw) ?? 0;
+              final amt =
+                  double.tryParse(amountText.trim().replaceAll(',', '')) ??
+                      0;
                 if (amt <= 0) {
-                  ScaffoldMessenger.of(dialogCtx).showSnackBar(const SnackBar(content: Text('Enter valid amount')));
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Enter valid amount')));
                   return;
                 }
-                Navigator.of(dialogCtx).pop(_DisburseFormResult(amt, note.trim().isEmpty ? null : note.trim()));
+              Navigator.pop(ctx,
+                  _DisburseFormResult(amt, note.trim().isEmpty ? null : note.trim()));
               },
-              child: const Text('Disburse'),
+            child: Text('Disburse', style: GoogleFonts.inter()),
             ),
           ],
-        );
-      },
+      ),
     );
   }
 
   Future<_RepayFormResult?> _askRepayment(double suggested) async {
-    String amountText = suggested > 0 ? suggested.toStringAsFixed(0) : '';
+    String amountText =
+        suggested > 0 ? suggested.toStringAsFixed(0) : '';
     String note = '';
     return showDialog<_RepayFormResult>(
       context: context,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: _ink,
-          title: const Text('Record Agent Repayment', style: TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                initialValue: amountText,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                onChanged: (v) => amountText = v,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Amount (BDT)',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  filled: true, fillColor: Colors.black.withOpacity(.25),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                initialValue: '',
-                onChanged: (v) => note = v,
-                maxLines: 2,
-                textInputAction: TextInputAction.done,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Note (optional)',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  filled: true, fillColor: Colors.black.withOpacity(.25),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.black87),
-              onPressed: () {
-                final raw = amountText.trim().replaceAll(',', '');
-                final amt = double.tryParse(raw);
-
-                if (amt == null || !amt.isFinite) {
-                  ScaffoldMessenger.of(dialogCtx).showSnackBar(const SnackBar(content: Text('Enter a valid number')));
-                  return;
-                }
-                if (amt <= 0) {
-                  ScaffoldMessenger.of(dialogCtx).showSnackBar(const SnackBar(content: Text('Amount must be greater than 0')));
-                  return;
-                }
-
-                Navigator.of(dialogCtx).pop(_RepayFormResult(amt, note.trim().isEmpty ? null : note.trim()));
-              },
-
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // ─────────────────────── Agent loans popup ───────────────────────
-  Future<void> _showAgentLoansDialog(String userId, String? userEmail) async {
-    final q = (await DB.col(C.loans)).where('userId', isEqualTo: userId).orderBy('requestedAt', descending: true);
-
-    await showDialog(
-      context: context,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          backgroundColor: _ink,
-          scrollable: true,
-          title: Text(userEmail ?? userId, style: const TextStyle(color: Colors.white)),
-          content: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: q.snapshots(),
-            builder: (_, snap) {
-              if (!snap.hasData) {
-                return const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
-              }
-              final docs = snap.data!.docs;
-              if (docs.isEmpty) {
-                return const Text('No loans for this agent.', style: TextStyle(color: Colors.white70));
-              }
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final d in docs) ...[
-                    _AgentLoanTile(
-                      money: _money,
-                      statusColor: _statusColor,
-                      date: _date,
-                      data: d.data(),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Close')),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/* ========================= Widgets ========================= */
-
-class _Segment extends StatelessWidget {
-  final String text;
-  final bool selected;
-  final VoidCallback onTap;
-  const _Segment({required this.text, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? Colors.white : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: selected ? Colors.black : Colors.white70,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final String text;
-  final Color color;
-  const _StatusPill({required this.text, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: text,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(.14),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(.35)),
-        ),
-        child: Text(
-          text,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionBar extends StatelessWidget {
-  final VoidCallback? onApprove;
-  final VoidCallback? onReject;
-  final VoidCallback? onDisburse;
-  final VoidCallback? onRepayAgent; // per-agent only
-  const _ActionBar({this.onApprove, this.onReject, this.onDisburse, this.onRepayAgent});
-
-  Widget _btn(IconData ic, String txt, {VoidCallback? onTap, Color? bg, Color? fg}) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 140),
-      child: Opacity(
-        opacity: onTap == null ? 0.45 : 1,
-        child: ElevatedButton.icon(
-          onPressed: onTap,
-          icon: Icon(ic, size: 18),
-          label: Text(txt, overflow: TextOverflow.ellipsis),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: bg ?? Colors.white12,
-            foregroundColor: fg ?? Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            textStyle: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final raw = <Widget>[
-      if (onApprove != null) _btn(Icons.check_circle, 'Approve', onTap: onApprove, bg: Colors.white, fg: Colors.black87),
-      if (onReject != null)  _btn(Icons.close_rounded, 'Reject',  onTap: onReject,  bg: const Color(0xFF36212A)),
-      if (onDisburse != null) _btn(Icons.payments, 'Disburse', onTap: onDisburse, bg: const Color(0xFF1E2D23)),
-      if (onRepayAgent != null) _btn(Icons.account_balance_wallet_outlined, 'Repay Agent', onTap: onRepayAgent, bg: const Color(0xFF10381E)),
-    ];
-
-    return Wrap(spacing: 8, runSpacing: 8, children: raw);
-  }
-}
-
-class _ChipKpi extends StatelessWidget {
-  final Color color;
-  final IconData icon;
-  final String label;
-  final Stream<String> stream;
-  const _ChipKpi({required this.color, required this.icon, required this.label, required this.stream});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 170,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        children: [
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
           Container(
             width: 36, height: 36,
-            decoration: BoxDecoration(color: Colors.black.withOpacity(.85), shape: BoxShape.circle),
-            child: Icon(icon, color: Colors.white, size: 18),
+            decoration: BoxDecoration(
+                color: _primaryLt,
+                borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.account_balance_wallet_rounded,
+                color: _primary, size: 20),
           ),
           const SizedBox(width: 10),
-          Expanded(
-            child: StreamBuilder<String>(
-              stream: stream,
-              builder: (_, snap) {
-                final v = snap.data ?? '—';
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(v, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-                    Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                  ],
-                );
-              },
-            ),
+          Text('Record Repayment',
+              style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w800, fontSize: 16)),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _DialogField(
+            label: 'Amount (BDT)',
+                initialValue: amountText,
+                keyboardType: TextInputType.number,
+                onChanged: (v) => amountText = v,
+              ),
+              const SizedBox(height: 10),
+          _DialogField(
+            label: 'Note (optional)',
+                onChanged: (v) => note = v,
+                maxLines: 2,
+          ),
+        ]),
+          actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel',
+                  style: GoogleFonts.inter(color: _muted))),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: _primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+              onPressed: () {
+              final amt =
+                  double.tryParse(amountText.trim().replaceAll(',', ''));
+              if (amt == null || !amt.isFinite || amt <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    content: Text('Enter a valid amount')));
+                  return;
+                }
+              Navigator.pop(ctx,
+                  _RepayFormResult(amt, note.trim().isEmpty ? null : note.trim()));
+            },
+            child: Text('Save', style: GoogleFonts.inter()),
           ),
         ],
       ),
     );
   }
+
+  Future<void> _showAgentLoansDialog(
+      String userId, String? userEmail) async {
+    final q = (await DB.col(C.loans))
+        .where('userId', isEqualTo: userId)
+        .orderBy('requestedAt', descending: true);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
+            decoration: const BoxDecoration(
+              color: _primary,
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: Text(userEmail ?? userId,
+                    style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    color: Colors.white, size: 20),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ]),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: q.snapshots(),
+            builder: (_, snap) {
+              if (!snap.hasData) {
+                    return const SizedBox(
+                        height: 80,
+                        child: Center(
+                            child: CircularProgressIndicator(
+                                color: _primary)));
+              }
+              final docs = snap.data!.docs;
+              if (docs.isEmpty) {
+                    return Text('No loans for this agent.',
+                        style: GoogleFonts.inter(color: _muted));
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                    children: docs
+                        .map((d) => Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: 8),
+                              child: _AgentLoanTile(
+                      money: _money,
+                      date: _date,
+                      data: d.data(),
+                    ),
+                            ))
+                        .toList(),
+              );
+            },
+          ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 }
 
-// ───────────────── Company Loan Balance (Total = Repaid + Due) ─────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPANY BALANCE CARD
+// ─────────────────────────────────────────────────────────────────────────────
 class _CompanyBalanceCard extends StatelessWidget {
   final NumberFormat money;
-  final Stream<num> approvedPrincipalStream; // "Total Loan" principal
-  final Stream<num> totalRepaidStream;       // "Repaid Amount"
+  final Stream<num> approvedPrincipalStream;
+  final Stream<num> totalRepaidStream;
+
   const _CompanyBalanceCard({
     required this.money,
     required this.approvedPrincipalStream,
@@ -1161,113 +1073,225 @@ class _CompanyBalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<num>(
+      stream: approvedPrincipalStream,
+      builder: (_, principalSnap) {
+        final totalLoan = (principalSnap.data ?? 0).toDouble().clamp(0, double.infinity);
+        return StreamBuilder<num>(
+          stream: totalRepaidStream,
+          builder: (_, repaidSnap) {
+            final repaid = (repaidSnap.data ?? 0).toDouble().clamp(0, double.infinity);
+            final due = (totalLoan - repaid).clamp(0, double.infinity);
+            final progress =
+                totalLoan > 0 ? (repaid / totalLoan).clamp(0.0, 1.0) : 0.0;
+
     return Container(
+              padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0x33111111), Color(0x22333333)],
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [_primary, _primaryMd],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white24),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: StreamBuilder<num>(
-        stream: approvedPrincipalStream,
-        builder: (context, principalSnap) {
-          final totalLoanRaw = (principalSnap.data ?? 0);
-          final totalLoan = totalLoanRaw < 0 ? 0 : totalLoanRaw; // safety
-
-          return StreamBuilder<num>(
-            stream: totalRepaidStream,
-            builder: (context, repaidSnap) {
-              final repaidRaw = (repaidSnap.data ?? 0);
-              final repaid = repaidRaw < 0 ? 0 : repaidRaw; // safety
-
-              // Identity: Due = max(0, Total - Repaid)
-              final due = (totalLoan - repaid) < 0 ? 0 : (totalLoan - repaid);
-
-              // Progress is for visuals only; keep it in [0,1]
-              final progress = totalLoan > 0
-                  ? (repaid / totalLoan).clamp(0, 1).toDouble()
-                  : 0.0;
-
-              return Column(
+                boxShadow: [
+                  BoxShadow(
+                      color: _primary.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Company Loan Balance',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    children: [
-                      _miniStat('Total Loan',    money.format(totalLoan)),
-                      _miniStat('Repaid Amount', money.format(repaid)),
-                      _miniStat('Due Amount',    money.format(due)),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                  Row(children: [
+                    const Icon(Icons.account_balance_rounded,
+                        color: Colors.white70, size: 16),
+                    const SizedBox(width: 6),
+                    Text('Company Loan Portfolio',
+                        style: GoogleFonts.inter(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.3)),
+                  ]),
+                  const SizedBox(height: 14),
+                  Row(children: [
+                    Expanded(
+                      child: _BalanceStat(
+                        label: 'Total Issued',
+                        value: money.format(totalLoan),
+                        icon: Icons.receipt_long_rounded,
+                      ),
+                    ),
+                    Container(
+                        width: 1, height: 40, color: Colors.white24),
+                    Expanded(
+                      child: _BalanceStat(
+                        label: 'Repaid',
+                        value: money.format(repaid),
+                        icon: Icons.check_circle_outline_rounded,
+                      ),
+                    ),
+                    Container(
+                        width: 1, height: 40, color: Colors.white24),
+                    Expanded(
+                      child: _BalanceStat(
+                        label: 'Outstanding',
+                        value: money.format(due),
+                        icon: Icons.pending_actions_rounded,
+                        highlight: due > 0,
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
                     child: LinearProgressIndicator(
                       value: progress,
-                      minHeight: 8,
-                      backgroundColor: Colors.white12,
-                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF65D38B)),
+                          minHeight: 6,
+                          backgroundColor: Colors.white24,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                              Colors.white),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '${(progress * 100).round()}% repaid',
+                      style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ]),
                 ],
+              ),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  Widget _miniStat(String label, String value) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 140),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(.18),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          ],
-        ),
-      ),
     );
   }
 }
 
+class _BalanceStat extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  final bool highlight;
+  const _BalanceStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Column(children: [
+          Icon(icon,
+              color: highlight ? const Color(0xFFFCD34D) : Colors.white70,
+              size: 18),
+          const SizedBox(height: 4),
+          Text(value,
+              style: GoogleFonts.inter(
+                  color: highlight ? const Color(0xFFFCD34D) : Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Text(label,
+              style: GoogleFonts.inter(
+                  color: Colors.white60, fontSize: 10),
+              textAlign: TextAlign.center),
+        ]),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KPI CARD
+// ─────────────────────────────────────────────────────────────────────────────
+class _KpiCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Stream<String> stream;
+  const _KpiCard(
+      {required this.icon,
+      required this.label,
+      required this.color,
+      required this.stream});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+        color: _card,
+          borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x06000000),
+              blurRadius: 6,
+              offset: Offset(0, 2))
+        ],
+      ),
+      child: Row(children: [
+        Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: StreamBuilder<String>(
+            stream: stream,
+            builder: (_, snap) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+          children: [
+                Text(snap.data ?? '—',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: _fg),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                Text(label,
+                    style: GoogleFonts.inter(
+                        fontSize: 10, color: _muted),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+          ],
+        ),
+      ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LOAN CARD (pending tab)
+// ─────────────────────────────────────────────────────────────────────────────
 class _LoanCard extends StatelessWidget {
   final String loanId;
   final NumberFormat money;
-  final String title;
-  final String subtitle;
-  final String purpose;
-  final String status;
-  final Color statusColor;
-  final String initials;
-  final double principal;
-  final String userId;
-  final String? userEmail;
-  final VoidCallback? onApprove;
-  final VoidCallback? onReject;
-  final VoidCallback? onDisburse;
-  final VoidCallback? onRepayAgent;
-
-  // stable real-time sums
+  final DateFormat date;
+  final String type, status, userId, initials;
+  final String? email, purpose;
+  final double amount;
+  final int durationMonths;
+  final DateTime? createdAt;
+  final VoidCallback? onApprove, onReject, onDisburse, onRepayAgent;
   final Stream<num> repaidStream;
   final num? initialRepaid;
   final void Function(num)? onRepaidChanged;
@@ -1276,184 +1300,253 @@ class _LoanCard extends StatelessWidget {
     super.key,
     required this.loanId,
     required this.money,
-    required this.title,
-    required this.subtitle,
-    required this.purpose,
+    required this.date,
+    required this.type,
     required this.status,
-    required this.statusColor,
-    required this.initials,
-    required this.principal,
     required this.userId,
-    required this.userEmail,
+    required this.initials,
+    required this.amount,
+    required this.durationMonths,
+    required this.repaidStream,
+    this.email,
+    this.purpose,
+    this.createdAt,
     this.onApprove,
     this.onReject,
     this.onDisburse,
     this.onRepayAgent,
-    required this.repaidStream,
     this.initialRepaid,
     this.onRepaidChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final sc = _statusColor(status);
+    final si = _statusIcon(status);
+
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0x1FFFFFFF), Color(0x00000000)]),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        color: _card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x07000000),
+              blurRadius: 8,
+              offset: Offset(0, 2))
+        ],
       ),
-      child: Container(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Header strip ────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0E2B8F), Color(0xFF0B1F6A)]),
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+            color: sc.withValues(alpha: 0.06),
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(14)),
+            border: Border(
+                bottom: BorderSide(color: sc.withValues(alpha: 0.15))),
+          ),
+          child: Row(children: [
             // Avatar
             Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(12)),
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: _primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
               alignment: Alignment.center,
-              child: Text(initials, maxLines: 1, overflow: TextOverflow.fade, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+              child: Text(initials,
+                  style: GoogleFonts.inter(
+                      color: _primary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14)),
             ),
             const SizedBox(width: 12),
-
-            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top: title + status
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 160),
-                        child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                      ),
-                      _StatusPill(text: status.toUpperCase(), color: statusColor),
-                    ],
-                  ),
+                    Text(email ?? userId,
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: _fg),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      '$type  •  ${durationMonths}m'
+                      '${createdAt != null ? '  •  ${date.format(createdAt!)}' : ''}',
+                      style: GoogleFonts.inter(
+                          fontSize: 11, color: _muted),
+                    ),
+                  ]),
+            ),
+            // Status badge
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: sc.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: sc.withValues(alpha: 0.3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(si, size: 12, color: sc),
+                const SizedBox(width: 4),
+                Text(status.toUpperCase(),
+                    style: GoogleFonts.inter(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: sc)),
+              ]),
+            ),
+          ]),
+        ),
 
-                  const SizedBox(height: 6),
-                  Text(subtitle, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
-
-                  if (purpose.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(purpose, maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                  ],
+        // ── Body ────────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            // Amount + progress
+            Row(children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Loan Amount',
+                    style: GoogleFonts.inter(
+                        fontSize: 10, color: _muted,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(money.format(amount),
+                    style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: _fg)),
+              ]),
+            ]),
 
                   const SizedBox(height: 10),
 
-                  // Per-loan live summary — stable with initialRepaid
+            // Repayment progress
                   StreamBuilder<num>(
                     stream: repaidStream,
                     initialData: initialRepaid,
-                    builder: (context, snap) {
-                      final repaid = (snap.data ?? initialRepaid ?? 0).toDouble();
+              builder: (_, snap) {
+                final repaid =
+                    (snap.data ?? initialRepaid ?? 0).toDouble();
                       onRepaidChanged?.call(repaid);
-                      final outstanding = (principal - repaid).clamp(0, double.infinity);
-                      final pct = principal > 0 ? (repaid / principal).clamp(0, 1).toDouble() : 0.0;
+                final outstanding =
+                    (amount - repaid).clamp(0, double.infinity);
+                final pct = amount > 0
+                    ? (repaid / amount).clamp(0.0, 1.0)
+                    : 0.0;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _pill('Repaid', money.format(repaid)),
-                              _pill('Outstanding', money.format(outstanding)),
-                              if (outstanding == 0)
+                  Row(children: [
+                    Expanded(
+                      child: _StatPill(
+                          label: 'Repaid',
+                          value: money.format(repaid),
+                          color: _primaryMd),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _StatPill(
+                          label: 'Outstanding',
+                          value: money.format(outstanding),
+                          color: outstanding > 0 ? _warn : _primaryMd),
+                    ),
+                    if (outstanding == 0) ...[
+                      const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(.15),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.green.withOpacity(.35)),
-                                  ),
-                                  child: const Text('All Cleared', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, fontSize: 12)),
-                                ),
-                              if (onRepayAgent != null && outstanding > 0)
-                                TextButton.icon(
-                                  onPressed: onRepayAgent,
-                                  icon: const Icon(Icons.account_balance_wallet_outlined, size: 18, color: Colors.white),
-                                  label: const Text('Repay Agent', style: TextStyle(color: Colors.white)),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
+                          color: _primaryLt,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('Cleared ✓',
+                            style: GoogleFonts.inter(
+                                color: _primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11)),
+                      ),
+                    ],
+                  ]),
+                  const SizedBox(height: 8),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                             child: LinearProgressIndicator(
                               value: pct,
                               minHeight: 6,
-                              backgroundColor: Colors.white12,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF65D38B)),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                      backgroundColor: _primaryLt,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          _primaryMd),
+                    ),
                   ),
+                ]);
+              },
+            ),
+
+            if (purpose != null && purpose!.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _border),
+                ),
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Icon(Icons.notes_rounded,
+                      size: 14, color: _muted),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(purpose!,
+                        style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: _muted,
+                            height: 1.4),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ]),
+              ),
+            ],
 
                   const SizedBox(height: 12),
+
+            // Action buttons
                   _ActionBar(
                     onApprove: onApprove,
                     onReject: onReject,
                     onDisburse: onDisburse,
                     onRepayAgent: onRepayAgent,
                   ),
-                ],
-              ),
-            ),
-          ],
+          ]),
         ),
-      ),
-    );
-  }
-
-  Widget _pill(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
-        ],
-      ),
+      ]),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AGENT ROW CARD (all tab)
+// ─────────────────────────────────────────────────────────────────────────────
 class _AgentRowCard extends StatelessWidget {
-  final String email;
-  final String initials;
-  final int loanCount;
-  final double totalPrincipal;     // sum of ALL loans (display only)
-  final NumberFormat money;
-  final String userId;
+  final String email, initials, userId;
   final String? userEmail;
-  final VoidCallback onRepayAgent;
-  final VoidCallback onViewLoans;
-  final VoidCallback onPrint;
-
-  // accurate outstanding (sum(approved+disbursed principal) - sum(repayments on those loans))
+  final int loanCount;
+  final double totalPrincipal;
+  final NumberFormat money;
+  final VoidCallback onRepayAgent, onViewLoans, onPrint;
   final Future<_AgentOutstandingTotals> outstandingFuture;
-
-  // auto hide switch
   final bool autoHideWhenCleared;
 
   const _AgentRowCard({
@@ -1479,211 +1572,448 @@ class _AgentRowCard extends StatelessWidget {
       builder: (_, snap) {
         if (!snap.hasData) {
           return Container(
-            padding: const EdgeInsets.all(16),
+            height: 72,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0x1FFFFFFF), Color(0x00000000)]),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white10),
+              color: _card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _border),
             ),
-            child: const SizedBox(height: 48, child: Center(child: LinearProgressIndicator(minHeight: 3))),
+            child: const Center(
+                child: LinearProgressIndicator(
+                    color: _primary, minHeight: 2)),
           );
         }
 
         final totals = snap.data!;
-        final repaid = totals.repaid < 0 ? 0 : totals.repaid; // extra safety
-        final outstanding = totals.outstanding < 0 ? 0 : totals.outstanding;
-        final repayablePrincipal = totals.repayablePrincipal < 0 ? 0 : totals.repayablePrincipal;
+        final repaid =
+            totals.repaid.clamp(0, double.infinity).toDouble();
+        final outstanding =
+            totals.outstanding.clamp(0, double.infinity).toDouble();
+        final repayable =
+            totals.repayablePrincipal.clamp(0, double.infinity).toDouble();
 
-        // 👉 auto-hide if fully cleared
         if (autoHideWhenCleared && outstanding == 0) {
           return const SizedBox.shrink();
         }
 
+        final pct = repayable > 0
+            ? (repaid / repayable).clamp(0.0, 1.0)
+            : 0.0;
+
         return Container(
-          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0x1FFFFFFF), Color(0x00000000)]),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white10),
+            color: _card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+            boxShadow: const [
+              BoxShadow(
+                  color: Color(0x07000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2))
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row (email + count)
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 160),
-                    child: Text(email, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                  ),
+            // Header
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white24)),
-                    child: Text('$loanCount loan${loanCount == 1 ? '' : 's'}', style: const TextStyle(color: Colors.white)),
-                  ),
-                ],
+              padding:
+                  const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: const BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: _border)),
               ),
-              const SizedBox(height: 6),
-
-              // Totals line — exactly Total (approved+disbursed), Repaid, Due
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _miniPill('Total', money.format(repayablePrincipal)),
-                  _miniPill('Repaid', money.format(repaid)),
-                  _miniPill('Due', money.format(outstanding)),
-                  if (outstanding == 0)
+              child: Row(children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(.15),
+                    color: _primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.green.withOpacity(.35)),
-                      ),
-                      child: const Text('No loan left', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w900, fontSize: 12)),
-                    ),
-                ],
-              ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(initials,
+                      style: GoogleFonts.inter(
+                          color: _primary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text(email,
+                        style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: _fg),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    Text(
+                        '$loanCount loan${loanCount == 1 ? '' : 's'}  •  Total: ${money.format(repayable)}',
+                        style: GoogleFonts.inter(
+                            fontSize: 11, color: _muted)),
+                  ]),
+                ),
+              ]),
+            ),
 
-              const SizedBox(height: 10),
-
-              // Buttons
-              if (outstanding > 0)
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+            // Stats + progress
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 140),
-                      child: ElevatedButton.icon(
-                        onPressed: onRepayAgent,
-                        icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
-                        label: const Text('Repay Agent'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10381E),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 140),
-                      child: OutlinedButton.icon(
-                        onPressed: onViewLoans,
-                        icon: const Icon(Icons.list_alt, size: 18),
-                        label: const Text('View Loans'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white24),
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 120),
-                      child: OutlinedButton.icon(
-                        onPressed: onPrint,
-                        icon: const Icon(Icons.print, size: 18),
-                        label: const Text('Save PDF'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white24),
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: onPrint,
-                    icon: const Icon(Icons.print, size: 18),
-                    label: const Text('Save PDF (history)'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
+                Row(children: [
+                  Expanded(
+                    child: _StatPill(
+                        label: 'Repaid',
+                        value: money.format(repaid),
+                        color: _primaryMd),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _StatPill(
+                        label: 'Outstanding',
+                        value: money.format(outstanding),
+                        color: outstanding > 0 ? _warn : _primaryMd),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: pct,
+                    minHeight: 6,
+                    backgroundColor: _primaryLt,
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(_primaryMd),
                   ),
                 ),
-            ],
-          ),
+                const SizedBox(height: 12),
+
+                // Action buttons
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (outstanding > 0)
+                    _ActionButton(
+                      icon: Icons.account_balance_wallet_rounded,
+                      label: 'Repay',
+                      color: _primary,
+                      onTap: onRepayAgent,
+                    ),
+                  _ActionButton(
+                    icon: Icons.list_alt_rounded,
+                    label: 'View Loans',
+                    color: _info,
+                    outlined: true,
+                    onTap: onViewLoans,
+                  ),
+                  _ActionButton(
+                    icon: Icons.picture_as_pdf_rounded,
+                    label: 'Export PDF',
+                    color: _muted,
+                    outlined: true,
+                    onTap: onPrint,
+                  ),
+                ]),
+              ]),
+            ),
+          ]),
         );
       },
     );
   }
+}
 
-  Widget _miniPill(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(.08), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white24)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label: ', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
-        ],
-      ),
-    );
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTION BAR (pending loan card)
+// ─────────────────────────────────────────────────────────────────────────────
+class _ActionBar extends StatelessWidget {
+  final VoidCallback? onApprove, onReject, onDisburse, onRepayAgent;
+  const _ActionBar(
+      {this.onApprove, this.onReject, this.onDisburse, this.onRepayAgent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(spacing: 8, runSpacing: 8, children: [
+      if (onApprove != null)
+        _ActionButton(
+            icon: Icons.check_circle_rounded,
+            label: 'Approve',
+            color: _primaryMd,
+            onTap: onApprove!),
+      if (onReject != null)
+        _ActionButton(
+            icon: Icons.cancel_rounded,
+            label: 'Reject',
+            color: _danger,
+            outlined: true,
+            onTap: onReject!),
+      if (onDisburse != null)
+        _ActionButton(
+            icon: Icons.payments_rounded,
+            label: 'Disburse',
+            color: _info,
+            outlined: true,
+            onTap: onDisburse!),
+      if (onRepayAgent != null)
+        _ActionButton(
+            icon: Icons.account_balance_wallet_rounded,
+            label: 'Repay',
+            color: _primary,
+            outlined: true,
+            onTap: onRepayAgent!),
+    ]);
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AGENT LOAN TILE (inside dialog)
+// ─────────────────────────────────────────────────────────────────────────────
 class _AgentLoanTile extends StatelessWidget {
   final Map<String, dynamic> data;
   final NumberFormat money;
-  final Color Function(String) statusColor;
   final DateFormat date;
 
   const _AgentLoanTile({
     super.key,
     required this.data,
     required this.money,
-    required this.statusColor,
     required this.date,
   });
 
   @override
   Widget build(BuildContext context) {
-    final amount  = (data['amount'] as num? ?? 0).toDouble();
-    final type    = (data['type'] ?? 'Loan') as String;
-    final status  = (data['status'] ?? 'pending') as String;
-    final created = (data['requestedAt'] is Timestamp) ? (data['requestedAt'] as Timestamp).toDate() : null;
+    final amount = (data['amount'] as num? ?? 0).toDouble();
+    final type = (data['type'] ?? 'Loan') as String;
+    final status = (data['status'] ?? 'pending') as String;
+    final created = (data['requestedAt'] is Timestamp)
+        ? (data['requestedAt'] as Timestamp).toDate()
+        : null;
+    final sc = _statusColor(status);
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: const Color(0x22000000), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white12)),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        runSpacing: 6,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _border),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 160),
-            child: Text(
-              '$type • ${money.format(amount)}${created != null ? ' • ${date.format(created)}' : ''}',
-              maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white),
-            ),
+            Text('$type  •  ${money.format(amount)}',
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: _fg)),
+            if (created != null)
+              Text(date.format(created),
+                  style: GoogleFonts.inter(
+                      fontSize: 11, color: _muted)),
+          ]),
+        ),
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: sc.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
           ),
-          _StatusPill(text: status.toUpperCase(), color: statusColor(status)),
-        ],
+          child: Text(status.toUpperCase(),
+              style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: sc)),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMALL REUSABLE WIDGETS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatPill extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _StatPill(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+          Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 10, color: _muted,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(value,
+              style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ]),
+      );
+}
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool outlined;
+  final VoidCallback onTap;
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.outlined = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (outlined) {
+      return OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 15),
+        label: Text(label,
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, fontSize: 12)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          side: BorderSide(color: color.withValues(alpha: 0.5)),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
+    return FilledButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 15),
+      label: Text(label,
+          style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700, fontSize: 12)),
+      style: FilledButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 }
 
-/* ========================= Models & helpers ========================= */
+class _DialogField extends StatelessWidget {
+  final String label;
+  final String? initialValue;
+  final TextInputType? keyboardType;
+  final void Function(String)? onChanged;
+  final int maxLines;
+  const _DialogField({
+    required this.label,
+    this.initialValue,
+    this.keyboardType,
+    this.onChanged,
+    this.maxLines = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _fg)),
+          const SizedBox(height: 6),
+          TextFormField(
+            initialValue: initialValue,
+            keyboardType: keyboardType,
+            maxLines: maxLines,
+            onChanged: onChanged,
+            style: GoogleFonts.inter(fontSize: 14, color: _fg),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: _surface,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: _border)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide:
+                      const BorderSide(color: _primary, width: 1.5)),
+            ),
+          ),
+        ],
+      );
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title, subtitle;
+  const _EmptyState(
+      {required this.icon,
+      required this.title,
+      required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: _primaryLt,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: _primary, size: 32),
+            ),
+            const SizedBox(height: 16),
+            Text(title,
+                style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _fg)),
+            const SizedBox(height: 6),
+            Text(subtitle,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                    fontSize: 13, color: _muted)),
+          ]),
+        ),
+      );
+}
+
+/* ── Models ──────────────────────────────────────────────────────────────── */
 
 class _DisburseFormResult {
   final double amount;
@@ -1704,47 +2034,42 @@ class _LoanOutstanding {
 }
 
 class _LoanRow {
-  final String type;
-  final double amount;
+  final String type, status;
+  final double amount, repaid;
   final DateTime? date;
-  final String status;
-  final double repaid;
-  _LoanRow({required this.type, required this.amount, required this.date, required this.status, required this.repaid});
+  _LoanRow(
+      {required this.type,
+      required this.amount,
+      required this.date,
+      required this.status,
+      required this.repaid});
 }
 
 class _RepayRow {
   final DateTime? date;
   final double amount;
-  final String note;
-  final String loanType;
-  _RepayRow({required this.date, required this.amount, required this.note, required this.loanType});
+  final String note, loanType;
+  _RepayRow(
+      {required this.date,
+      required this.amount,
+      required this.note,
+      required this.loanType});
 }
 
 class _AgentAggregate {
   final String userId;
   final String? email;
   int loanCount = 0;
-  double totalPrincipal = 0;      // all loans (display)
-  double repayablePrincipal = 0;  // approved + disbursed only (for due)
+  double totalPrincipal = 0;
+  double repayablePrincipal = 0;
   final List<String> loanIds = [];
   _AgentAggregate({required this.userId, required this.email});
 }
 
-/// Accurate derived totals for an agent.
 class _AgentOutstandingTotals {
-  final double repayablePrincipal; // approved + disbursed
-  final double repaid;
-  final double outstanding;
-  _AgentOutstandingTotals({
-    required this.repayablePrincipal,
+  final double repayablePrincipal, repaid, outstanding;
+  _AgentOutstandingTotals(
+      {required this.repayablePrincipal,
     required this.repaid,
-    required this.outstanding,
-  });
-}
-
-/// Remove overscroll glow in horizontal KPI list
-class _NoGlowBehavior extends ScrollBehavior {
-  const _NoGlowBehavior();
-  @override
-  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+      required this.outstanding});
 }

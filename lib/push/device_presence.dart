@@ -16,13 +16,21 @@
 // start()/stop() manually if you prefer.
 
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/widgets.dart';
+
+String get _platformName {
+  if (kIsWeb) return 'web';
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.android: return 'android';
+    case TargetPlatform.iOS:     return 'ios';
+    default:                     return 'other';
+  }
+}
 
 class DevicePresence with WidgetsBindingObserver {
   DevicePresence._();
@@ -67,7 +75,7 @@ class DevicePresence with WidgetsBindingObserver {
     await _docRef!.set({
       'online'   : true,
       'lastSeen' : FieldValue.serverTimestamp(),
-      'platform' : Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'other',
+      'platform' : _platformName,
       'token'    : token,
       'app'      : 'uddoygi',
     }, SetOptions(merge: true));
@@ -102,7 +110,7 @@ class DevicePresence with WidgetsBindingObserver {
         await newRef.set({
           'online'  : true,
           'lastSeen': FieldValue.serverTimestamp(),
-          'platform': Platform.isAndroid ? 'android' : Platform.isIOS ? 'ios' : 'other',
+          'platform': _platformName,
           'token'   : newT,
           'app'     : 'uddoygi',
         }, SetOptions(merge: true));

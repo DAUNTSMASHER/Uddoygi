@@ -42,6 +42,7 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
     if (_docRef == null) return;
     final result = await FilePicker.platform.pickFiles(type: FileType.image);
     if (result?.files.single.path == null) return;
+    if (!mounted) return;
 
     final url = await Navigator.push<String?>(
       context,
@@ -64,6 +65,7 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
     if (_docRef == null) return;
     final result = await FilePicker.platform.pickFiles(type: FileType.any);
     if (result?.files.single.path == null) return;
+    if (!mounted) return;
 
     final url = await Navigator.push<String?>(
       context,
@@ -121,6 +123,51 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
     );
     if (updated != null && updated != currentValue) {
       await _docRef!.update({key: updated});
+    }
+  }
+
+  Future<void> _editPaymentMethod() async {
+    if (_docRef == null) return;
+    const methods = ['bKash', 'Nagad', 'Rocket', 'Upay', 'Bank Transfer', 'Other'];
+    final snap = await _docRef!.get();
+    if (!mounted) return;
+    final current = (snap.data()?['paymentMethod'] as String?) ?? '';
+    String? selected = current.isEmpty ? null : current;
+
+    final nav = Navigator.of(context);
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          title: const Text('Select Payment Method'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: methods.map((m) => ListTile(
+              dense: true,
+              title: Text(m),
+              leading: Icon(
+                selected == m
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected == m ? const Color(0xFF2A0A4B) : Colors.black38,
+                size: 20,
+              ),
+              onTap: () => setSt(() => selected = m),
+            )).toList(),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => nav.pop(),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => nav.pop(selected),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && picked != current) {
+      await _docRef!.update({'paymentMethod': picked});
     }
   }
 
@@ -182,13 +229,22 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
           final personalEmail = (d['personalEmail'] as String? ?? '').toString();
           final personalPhone = (d['personalPhone'] ?? '').toString();
           final governmentId  = (d['governmentIdUrl'] as String? ?? '').toString();
+          // -- PAYMENT INFO
+          final paymentMethod  = (d['paymentMethod']  as String? ?? '').toString();
+          final paymentAccount = (d['paymentAccount'] as String? ?? '').toString();
+          final paymentName    = (d['paymentName']    as String? ?? '').toString();
+          final bankName       = (d['bankName']       as String? ?? '').toString();
+          final branchName     = (d['branchName']     as String? ?? '').toString();
+          final routingNumber  = (d['routingNumber']  as String? ?? '').toString();
+          final paymentVerified = (d['paymentVerified'] as bool?) ?? false;
           // -- OFFICE
           final employeeId      = (d['employeeId'] as String? ?? widget.employeeId).toString();
           final officeEmail     = (d['officeEmail'] as String? ?? widget.userEmail).toString();
           final department      = (d['department'] as String? ?? '').toString().toUpperCase();
           final jobTitle        = (d['jobTitle'] as String? ?? '').toString();
           final designation     = (d['designation'] as String? ?? '').toString();
-          final employmentType  = (d['employmentType'] as String? ?? '').toString();
+          // employmentType read but not displayed in current layout
+          // final employmentType = (d['employmentType'] as String? ?? '').toString();
           final yearsOfExp      = (d['yearsOfExperience'] ?? '').toString();
           final badgeNumber     = (d['badgeNumber'] ?? '').toString();
           final shiftPattern    = (d['shiftPattern'] as String? ?? '').toString();
@@ -332,6 +388,91 @@ class _EmployeeDetailsPageState extends State<EmployeeDetailsPage> {
                 yearsOfExp,
                 onTap: () => _editField(
                     'yearsOfExperience', 'Years of Experience', yearsOfExp)),
+
+            // PAYMENT INFO
+            _sectionHeader('Payment Information'),
+            // Verified badge
+            if (paymentVerified)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF065F46).withValues(alpha: 0.08),
+                  border: Border.all(color: const Color(0xFF065F46).withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.verified_rounded, color: Color(0xFF065F46), size: 18),
+                  SizedBox(width: 8),
+                  Text('Payment details verified by HR',
+                      style: TextStyle(
+                          color: Color(0xFF065F46),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12)),
+                ]),
+              )
+            else
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD97706).withValues(alpha: 0.08),
+                  border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Payment details not yet verified. Employee should update their info.',
+                        style: TextStyle(
+                            color: Color(0xFFD97706),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12)),
+                  ),
+                ]),
+              ),
+            _infoRow('paymentMethod', Icons.payment_rounded, 'Payment Method',
+                paymentMethod.isEmpty ? 'Not set' : paymentMethod,
+                onTap: () => _editPaymentMethod()),
+            _infoRow('paymentAccount', Icons.account_balance_wallet_rounded,
+                'Account / Mobile Number',
+                paymentAccount.isEmpty ? 'Not set' : paymentAccount,
+                onTap: () => _editField('paymentAccount', 'Account / Mobile Number', paymentAccount)),
+            _infoRow('paymentName', Icons.person_outline_rounded,
+                'Account Holder Name',
+                paymentName.isEmpty ? 'Not set' : paymentName,
+                onTap: () => _editField('paymentName', 'Account Holder Name', paymentName)),
+            _infoRow('bankName', Icons.account_balance_rounded,
+                'Bank Name (if bank transfer)',
+                bankName.isEmpty ? 'Not set' : bankName,
+                onTap: () => _editField('bankName', 'Bank Name', bankName)),
+            _infoRow('branchName', Icons.location_city_rounded,
+                'Branch Name',
+                branchName.isEmpty ? 'Not set' : branchName,
+                onTap: () => _editField('branchName', 'Branch Name', branchName)),
+            _infoRow('routingNumber', Icons.numbers_rounded,
+                'Routing / Account Number',
+                routingNumber.isEmpty ? 'Not set' : routingNumber,
+                onTap: () => _editField('routingNumber', 'Routing Number', routingNumber)),
+            // HR verify toggle
+            ListTile(
+              leading: Icon(
+                paymentVerified ? Icons.verified_rounded : Icons.pending_actions_rounded,
+                color: paymentVerified ? const Color(0xFF065F46) : const Color(0xFFD97706),
+              ),
+              title: const Text('HR Verification'),
+              subtitle: Text(paymentVerified ? 'Verified' : 'Pending verification'),
+              trailing: Switch.adaptive(
+                value: paymentVerified,
+                activeThumbColor: const Color(0xFF065F46),
+                activeTrackColor: const Color(0xFF065F46).withValues(alpha: 0.4),
+                onChanged: (v) async {
+                  if (_docRef == null) return;
+                  await _docRef!.update({'paymentVerified': v});
+                },
+              ),
+            ),
             const SizedBox(height: 24),
           ]);
         },

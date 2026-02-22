@@ -8,9 +8,7 @@
 //
 // Links: Register Company | Forgot Company ID
 // ─────────────────────────────────────────────────────────────
-import 'dart:ui';
-
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -62,8 +60,8 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordCtrl = TextEditingController();
   bool _obscure = true;
 
-  // ── Video background ─────────────────────────────────────
-  late final VideoPlayerController _videoCtrl;
+  // ── Video background (mobile only) ───────────────────────
+  VideoPlayerController? _videoCtrl;
   Future<void>? _videoInit;
   bool _videoReady = false;
 
@@ -71,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initVideo();
+    if (!kIsWeb) _initVideo();
     _loadSavedCompanyId();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       precacheImage(const AssetImage('assets/icons/app_icon.png'), context);
@@ -88,20 +86,22 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _initVideo() async {
-    _videoCtrl = VideoPlayerController.asset(
+    final ctrl = VideoPlayerController.asset(
       'assets/videos/login_bg.mp4',
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
-    )..addListener(() {
-        if (mounted && _videoCtrl.value.isInitialized && !_videoReady) {
-          setState(() => _videoReady = true);
-        }
-      });
-    _videoInit = _videoCtrl
+    );
+    ctrl.addListener(() {
+      if (mounted && ctrl.value.isInitialized && !_videoReady) {
+        setState(() => _videoReady = true);
+      }
+    });
+    _videoCtrl = ctrl;
+    _videoInit = ctrl
         .initialize()
         .then((_) async {
-          await _videoCtrl.setLooping(true);
-          await _videoCtrl.setVolume(0);
-          await _videoCtrl.play();
+          await ctrl.setLooping(true);
+          await ctrl.setVolume(0);
+          await ctrl.play();
         })
         .catchError((_) {});
     if (mounted) setState(() {});
@@ -109,18 +109,19 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!_videoCtrl.value.isInitialized) return;
+    final ctrl = _videoCtrl;
+    if (ctrl == null || !ctrl.value.isInitialized) return;
     if (state == AppLifecycleState.paused) {
-      _videoCtrl.pause();
+      ctrl.pause();
     } else if (state == AppLifecycleState.resumed) {
-      _videoCtrl.play();
+      ctrl.play();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _videoCtrl.dispose();
+    _videoCtrl?.dispose();
     _companyIdCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
@@ -185,43 +186,59 @@ class _LoginScreenState extends State<LoginScreen>
   // ─────────────────────────────────────────────────────────
   // BUILD
   // ─────────────────────────────────────────────────────────
+  Widget _buildBackground() {
+    if (kIsWeb) {
+      // Clean gradient background for web — no video dependency.
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF1976D2)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      );
+    }
+
+    final ctrl = _videoCtrl;
+    return FutureBuilder<void>(
+      future: _videoInit,
+      builder: (_, __) {
+        if (ctrl == null || !ctrl.value.isInitialized) {
+          return Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          );
+        }
+        final size = ctrl.value.size;
+        return AnimatedOpacity(
+          duration: const Duration(milliseconds: 400),
+          opacity: _videoReady ? 1 : 0,
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: VideoPlayer(ctrl),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(children: [
-        // ── Video background ──────────────────────────────
-        Positioned.fill(
-          child: FutureBuilder<void>(
-            future: _videoInit,
-            builder: (_, __) {
-              if (!_videoCtrl.value.isInitialized) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                );
-              }
-              final size = _videoCtrl.value.size;
-              return AnimatedOpacity(
-                duration: const Duration(milliseconds: 400),
-                opacity: _videoReady ? 1 : 0,
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height,
-                    child: VideoPlayer(_videoCtrl),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
+        // ── Background (video on mobile, gradient on web) ─
+        Positioned.fill(child: _buildBackground()),
 
         // ── Login card ────────────────────────────────────
         SafeArea(

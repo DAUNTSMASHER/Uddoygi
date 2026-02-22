@@ -267,11 +267,11 @@ class _ProcurementScreenState extends State<ProcurementScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => StatefulBuilder(
         builder: (ctx, ss) => Padding(
-          padding: EdgeInsets.only(
+        padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
             left: 20, right: 20, top: 20,
           ),
-          child: SingleChildScrollView(
+        child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               // Handle
               Container(width: 40, height: 4,
@@ -329,7 +329,7 @@ class _ProcurementScreenState extends State<ProcurementScreen>
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () async {
+                onPressed: () async {
                     if (itemCtl.text.trim().isEmpty) return;
                     final session = await LocalStorageService.getSession();
                     final user    = FirebaseAuth.instance.currentUser;
@@ -347,11 +347,11 @@ class _ProcurementScreenState extends State<ProcurementScreen>
                       'requestedByName':  myName,
                       'requestedAt': DateFormat('yyyy-MM-dd').format(DateTime.now()),
                       'updatedAt': FieldValue.serverTimestamp(),
-                    };
+                  };
 
-                    if (isEdit) {
+                  if (isEdit) {
                       await DB.colSync(_cid, C.procurements).doc(doc.id).update(payload);
-                    } else {
+                  } else {
                       await DB.colSync(_cid, C.procurements).add({
                         ...payload,
                         'status':    'Pending',
@@ -411,9 +411,9 @@ class _ProcurementScreenState extends State<ProcurementScreen>
             Tab(text: 'Approved'),
             Tab(text: 'Received'),
             Tab(text: 'All'),
-          ],
+            ],
+          ),
         ),
-      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showForm(),
         backgroundColor: _brand,
@@ -737,7 +737,7 @@ class _ProcCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
+          Expanded(
                     child: _ActionBtn(
                       label: 'Cancel',
                       icon: Icons.close_rounded,

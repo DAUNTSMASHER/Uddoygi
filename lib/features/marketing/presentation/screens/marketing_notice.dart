@@ -1,4 +1,4 @@
-// lib/features/marketing/presentation/screens/marketing_notice_screen.dart
+﻿// lib/features/marketing/presentation/screens/marketing_notice_screen.dart
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -256,9 +256,10 @@ class _MarketingNoticeScreenState extends State<MarketingNoticeScreen> {
           final meAvatar = (me != null && me.photoUrl.isNotEmpty)
               ? me.photoUrl
               : null;
-          final meName = me?.name ?? (userName ?? myEmail);
+          final meName = (me?.name?.trim().isNotEmpty == true ? me!.name : null) ?? (userName?.trim().isNotEmpty == true ? userName : null) ?? (myEmail.isNotEmpty ? myEmail : 'User');
 
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Composer bar — wording changed to “notice”
               Padding(

@@ -76,7 +76,7 @@ class _SalaryScreenState extends State<SalaryScreen>
     try {
       final cid = await LocalStorageService.getSavedCompanyId();
       final session = await LocalStorageService.getSession();
-      final user = FirebaseAuth.instance.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
 
       if (cid == null || cid.isEmpty) {
         if (mounted) setState(() { _loading = false; _error = 'Company ID not found. Please log in again.'; });
@@ -171,6 +171,7 @@ class _SalaryScreenState extends State<SalaryScreen>
   }
 
   /// Stream payslips sent by HR for this employee.
+  /// Orders by createdAt (not sentAt) so payslips with sentAt=null still appear.
   Stream<List<_SalaryEntry>> _payslipStream() {
     if (_cid.isEmpty) return const Stream.empty();
 
@@ -178,29 +179,30 @@ class _SalaryScreenState extends State<SalaryScreen>
     if (_uid.isNotEmpty) {
       q = DB.colSync(_cid, 'payslips')
           .where('employeeUid', isEqualTo: _uid)
-          .orderBy('sentAt', descending: true);
+          .orderBy('createdAt', descending: true);
     } else if (_realEmail.isNotEmpty) {
       q = DB.colSync(_cid, 'payslips')
           .where('officeEmail', isEqualTo: _realEmail)
-          .orderBy('sentAt', descending: true);
+          .orderBy('createdAt', descending: true);
     } else {
       return const Stream.empty();
     }
 
     return q.snapshots().map((snap) => snap.docs.map((d) {
           final m = d.data();
+          final period = (m['period'] ?? m['month'] ?? '').toString();
           return _SalaryEntry(
             id:        d.id,
             source:    'payslip',
-            period:    (m['period'] ?? '').toString(),
-            gross:     _num(m['grossSalary']),
+            period:    period,
+            gross:     _num(m['grossSalary'] ?? m['basicSalary']),
             bonus:     _num(m['bonus']),
-            loan:      _num(m['loanDeduction']),
+            loan:      _num(m['loanDeduction'] ?? m['deductions']),
             net:       _num(m['netSalary']),
-            status:    'disbursed', // payslips are always disbursed
+            status:    'disbursed',
             method:    (m['paymentMethod'] ?? '').toString(),
-            generatedAt: m['disbursedAt'],
-            disbursedAt: m['disbursedAt'],
+            generatedAt: m['paidAt'] ?? m['createdAt'],
+            disbursedAt: m['paidAt'] ?? m['createdAt'],
             sentAt:      m['sentAt'],
             extras:    (m['extraDeductions'] as List?)?.cast<Map>() ?? [],
             dept:      (m['department'] ?? '').toString(),
@@ -227,6 +229,14 @@ class _SalaryScreenState extends State<SalaryScreen>
             ),
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'My Payment Methods',
+            icon: const Icon(Icons.account_balance_wallet_rounded),
+            onPressed: () => Navigator.pushNamed(
+                context, '/common/salary/payment-methods'),
+          ),
+        ],
         bottom: TabBar(
           controller: _tab,
           indicatorColor: Colors.white,
@@ -311,8 +321,8 @@ class _PayslipsTab extends StatelessWidget {
       stream: stream,
       builder: (_, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _green));
-        }
+            return const Center(child: CircularProgressIndicator(color: _green));
+          }
         if (snap.hasError) {
           return _ErrorView(message: snap.error.toString());
         }
@@ -392,11 +402,11 @@ class _PayrollHistoryTab extends StatelessWidget {
           totalNet += e.net;
           if (e.status == 'disbursed') { paidNet += e.net; paidCount++; }
           else { pendingNet += e.net; pendingCount++; }
-        }
+          }
 
-        return ListView(
+          return ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          children: [
+            children: [
             _SummaryHero(
               totalNet: totalNet,
               count: entries.length,
@@ -406,16 +416,16 @@ class _PayrollHistoryTab extends StatelessWidget {
                 _SubStat(label: 'Paid', value: money.format(paidNet), count: paidCount, color: _green),
                 _SubStat(label: 'Pending', value: money.format(pendingNet), count: pendingCount, color: _orange),
               ],
-            ),
-            const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 16),
             ...entries.map((e) => _PayrollCard(
                   entry: e,
                   money: money,
                   formatDate: formatDate,
                 )),
-          ],
-        );
-      },
+            ],
+          );
+        },
     );
   }
 }
@@ -508,10 +518,10 @@ class _SummaryHero extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color: Colors.white.withValues(alpha: 0.2)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                           Text(s.value,
                               style: GoogleFonts.inter(
                                   color: Colors.white,
@@ -593,7 +603,7 @@ class _PayslipCardState extends State<_PayslipCard> {
                         style: GoogleFonts.inter(
                             fontWeight: FontWeight.w800,
                             fontSize: 15, color: _fg)),
-                    const SizedBox(height: 2),
+          const SizedBox(height: 2),
                     Text(
                       'Sent ${widget.formatDate(e.sentAt)}',
                       style: GoogleFonts.inter(color: _muted, fontSize: 12),
@@ -842,12 +852,12 @@ class _PayrollCardState extends State<_PayrollCard> {
         ],
       ),
       child: Column(
-        children: [
+          children: [
           // Header row
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
             child: Row(children: [
-              Expanded(
+            Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -867,13 +877,13 @@ class _PayrollCardState extends State<_PayrollCard> {
               // Net amount
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
+        children: [
                   Text(widget.money.format(e.net),
                       style: GoogleFonts.inter(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                           color: e.status == 'disbursed' ? _green : _fg)),
-                  const SizedBox(height: 4),
+          const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
@@ -1078,7 +1088,7 @@ class _EmptyState extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 72, height: 72,
-            decoration: BoxDecoration(
+      decoration: BoxDecoration(
               color: _green.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(20),
             ),

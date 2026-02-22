@@ -158,10 +158,10 @@ class NoticeComposerBar extends StatelessWidget {
   }
 }
 
-/// same helper you used in AllEmployeesPage
+/// Returns up to 2 uppercase initials from a name, safely handling empty strings.
 String _initials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+'));
+  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
   if (parts.isEmpty) return '?';
-  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-  return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  if (parts.length == 1) return parts.first[0].toUpperCase();
+  return (parts.first[0] + parts.last[0]).toUpperCase();
 }

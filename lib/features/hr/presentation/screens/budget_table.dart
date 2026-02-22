@@ -1,75 +1,140 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/features/hr/presentation/screens/budget_table.dart
+//
+// Budget Table — add/edit expense rows & sales targets for a given month.
+//
+// FIX: _cid is now passed in directly from BudgetPage (no async race).
+// ─────────────────────────────────────────────────────────────────────────────
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:pdf/pdf.dart' as pdf;
+import 'package:pdf/pdf.dart' as pdflib;
 import 'package:printing/printing.dart';
 
-const _green = Color(0xFF065F46);
-const _blue  = Color(0xFF065F46);
-const _teal  = Color(0xFF21C7A8);
-const _orange = Color(0xFFFF8A00);
+// ── Palette ───────────────────────────────────────────────────────────────────
+const Color _brand    = Color(0xFF065F46);
+const Color _brandMid = Color(0xFF059669);
+const Color _surface  = Color(0xFFF0FDF4);
+const Color _teal     = Color(0xFF0891B2);
+const Color _red      = Color(0xFFDC2626);
 
-final _money = NumberFormat.currency(locale: 'en', symbol: '৳', decimalDigits: 0);
+final _money = NumberFormat('#,##0', 'en');
 
+// ─────────────────────────────────────────────────────────────────────────────
 class BudgetTablePage extends StatefulWidget {
-  final DocumentReference<Map<String, dynamic>>? budgetDoc; // if null => create/edit this month by key
-  const BudgetTablePage({super.key, this.budgetDoc});
+  /// Company ID — passed directly so there's no async race on init.
+  final String cid;
+  final DocumentReference<Map<String, dynamic>>? budgetDoc;
+
+  const BudgetTablePage({super.key, required this.cid, this.budgetDoc});
 
   @override
   State<BudgetTablePage> createState() => _BudgetTablePageState();
 }
 
 class _BudgetTablePageState extends State<BudgetTablePage> {
-  String _cid = '';
   final _companyCtl = TextEditingController(text: 'Wig Bangladesh');
-  late String _period; // e.g. "September 2025"
+  late String _period;
   DateTime? _createdAt;
   DateTime? _editableUntil;
 
   bool _loading = true;
-  bool get _locked => _editableUntil != null && DateTime.now().isAfter(_editableUntil!);
+  bool _saving  = false;
 
-  // Dynamic expenses
-  final List<_RowItem> _rows = [];
+  bool get _locked =>
+      _editableUntil != null && DateTime.now().isAfter(_editableUntil!);
 
-  // Sales targets
-  final List<_Target> _targets = [];
+  final List<_RowItem> _rows    = [];
+  final List<_Target>  _targets = [];
 
-  // Agents for picker
-  List<String> _agents = [];
-  final Map<String, String> _emailByName = {}; // fullName -> email
+  final List<String>          _agents      = [];
+  final Map<String, String> _emailByName = {};
 
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _period = DateFormat('MMMM yyyy').format(DateTime.now());
     _init();
   }
 
-  // --------------------- helpers --------------------- //
+  @override
+  void dispose() {
+    _companyCtl.dispose();
+    super.dispose();
+  }
 
-  String _periodKeyFromPeriod(String period) {
-    // "September 2025" -> "2025-09"
-    final parts = period.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      final monthName = parts[0].toLowerCase();
-      const months = {
-        'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
-        'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
-      };
-      final m = months[monthName] ?? DateTime.now().month;
-      final y = int.tryParse(parts[1]) ?? DateTime.now().year;
-      return '${y.toString()}-${m.toString().padLeft(2, '0')}';
+  // ── Init — uses widget.cid directly (no async race) ──────────────────────
+  Future<void> _init() async {
+    // 1. Load marketing agents
+    try {
+      final users = await DB.colSync(widget.cid, C.users)
+        .where('department', isEqualTo: 'marketing')
+        .get();
+    _agents.clear();
+    _emailByName.clear();
+    for (final d in users.docs) {
+        final m     = d.data();
+        final name  = (m['fullName'] ?? m['name'] ?? '').toString().trim();
+      final email = (m['email'] ?? '').toString().trim();
+      if (name.isEmpty) continue;
+      _agents.add(name);
+      if (email.isNotEmpty) _emailByName[name] = email;
     }
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    _agents.sort();
+    } catch (_) {
+      // non-fatal — agents list stays empty
+    }
+
+    // 2. Load existing budget doc (if provided)
+    if (widget.budgetDoc != null) {
+      try {
+    final s = await widget.budgetDoc!.get();
+    if (s.exists) {
+      final m = s.data()!;
+      _companyCtl.text = (m['companyName'] ?? _companyCtl.text).toString();
+          _period          = (m['period']      ?? _period).toString();
+          _createdAt       = (m['createdAt']   as Timestamp?)?.toDate();
+          _editableUntil   = (m['editableUntil'] as Timestamp?)?.toDate();
+
+      final items = (m['items'] as List?) ?? [];
+      _rows
+        ..clear()
+        ..addAll(items.map((r) => _RowItem(
+          (r['sl'] ?? (_rows.length + 1)) as int,
+          (r['name'] ?? '').toString(),
+          amountNeed: _asDouble(r['amountNeed']),
+              minAmount:  _asDouble(r['minAmount']),
+              notes:      r['notes'] as String?,
+        )));
+
+      final tgs = (m['salesTargets'] as List?) ?? [];
+      _targets
+        ..clear()
+        ..addAll(tgs.map((t) => _Target(
+              name:        (t['name']  ?? '').toString(),
+              email:       t['email'] as String?,
+              maxTarget:   _asDouble(t['maxTarget']),
+          finalTarget: _asDouble(t['finalTarget']),
+        )));
+    } else {
+          _setDefaults();
+        }
+      } catch (_) {
+        _setDefaults();
+      }
+    } else {
+      _setDefaults();
+    }
+
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _setDefaults() {
+    _createdAt     = DateTime.now();
+    _editableUntil = _createdAt!.add(const Duration(days: 30));
   }
 
   double _asDouble(dynamic v) {
@@ -90,434 +155,497 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
   String _norm(String s) =>
       s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
-  // --------------------- init/load --------------------- //
-
-  Future<void> _init() async {
-    // Load agents (marketing dept) with emails
-    final users = await DB.colSync(_cid, C.users)
-        .where('department', isEqualTo: 'marketing')
-        .get();
-
-    _agents.clear();
-    _emailByName.clear();
-    for (final d in users.docs) {
-      final m = d.data();
-      final name = (m['fullName'] ?? m['name'] ?? '').toString().trim();
-      final email = (m['email'] ?? '').toString().trim();
-      if (name.isEmpty) continue;
-      _agents.add(name);
-      if (email.isNotEmpty) _emailByName[name] = email;
+  String _periodKey() {
+    final parts = _period.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      const months = {
+        'january': 1, 'february': 2, 'march': 3, 'april': 4,
+        'may': 5, 'june': 6, 'july': 7, 'august': 8,
+        'september': 9, 'october': 10, 'november': 11, 'december': 12,
+      };
+      final m = months[parts[0].toLowerCase()] ?? DateTime.now().month;
+      final y = int.tryParse(parts[1]) ?? DateTime.now().year;
+      return '$y-${m.toString().padLeft(2, '0')}';
     }
-    _agents.sort();
-
-    if (widget.budgetDoc == null) {
-      _createdAt = DateTime.now();
-      _editableUntil = _createdAt!.add(const Duration(days: 7));
-      setState(() => _loading = false);
-      return;
-    }
-
-    final s = await widget.budgetDoc!.get();
-    if (s.exists) {
-      final m = s.data()!;
-      _companyCtl.text = (m['companyName'] ?? _companyCtl.text).toString();
-      _period = (m['period'] ?? _period).toString();
-      _createdAt = (m['createdAt'] as Timestamp?)?.toDate();
-      _editableUntil = (m['editableUntil'] as Timestamp?)?.toDate();
-
-      final items = (m['items'] as List?) ?? [];
-      _rows
-        ..clear()
-        ..addAll(items.map((r) => _RowItem(
-          (r['sl'] ?? (_rows.length + 1)) as int,
-          (r['name'] ?? '').toString(),
-          amountNeed: _asDouble(r['amountNeed']),
-          minAmount: _asDouble(r['minAmount']),
-          notes: (r['notes'] as String?)?.toString(),
-        )));
-
-      final tgs = (m['salesTargets'] as List?) ?? [];
-      _targets
-        ..clear()
-        ..addAll(tgs.map((t) => _Target(
-          name: (t['name'] ?? '').toString(),
-          email: (t['email'] ?? '').toString(),
-          maxTarget: _asDouble(t['maxTarget']),
-          finalTarget: _asDouble(t['finalTarget']),
-        )));
-    } else {
-      _createdAt = DateTime.now();
-      _editableUntil = _createdAt!.add(const Duration(days: 7));
-    }
-    setState(() => _loading = false);
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}';
   }
 
-  // --------------------- actions --------------------- //
-
+  // ── Save ──────────────────────────────────────────────────────────────────
   Future<void> _save() async {
     if (_locked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Locked: Budget can only be edited within 7 days of creation.')),
-      );
+      _snack('Budget is locked — cannot edit after the editable period.');
       return;
     }
-
-    // re-number SL in case rows were added/removed
+    setState(() => _saving = true);
+    try {
     for (var i = 0; i < _rows.length; i++) {
       _rows[i].sl = i + 1;
     }
 
-    // Build fast lookup for targets (what Sales screen reads first)
-    final Map<String, num> idxEmail = {};  // email -> effective
-    final Map<String, num> idxLower = {};  // lower(full name) -> effective
+      final Map<String, num> idxEmail = {};
+      final Map<String, num> idxLower = {};
     for (final t in _targets) {
       final effective = t.finalTarget > 0 ? t.finalTarget : t.maxTarget;
       if (effective <= 0) continue;
       if ((t.email ?? '').trim().isNotEmpty) {
-        idxEmail[(t.email!).toLowerCase()] = effective;
+          idxEmail[t.email!.toLowerCase()] = effective;
       }
       idxLower[_norm(t.name)] = effective;
     }
 
-    final periodKey = _periodKeyFromPeriod(_period);
-    final ref = DB.colSync(_cid, C.budgets).doc(periodKey);
+      final key = _periodKey();
+      final ref = DB.colSync(widget.cid, C.budgets).doc(key);
 
-    final data = {
-      'periodKey': periodKey,         // deterministic monthly id (Sales screen listens to this doc)
-      'period': _period,              // human readable; Sales screen also queries by this
-      'companyName': _companyCtl.text.trim(),
-      'createdAt': _createdAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(_createdAt!),
-      'editableUntil': _editableUntil == null
+      await ref.set({
+        'periodKey':          key,
+        'period':             _period,
+        'companyName':        _companyCtl.text.trim(),
+        'createdAt':          _createdAt == null
           ? FieldValue.serverTimestamp()
+            : Timestamp.fromDate(_createdAt!),
+        'editableUntil':      _editableUntil == null
+            ? Timestamp.fromDate(DateTime.now().add(const Duration(days: 30)))
           : Timestamp.fromDate(_editableUntil!),
-      'items': _rows.map((r) => r.toMap()).toList(),
-      'salesTargets': _targets.map((t) => t.toMap()).toList(), // <— includes email now
-      // fast lookups used by Sales screen:
-      'targetsIndexEmail': idxEmail,
-      'targetsIndexLower': idxLower,
-      'totalNeed': _totalNeed,
-      'totalMin': _totalMin,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+        'items':              _rows.map((r) => r.toMap()).toList(),
+        'salesTargets':       _targets.map((t) => t.toMap()).toList(),
+        'targetsIndexEmail':  idxEmail,
+        'targetsIndexLower':  idxLower,
+        'totalNeed':          _totalNeed,
+        'totalMin':           _totalMin,
+        'updatedAt':          FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
-    // Upsert to monthly doc id
-    await ref.set(data, SetOptions(merge: true));
-
-    // If this is the first save and editableUntil was null -> extend to +7 days from createdAt
-    if (_editableUntil == null) {
-      final snap = await ref.get();
-      final created = (snap.data()?['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-      final until = created.add(const Duration(days: 7));
-      await ref.update({'editableUntil': Timestamp.fromDate(until)});
-      _editableUntil = until;
+      _snack('Budget saved ✅  Sales targets are live.');
+    } catch (e) {
+      _snack('Save failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saved ✅ Targets are live on Sales Dashboard.')),
-    );
   }
 
+  void _snack(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: error ? _red : _brand,
+    ));
+  }
+
+  // ── PDF ───────────────────────────────────────────────────────────────────
   Future<void> _downloadPdf() async {
-    final pdfDoc = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
-    final items = [..._rows]..sort((a, b) => a.sl.compareTo(b.sl));
+    final items   = [..._rows]..sort((a, b) => a.sl.compareTo(b.sl));
     final targets = _targets;
+    final now     = DateTime.now();
+    final dateFmt = DateFormat('d MMMM yyyy');
 
-    pdfDoc.addPage(
-      pw.MultiPage(
-        margin: const pw.EdgeInsets.all(20),
-        build: (ctx) => [
-          pw.Center(
-            child: pw.Text('Wig Bangladesh',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-          ),
-          pw.Center(
-            child: pw.Text('Estimated Budget Statement & Sales Target - $_period'),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Text('Company: ${_companyCtl.text}'),
-          pw.Text('Created: ${_createdAt == null ? '—' : DateFormat('yMMMd').format(_createdAt!)}'),
-          pw.SizedBox(height: 10),
+    final headerBg  = const pdflib.PdfColor.fromInt(0xFF065F46);
+    final rowAlt    = const pdflib.PdfColor.fromInt(0xFFF0FDF4);
+    final lineClr   = const pdflib.PdfColor.fromInt(0xFFD1FAE5);
+    final textMuted = const pdflib.PdfColor.fromInt(0xFF6B7280);
 
-          // Expenses table
+    final pdfDoc = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base:       pw.Font.times(),
+        bold:       pw.Font.timesBold(),
+        italic:     pw.Font.timesItalic(),
+        boldItalic: pw.Font.timesBoldItalic(),
+      ),
+    );
+
+    pdfDoc.addPage(pw.MultiPage(
+      pageFormat: pdflib.PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(36, 36, 36, 48),
+      header: (ctx) => pw.Column(children: [
           pw.Container(
-            decoration: pw.BoxDecoration(border: pw.Border.all()),
-            child: pw.Column(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          decoration: pw.BoxDecoration(color: headerBg),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Container(
-                  color: pdf.PdfColors.grey300,
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Row(children: [
-                    pw.Expanded(flex: 1, child: pw.Text('SL No')),
-                    pw.Expanded(flex: 6, child: pw.Text('Particulars')),
-                    pw.Expanded(flex: 3, child: pw.Text('Amount Need To Arrange (Tk)')),
-                    pw.Expanded(flex: 3, child: pw.Text('Minimum Amount to pay (tk)')),
-                    pw.Expanded(flex: 4, child: pw.Text('Remarks')),
-                  ]),
-                ),
-                ...items.map((r) => pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  child: pw.Row(children: [
-                    pw.Expanded(flex: 1, child: pw.Text(r.sl.toString())),
-                    pw.Expanded(flex: 6, child: pw.Text(r.name)),
-                    pw.Expanded(flex: 3, child: pw.Text(_money.format(r.amountNeed))),
-                    pw.Expanded(flex: 3, child: pw.Text(_money.format(r.minAmount))),
-                    pw.Expanded(flex: 4, child: pw.Text(r.notes ?? '')),
-                  ]),
-                )),
-                pw.Divider(),
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                  child: pw.Row(children: [
-                    pw.Expanded(
-                        flex: 7,
-                        child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                    pw.Expanded(flex: 3, child: pw.Text(_money.format(_totalNeed))),
-                    pw.Expanded(flex: 3, child: pw.Text(_money.format(_totalMin))),
-                    pw.Expanded(flex: 4, child: pw.Text('')),
-                  ]),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('BUDGET STATEMENT — $_period',
+                      style: pw.TextStyle(
+                          font: pw.Font.timesBold(),
+                          fontSize: 14,
+                          color: pdflib.PdfColors.white)),
+                  pw.SizedBox(height: 3),
+                  pw.Text(_companyCtl.text,
+                      style: pw.TextStyle(
+                          font: pw.Font.timesItalic(),
+                          fontSize: 10,
+                          color: pdflib.PdfColors.white)),
+                ],
+              ),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('Generated: ${dateFmt.format(now)}',
+                      style: pw.TextStyle(
+                          font: pw.Font.times(),
+                          fontSize: 9,
+                          color: pdflib.PdfColors.white)),
+                  pw.Text('Page ${ctx.pageNumber} of ${ctx.pagesCount}',
+                      style: pw.TextStyle(
+                          font: pw.Font.times(),
+                          fontSize: 9,
+                          color: pdflib.PdfColors.white)),
+                ],
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 12),
+        pw.SizedBox(height: 10),
+      ]),
+      footer: (_) => pw.Container(
+        padding: const pw.EdgeInsets.only(top: 6),
+        decoration: pw.BoxDecoration(
+            border: pw.Border(
+                top: pw.BorderSide(color: lineClr, width: 0.5))),
+        child: pw.Text('Confidential — HR Department',
+            style: pw.TextStyle(
+                font: pw.Font.timesItalic(),
+                fontSize: 8,
+                color: textMuted)),
+      ),
+      build: (_) => [
+        // KPI row
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+          children: [
+            _pdfKpi('Total Budget Need', '৳ ${_money.format(_totalNeed)}',
+                const pdflib.PdfColor.fromInt(0xFF065F46)),
+            _pdfKpi('Minimum Required', '৳ ${_money.format(_totalMin)}',
+                const pdflib.PdfColor.fromInt(0xFF0891B2)),
+            _pdfKpi('Expense Items', '${items.length}',
+                const pdflib.PdfColor.fromInt(0xFFD97706)),
+            _pdfKpi('Sales Targets', '${targets.length}',
+                const pdflib.PdfColor.fromInt(0xFF7C3AED)),
+          ],
+        ),
+        pw.SizedBox(height: 16),
 
-          // Sales Target table
-          pw.Container(
-            decoration: pw.BoxDecoration(border: pw.Border.all()),
-            child: pw.Column(
+        // Expenses table
+        pw.Text('Expense / Payment Items',
+            style: pw.TextStyle(
+                font: pw.Font.timesBold(), fontSize: 13,
+                color: const pdflib.PdfColor.fromInt(0xFF065F46))),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder(
+              horizontalInside:
+                  pw.BorderSide(color: lineClr, width: 0.5)),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(28),
+            1: const pw.FlexColumnWidth(4),
+            2: const pw.FlexColumnWidth(2.5),
+            3: const pw.FlexColumnWidth(2.5),
+            4: const pw.FlexColumnWidth(3),
+          },
               children: [
-                pw.Container(
-                  color: pdf.PdfColors.grey300,
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Row(children: [
-                    pw.Expanded(flex: 1, child: pw.Text('SL')),
-                    pw.Expanded(flex: 6, child: pw.Text('Name')),
-                    pw.Expanded(flex: 4, child: pw.Text('Max Target: As Per System')),
-                    pw.Expanded(flex: 4, child: pw.Text('Final Target')),
-                  ]),
-                ),
-                ...List.generate(targets.length, (i) {
-                  final t = targets[i];
-                  return pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: pw.Row(children: [
-                      pw.Expanded(flex: 1, child: pw.Text('${i + 1}')),
-                      pw.Expanded(flex: 6, child: pw.Text(t.name)),
-                      pw.Expanded(flex: 4, child: pw.Text(_money.format(t.maxTarget))),
-                      pw.Expanded(flex: 4, child: pw.Text(_money.format(t.finalTarget))),
-                    ]),
+            pw.TableRow(
+              decoration: pw.BoxDecoration(color: headerBg),
+              children: ['#', 'Particulars', 'Amount Need (৳)', 'Minimum (৳)', 'Remarks']
+                  .map((h) => pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        child: pw.Text(h,
+                            style: pw.TextStyle(
+                                font: pw.Font.timesBold(),
+                                fontSize: 9,
+                                color: pdflib.PdfColors.white)),
+                      ))
+                  .toList(),
+            ),
+            ...items.asMap().entries.map((e) {
+              final i = e.key;
+              final r = e.value;
+              return pw.TableRow(
+                decoration: pw.BoxDecoration(
+                    color: i.isOdd ? rowAlt : pdflib.PdfColors.white),
+                children: [
+                  r.sl.toString(),
+                  r.name,
+                  _money.format(r.amountNeed),
+                  _money.format(r.minAmount),
+                  r.notes ?? '',
+                ]
+                    .map((cell) => pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 6),
+                          child: pw.Text(cell,
+                              style: pw.TextStyle(
+                                  font: pw.Font.times(), fontSize: 8)),
+                        ))
+                    .toList(),
                   );
                 }),
-                pw.Divider(),
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                  child: pw.Row(children: [
-                    pw.Expanded(
-                        flex: 7,
-                        child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                    pw.Expanded(
-                        flex: 4,
-                        child: pw.Text(_money.format(targets.fold(0.0, (p, e) => p + e.maxTarget)))),
-                    pw.Expanded(
-                        flex: 4,
-                        child: pw.Text(_money.format(targets.fold(0.0, (p, e) => p + e.finalTarget)))),
-                  ]),
+            // Total row
+            pw.TableRow(
+              decoration: pw.BoxDecoration(color: headerBg),
+              children: [
+                '',
+                'TOTAL',
+                _money.format(_totalNeed),
+                _money.format(_totalMin),
+                '',
+              ]
+                  .map((cell) => pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 7),
+                        child: pw.Text(cell,
+                            style: pw.TextStyle(
+                                font: pw.Font.timesBold(),
+                                fontSize: 9,
+                                color: pdflib.PdfColors.white)),
+                      ))
+                  .toList(),
                 ),
               ],
             ),
+        pw.SizedBox(height: 16),
+
+        // Sales targets table
+        if (targets.isNotEmpty) ...[
+          pw.Text('Sales Targets by Agent',
+              style: pw.TextStyle(
+                  font: pw.Font.timesBold(), fontSize: 13,
+                  color: const pdflib.PdfColor.fromInt(0xFF0891B2))),
+          pw.SizedBox(height: 8),
+          pw.Table(
+            border: pw.TableBorder(
+                horizontalInside:
+                    pw.BorderSide(color: lineClr, width: 0.5)),
+            columnWidths: {
+              0: const pw.FixedColumnWidth(28),
+              1: const pw.FlexColumnWidth(4),
+              2: const pw.FlexColumnWidth(3),
+              3: const pw.FlexColumnWidth(3),
+            },
+            children: [
+              pw.TableRow(
+                decoration: pw.BoxDecoration(
+                    color: const pdflib.PdfColor.fromInt(0xFF0891B2)),
+                children: ['#', 'Agent Name', 'Max Target (৳)', 'Final Target (৳)']
+                    .map((h) => pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 7),
+                          child: pw.Text(h,
+                              style: pw.TextStyle(
+                                  font: pw.Font.timesBold(),
+                                  fontSize: 9,
+                                  color: pdflib.PdfColors.white)),
+                        ))
+                    .toList(),
+              ),
+              ...targets.asMap().entries.map((e) {
+                final i = e.key;
+                final t = e.value;
+                return pw.TableRow(
+                  decoration: pw.BoxDecoration(
+                      color: i.isOdd ? rowAlt : pdflib.PdfColors.white),
+                  children: [
+                    '${i + 1}',
+                    t.name,
+                    _money.format(t.maxTarget),
+                    _money.format(t.finalTarget),
+                  ]
+                      .map((cell) => pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
+                            child: pw.Text(cell,
+                                style: pw.TextStyle(
+                                    font: pw.Font.times(), fontSize: 8)),
+                          ))
+                      .toList(),
+                );
+              }),
+              pw.TableRow(
+                decoration: pw.BoxDecoration(
+                    color: const pdflib.PdfColor.fromInt(0xFF0891B2)),
+                children: [
+                  '',
+                  'TOTAL',
+                  _money.format(
+                      targets.fold(0.0, (p, t) => p + t.maxTarget)),
+                  _money.format(
+                      targets.fold(0.0, (p, t) => p + t.finalTarget)),
+                ]
+                    .map((cell) => pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 7),
+                          child: pw.Text(cell,
+                              style: pw.TextStyle(
+                                  font: pw.Font.timesBold(),
+                                  fontSize: 9,
+                                  color: pdflib.PdfColors.white)),
+                        ))
+                    .toList(),
           ),
         ],
       ),
-    );
+        ],
+      ],
+    ));
 
     await Printing.layoutPdf(onLayout: (_) => pdfDoc.save());
   }
 
-  // --------------------- UI --------------------- //
-
-  @override
-  void dispose() {
-    _companyCtl.dispose();
-    super.dispose();
-  }
-
+  // ── Period picker ─────────────────────────────────────────────────────────
   Future<void> _pickMonth() async {
-    final now = DateTime.now();
+    final now    = DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: _createdAt ?? now,
       firstDate: DateTime(now.year - 5, 1),
-      lastDate: DateTime(now.year + 5, 12),
-      helpText: 'Pick any date in the month',
+      lastDate:  DateTime(now.year + 5, 12),
+      helpText:  'Pick any date in the target month',
     );
     if (picked != null) {
       setState(() => _period = DateFormat('MMMM yyyy').format(picked));
     }
   }
 
-  void _addExpenseRow() {
-    if (_locked) return;
-    setState(() {
-      _rows.add(_RowItem(_rows.length + 1, ''));
-    });
-  }
-
-  void _removeExpenseRow(int index) {
-    if (_locked) return;
-    setState(() {
-      _rows.removeAt(index);
-      // re-number
-      for (var i = 0; i < _rows.length; i++) {
-        _rows[i].sl = i + 1;
-      }
-    });
-  }
-
-  InputDecoration _sectionTitleDeco(String title, Color color, IconData icon) {
-    return InputDecoration(
-      labelText: title,
-      labelStyle: TextStyle(
-        color: color.darken(),
-        fontWeight: FontWeight.w900,
-      ),
-      prefixIcon: Icon(icon, color: color),
-      filled: true,
-      fillColor: color.withOpacity(.06),
-      enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: color.withOpacity(.25)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: color.withOpacity(.7), width: 1.5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
-  }
-
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: _surface,
+        body: Center(child: CircularProgressIndicator(color: _brand)),
+      );
     }
 
     return Scaffold(
+      backgroundColor: _surface,
       appBar: AppBar(
-        backgroundColor: _blue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Text('Budget Table • $_period', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_brand, _brandMid],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        title: Text('Budget — $_period',
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16)),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             tooltip: 'Download PDF',
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+            icon: const Icon(Icons.picture_as_pdf_rounded),
             onPressed: _downloadPdf,
           ),
+          if (!_locked)
           IconButton(
             tooltip: 'Save',
-            icon: const Icon(Icons.save, color: Colors.white),
-            onPressed: _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.save_rounded),
+              onPressed: _saving ? null : _save,
           ),
         ],
       ),
+
       floatingActionButton: _locked
           ? null
           : FloatingActionButton.extended(
-        backgroundColor: _green,
-        onPressed: _addExpenseRow,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add expense', style: TextStyle(color: Colors.white)),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF0FAFF), Color(0xFFF7FFF9)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              backgroundColor: _brand,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Item',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              onPressed: () => setState(() {
+                _rows.add(_RowItem(_rows.length + 1, ''));
+              }),
+            ),
+
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
           children: [
-            // Header card
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 12, offset: Offset(0, 4))],
-                border: Border.all(color: Colors.black12.withOpacity(.06)),
-              ),
+          // ── Header card ────────────────────────────────────────────────
+          _SectionCard(
               child: Column(
                 children: [
-                  Row(
-                    children: [
+                Row(children: [
                       Expanded(
-                        child: TextField(
+                    child: _InputField(
                           controller: _companyCtl,
+                      label: 'Company Name',
+                      icon: Icons.business_rounded,
                           enabled: !_locked,
-                          decoration: const InputDecoration(
-                            labelText: 'Company name',
-                            border: OutlineInputBorder(),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: InkWell(
+                    child: GestureDetector(
                           onTap: _locked ? null : _pickMonth,
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Month',
-                              border: OutlineInputBorder(),
-                            ),
-                            child: Text(_period),
-                          ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: _locked
+                              ? Colors.black.withValues(alpha: 0.03)
+                              : _surface,
+                          border: Border.all(
+                              color: _brand.withValues(alpha: 0.3)),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
+                        child: Row(children: [
+                          Icon(Icons.calendar_today_rounded,
+                              size: 16,
+                              color: _locked ? Colors.black26 : _brand),
+                          const SizedBox(width: 8),
                       Expanded(
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Creation date',
-                            border: OutlineInputBorder(),
+                            child: Text(_period,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: _locked
+                                        ? Colors.black38
+                                        : _brand)),
                           ),
-                          child: Text(_createdAt == null
-                              ? DateFormat('yMMMd').format(DateTime.now())
-                              : DateFormat('yMMMd').format(_createdAt!)),
-                        ),
+                          if (!_locked)
+                            Icon(Icons.arrow_drop_down_rounded,
+                                color: _brand),
+                        ]),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Editable until',
-                            border: OutlineInputBorder(),
-                          ),
-                          child: Text(_editableUntil == null
-                              ? '—'
-                              : DateFormat('yMMMd').format(_editableUntil!)),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
+                ]),
                   if (_locked) ...[
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(.06),
-                        border: Border.all(color: Colors.red.withOpacity(.2)),
+                      color: _red.withValues(alpha: 0.06),
+                      border: Border.all(
+                          color: _red.withValues(alpha: 0.2)),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text(
-                        'This budget is locked (editable only within 7 days after creation).',
-                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+                    child: Row(children: [
+                      const Icon(Icons.lock_rounded,
+                          color: _red, size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'This budget is locked — the editable period has passed.',
+                          style: TextStyle(
+                              color: _red, fontWeight: FontWeight.w600,
+                              fontSize: 12),
+                        ),
                       ),
+                    ]),
                     ),
                   ],
                 ],
@@ -526,173 +654,217 @@ class _BudgetTablePageState extends State<BudgetTablePage> {
 
             const SizedBox(height: 16),
 
-            // Expenses Section
-            TextField(
-              enabled: false,
-              decoration: _sectionTitleDeco('Expenses / Payments', _green, Icons.payments_rounded),
-            ),
-            const SizedBox(height: 8),
-
-            if (_rows.isEmpty)
+          // ── Summary card ───────────────────────────────────────────────
               Container(
-                padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _green.withOpacity(.03),
-                  border: Border.all(color: _green.withOpacity(.15)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text('No expense rows yet. Tap “Add expense” to begin.'),
+              gradient: const LinearGradient(
+                colors: [_brand, _brandMid],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-
-            ...List.generate(_rows.length, (i) {
-              final r = _rows[i];
-              return _ExpenseRow(
-                key: ValueKey('exp_$i'),
-                index: i,
-                item: r,
-                locked: _locked,
-                onChanged: (_) => setState(() {}),
-                onRemove: () => _removeExpenseRow(i),
-              );
-            }),
-
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: _orange.withOpacity(.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _orange.withOpacity(.25)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.summarize_rounded, color: _orange),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Total:  ${_money.format(_totalNeed)}   •   Minimum:  ${_money.format(_totalMin)}',
-                      style: const TextStyle(fontWeight: FontWeight.w900, color: _orange),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // Sales Targets Section
-            TextField(
-              enabled: false,
-              decoration: _sectionTitleDeco('Sales Targets (by Agent)', _teal, Icons.flag_rounded),
-            ),
-            const SizedBox(height: 8),
-
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('agent_picker_${_targets.length}'), // helps reset selection
-                    value: null, // always show prompt again after add
-                    isExpanded: true,
-                    items: _availableAgents
-                        .map((n) => DropdownMenuItem(value: n, child: Text(n)))
-                        .toList(),
-                    onChanged: _locked
-                        ? null
-                        : (v) {
-                      if (v == null || v.isEmpty) return;
-                      setState(() => _targets.add(_Target(
-                        name: v,
-                        email: _emailByName[v], // auto-fill email
-                      )));
-                    },
-                    decoration: const InputDecoration(
-                      labelText: 'Add marketing agent',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  flex: 2,
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Tip',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: Text('Pick agent, then fill targets (Max / Final).'),
-                  ),
-                ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                    color: _brand.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4)),
               ],
             ),
+            child: Row(children: [
+              Expanded(
+                child: _SumStat(
+                  label: 'Total Need',
+                  value: '৳ ${_money.format(_totalNeed)}',
+                  icon: Icons.account_balance_wallet_rounded,
+                ),
+              ),
+            Container(
+                  width: 1, height: 40,
+                  color: Colors.white.withValues(alpha: 0.2)),
+              Expanded(
+                child: _SumStat(
+                  label: 'Minimum',
+                  value: '৳ ${_money.format(_totalMin)}',
+                  icon: Icons.savings_rounded,
+                ),
+              ),
+              Container(
+                  width: 1, height: 40,
+                  color: Colors.white.withValues(alpha: 0.2)),
+                  Expanded(
+                child: _SumStat(
+                  label: 'Items',
+                  value: '${_rows.length}',
+                  icon: Icons.list_alt_rounded,
+                ),
+              ),
+            ]),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ── Expense rows section ───────────────────────────────────────
+          _SectionHeader(
+            icon: Icons.payments_rounded,
+            title: 'Expense / Payment Items',
+            color: _brand,
+            trailing: !_locked
+                ? TextButton.icon(
+                    onPressed: () => setState(() {
+                      _rows.add(_RowItem(_rows.length + 1, ''));
+                    }),
+                    icon: const Icon(Icons.add_rounded, size: 16),
+                    label: const Text('Add'),
+                    style: TextButton.styleFrom(foregroundColor: _brand),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 8),
+
+          if (_rows.isEmpty)
+            _EmptySection(
+              message: 'No expense items yet',
+              sub: _locked
+                  ? 'Budget is locked'
+                  : 'Tap "Add Item" or the button above',
+            )
+          else
+            ...List.generate(_rows.length, (i) => _ExpenseRow(
+              key:       ValueKey('exp_$i'),
+              index:     i,
+              item:      _rows[i],
+              locked:    _locked,
+              onChanged: (_) => setState(() {}),
+              onRemove:  () => setState(() {
+                _rows.removeAt(i);
+                for (var j = 0; j < _rows.length; j++) {
+                  _rows[j].sl = j + 1;
+                }
+              }),
+            )),
+
+          const SizedBox(height: 20),
+
+          // ── Sales targets section ──────────────────────────────────────
+          _SectionHeader(
+            icon: Icons.flag_rounded,
+            title: 'Sales Targets by Agent',
+            color: _teal,
+            ),
             const SizedBox(height: 8),
 
-            ...List.generate(_targets.length, (i) {
-              final t = _targets[i];
-              return _TargetRow(
-                key: ValueKey('tgt_$i'),
-                index: i,
-                target: t,
-                locked: _locked,
-                onRemove: () => setState(() => _targets.removeAt(i)),
-              );
-            }),
+          // Agent picker
+          if (!_locked && _availableAgents.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: _teal.withValues(alpha: 0.05),
+                border: Border.all(color: _teal.withValues(alpha: 0.3)),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: null,
+                    isExpanded: true,
+                  hint: const Text('Add marketing agent…',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: _teal)),
+                  icon: const Icon(Icons.arrow_drop_down_rounded,
+                      color: _teal),
+                    items: _availableAgents
+                      .map((n) => DropdownMenuItem(
+                            value: n,
+                            child: Text(n),
+                          ))
+                        .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                      setState(() => _targets.add(_Target(
+                      name:  v,
+                      email: _emailByName[v],
+                      )));
+                    },
+                    ),
+                  ),
+                ),
 
-            const SizedBox(height: 12),
-            Row(
-              children: [
+          if (_targets.isEmpty)
+            _EmptySection(
+              message: 'No sales targets set',
+              sub: _locked
+                  ? 'Budget is locked'
+                  : 'Pick an agent from the dropdown above',
+            )
+          else
+            ...List.generate(_targets.length, (i) => _TargetRow(
+              key:     ValueKey('tgt_$i'),
+              index:   i,
+              target:  _targets[i],
+              locked:  _locked,
+                onRemove: () => setState(() => _targets.removeAt(i)),
+            )),
+
+          const SizedBox(height: 24),
+
+          // ── Action buttons ─────────────────────────────────────────────
+          Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Download PDF'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _brand,
+                  side: const BorderSide(color: _brand),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.picture_as_pdf_rounded),
+                label: const Text('Download PDF',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
                     onPressed: _downloadPdf,
                   ),
                 ),
+            if (!_locked) ...[
                 const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: _blue),
-                    icon: const Icon(Icons.save, color: Colors.white),
-                    label: const Text('Save', style: TextStyle(color: Colors.white)),
-                    onPressed: _save,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brand,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 18, height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.save_rounded),
+                  label: Text(_saving ? 'Saving…' : 'Save Budget',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  onPressed: _saving ? null : _save,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ]),
+        ],
       ),
     );
   }
 }
 
-/* -------------------- Models & Rows -------------------- */
-
-class _RowItem {
-  int sl;
-  String name;
-  double amountNeed;
-  double minAmount;
-  String? notes;
-
-  _RowItem(this.sl, this.name, {this.amountNeed = 0.0, this.minAmount = 0.0, this.notes});
-
-  Map<String, dynamic> toMap() => {
-    'sl': sl,
-    'name': name,
-    'amountNeed': amountNeed,
-    'minAmount': minAmount,
-    'notes': (notes == null || notes!.trim().isEmpty) ? null : notes,
-  };
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPENSE ROW WIDGET
+// ─────────────────────────────────────────────────────────────────────────────
 class _ExpenseRow extends StatefulWidget {
-  final int index;
+  final int      index;
   final _RowItem item;
-  final bool locked;
+  final bool     locked;
   final ValueChanged<_RowItem> onChanged;
-  final VoidCallback onRemove;
+  final VoidCallback           onRemove;
 
   const _ExpenseRow({
     super.key,
@@ -717,8 +889,10 @@ class _ExpenseRowState extends State<_ExpenseRow> {
   void initState() {
     super.initState();
     _nameCtl  = TextEditingController(text: widget.item.name);
-    _needCtl  = TextEditingController(text: widget.item.amountNeed == 0 ? '' : widget.item.amountNeed.toString());
-    _minCtl   = TextEditingController(text: widget.item.minAmount == 0 ? '' : widget.item.minAmount.toString());
+    _needCtl  = TextEditingController(
+        text: widget.item.amountNeed == 0 ? '' : widget.item.amountNeed.toString());
+    _minCtl   = TextEditingController(
+        text: widget.item.minAmount == 0 ? '' : widget.item.minAmount.toString());
     _notesCtl = TextEditingController(text: widget.item.notes ?? '');
   }
 
@@ -731,45 +905,46 @@ class _ExpenseRowState extends State<_ExpenseRow> {
     super.dispose();
   }
 
-  InputDecoration _dec(String label) => InputDecoration(
-    labelText: label,
-    border: const OutlineInputBorder(),
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-  );
-
   @override
   Widget build(BuildContext context) {
     final numFmt = [FilteringTextInputFormatter.allow(RegExp(r'[0-9]+[.]?[0-9]*'))];
 
-    return Card(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
       color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _brand.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
+      ),
         child: Column(
           children: [
-            // --- Row 1: SL + Name + Delete
-            Row(
-              children: [
+          // Row 1: SL + Name + Delete
+          Row(children: [
                 Container(
-                  width: 28,
+              width: 30, height: 30,
                   alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
-                    color: _green.withOpacity(.08),
+                color: _brand.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _green.withOpacity(.25)),
-                  ),
-                  child: Text(widget.item.sl.toString(),
-                      style: TextStyle(color: _green.darken(), fontWeight: FontWeight.w800)),
-                ),
-                const SizedBox(width: 8),
+              ),
+              child: Text('${widget.item.sl}',
+                  style: const TextStyle(
+                      color: _brand, fontWeight: FontWeight.w800,
+                      fontSize: 12)),
+            ),
+            const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _nameCtl,
                     enabled: !widget.locked,
-                    decoration: _dec('Particulars / Name'),
+                decoration: _dec('Particulars / Description'),
                     onChanged: (v) {
                       widget.item.name = v;
                       widget.onChanged(widget.item);
@@ -778,55 +953,61 @@ class _ExpenseRowState extends State<_ExpenseRow> {
                 ),
                 if (!widget.locked) ...[
                   const SizedBox(width: 6),
-                  IconButton(
-                    tooltip: 'Remove row',
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: widget.onRemove,
+              GestureDetector(
+                onTap: widget.onRemove,
+                child: Container(
+                  width: 30, height: 30,
+                  decoration: BoxDecoration(
+                    color: _red.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 8),
+                  child: const Icon(Icons.close_rounded,
+                      color: _red, size: 16),
+                ),
+              ),
+            ],
+          ]),
+          const SizedBox(height: 10),
 
-            // --- Row 2: Amounts
-            Row(
-              children: [
+          // Row 2: Amounts
+          Row(children: [
                 Expanded(
                   child: TextField(
                     controller: _needCtl,
                     enabled: !widget.locked,
                     inputFormatters: numFmt,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: _dec('Amount need'),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _dec('Amount Need (৳)'),
                     onChanged: (v) {
                       widget.item.amountNeed = double.tryParse(v) ?? 0.0;
                       widget.onChanged(widget.item);
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
+            const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _minCtl,
                     enabled: !widget.locked,
                     inputFormatters: numFmt,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: _dec('Minimum'),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: _dec('Minimum (৳)'),
                     onChanged: (v) {
                       widget.item.minAmount = double.tryParse(v) ?? 0.0;
                       widget.onChanged(widget.item);
                     },
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
+          ]),
+          const SizedBox(height: 10),
 
-            // --- Row 3: Notes
+          // Row 3: Notes
             TextField(
               controller: _notesCtl,
               enabled: !widget.locked,
-              decoration: _dec('Notes / Remarks (optional)'),
+            decoration: _dec('Remarks (optional)'),
               onChanged: (v) {
                 widget.item.notes = v.trim().isEmpty ? null : v.trim();
                 widget.onChanged(widget.item);
@@ -834,32 +1015,28 @@ class _ExpenseRowState extends State<_ExpenseRow> {
               maxLines: null,
             ),
           ],
-        ),
       ),
     );
   }
+
+  InputDecoration _dec(String label) => InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      );
 }
 
-class _Target {
-  String name;
-  String? email;     // NEW: used by Sales screen for exact match
-  double maxTarget;
-  double finalTarget;
-  _Target({required this.name, this.email, this.maxTarget = 0.0, this.finalTarget = 0.0});
-
-  Map<String, dynamic> toMap() => {
-    'name': name,
-    'email': (email ?? '').trim(),  // include email in document
-    'maxTarget': maxTarget,
-    'finalTarget': finalTarget,
-  };
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+// TARGET ROW WIDGET
+// ─────────────────────────────────────────────────────────────────────────────
 class _TargetRow extends StatefulWidget {
-  final int index;
-  final _Target target;
-  final bool locked;
+  final int      index;
+  final _Target  target;
+  final bool     locked;
   final VoidCallback onRemove;
+
   const _TargetRow({
     super.key,
     required this.index,
@@ -879,19 +1056,10 @@ class _TargetRowState extends State<_TargetRow> {
   @override
   void initState() {
     super.initState();
-    _maxCtl = TextEditingController(text: widget.target.maxTarget == 0 ? '' : widget.target.maxTarget.toString());
-    _finalCtl = TextEditingController(text: widget.target.finalTarget == 0 ? '' : widget.target.finalTarget.toString());
-  }
-
-  @override
-  void didUpdateWidget(covariant _TargetRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.target.maxTarget != widget.target.maxTarget) {
-      _maxCtl.text = widget.target.maxTarget == 0 ? '' : widget.target.maxTarget.toString();
-    }
-    if (oldWidget.target.finalTarget != widget.target.finalTarget) {
-      _finalCtl.text = widget.target.finalTarget == 0 ? '' : widget.target.finalTarget.toString();
-    }
+    _maxCtl   = TextEditingController(
+        text: widget.target.maxTarget == 0 ? '' : widget.target.maxTarget.toString());
+    _finalCtl = TextEditingController(
+        text: widget.target.finalTarget == 0 ? '' : widget.target.finalTarget.toString());
   }
 
   @override
@@ -903,108 +1071,337 @@ class _TargetRowState extends State<_TargetRow> {
 
   @override
   Widget build(BuildContext context) {
-    final numFormatter = [FilteringTextInputFormatter.allow(RegExp(r'[0-9]+[.]?[0-9]*'))];
+    final numFmt = [FilteringTextInputFormatter.allow(RegExp(r'[0-9]+[.]?[0-9]*'))];
 
-    return Card(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
       color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Row(
-          children: [
-            // Agent (name + email chip if present)
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _teal.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Row(children: [
+        // Agent info
             Expanded(
               flex: 3,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(
-                  color: _teal.withOpacity(.06),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _teal.withOpacity(.25)),
-                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      const Icon(Icons.person_pin_circle_rounded, color: _teal),
+                Container(
+                  width: 30, height: 30,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _teal.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('${widget.index + 1}',
+                      style: const TextStyle(
+                          color: _teal, fontWeight: FontWeight.w800,
+                          fontSize: 12)),
+                ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          widget.target.name,
+                  child: Text(widget.target.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 13)),
                       ),
                     ]),
                     if ((widget.target.email ?? '').isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _blue.withOpacity(.06),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: _blue.withOpacity(.25)),
-                        ),
-                        child: Text(
-                          widget.target.email!,
+                const SizedBox(height: 4),
+                Row(children: [
+                  const SizedBox(width: 38),
+                  Expanded(
+                    child: Text(widget.target.email!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _blue),
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.black38)),
                         ),
-                      ),
+                ]),
                     ],
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+        const SizedBox(width: 10),
 
-            // Max widget.target
+            // Max target
             Expanded(
               flex: 2,
               child: TextField(
                 enabled: !widget.locked,
                 controller: _maxCtl,
-                inputFormatters: numFormatter,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Max Target', border: OutlineInputBorder()),
-                onChanged: (v) => widget.target.maxTarget = double.tryParse(v) ?? 0.0,
+            inputFormatters: numFmt,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Max (৳)',
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 10),
+            ),
+            onChanged: (v) =>
+                widget.target.maxTarget = double.tryParse(v) ?? 0.0,
               ),
             ),
             const SizedBox(width: 8),
 
-            // Final widget.target
+            // Final target
             Expanded(
               flex: 2,
               child: TextField(
                 enabled: !widget.locked,
                 controller: _finalCtl,
-                inputFormatters: numFormatter,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Final Target', border: OutlineInputBorder()),
-                onChanged: (v) => widget.target.finalTarget = double.tryParse(v) ?? 0.0,
+            inputFormatters: numFmt,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Final (৳)',
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 10),
+            ),
+            onChanged: (v) =>
+                widget.target.finalTarget = double.tryParse(v) ?? 0.0,
               ),
             ),
             const SizedBox(width: 8),
 
             if (!widget.locked)
-              IconButton(
-                tooltip: 'Remove',
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: widget.onRemove,
+          GestureDetector(
+            onTap: widget.onRemove,
+            child: Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(
+                color: _red.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
               ),
-          ],
-        ),
-      ),
+              child: const Icon(Icons.close_rounded,
+                  color: _red, size: 16),
+            ),
+          ),
+      ]),
     );
   }
 }
 
-/* -------------------- tiny color helper -------------------- */
-extension on Color {
-  Color darken([double amount = .1]) {
-    final hsl = HSLColor.fromColor(this);
-    final h = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
-    return h.toColor();
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────────────────────────────────────
+class _RowItem {
+  int     sl;
+  String  name;
+  double  amountNeed;
+  double  minAmount;
+  String? notes;
+
+  _RowItem(this.sl, this.name,
+      {this.amountNeed = 0.0, this.minAmount = 0.0, this.notes});
+
+  Map<String, dynamic> toMap() => {
+        'sl':         sl,
+        'name':       name,
+        'amountNeed': amountNeed,
+        'minAmount':  minAmount,
+        'notes': (notes == null || notes!.trim().isEmpty) ? null : notes,
+      };
 }
+
+class _Target {
+  String  name;
+  String? email;
+  double  maxTarget;
+  double  finalTarget;
+
+  _Target({
+    required this.name,
+    this.email,
+    this.maxTarget   = 0.0,
+    this.finalTarget = 0.0,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'name':        name,
+        'email':       (email ?? '').trim(),
+        'maxTarget':   maxTarget,
+        'finalTarget': finalTarget,
+      };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMALL REUSABLE WIDGETS
+// ─────────────────────────────────────────────────────────────────────────────
+class _SectionCard extends StatelessWidget {
+  final Widget child;
+  const _SectionCard({required this.child});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.black12),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: child,
+      );
+}
+
+class _SectionHeader extends StatelessWidget {
+  final IconData   icon;
+  final String     title;
+  final Color      color;
+  final Widget?    trailing;
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.color,
+    this.trailing,
+  });
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(title,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: color)),
+        ),
+        if (trailing != null) trailing!,
+      ]);
+}
+
+class _SumStat extends StatelessWidget {
+  final String   label;
+  final String   value;
+  final IconData icon;
+  const _SumStat(
+      {required this.label, required this.value, required this.icon});
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          Icon(icon, color: Colors.white70, size: 18),
+          const SizedBox(height: 4),
+          Text(value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 10)),
+        ],
+      );
+}
+
+class _InputField extends StatelessWidget {
+  final TextEditingController controller;
+  final String                label;
+  final IconData              icon;
+  final bool                  enabled;
+  const _InputField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    this.enabled = true,
+  });
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        enabled:    enabled,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: _brand, size: 18),
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10)),
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 13),
+        ),
+      );
+}
+
+class _EmptySection extends StatelessWidget {
+  final String message;
+  final String sub;
+  const _EmptySection({required this.message, required this.sub});
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black12),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.inbox_rounded,
+                size: 40, color: Colors.black12),
+            const SizedBox(height: 8),
+            Text(message,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, color: Colors.black38)),
+            const SizedBox(height: 2),
+            Text(sub,
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.black26)),
+          ],
+        ),
+      );
+}
+
+// ── PDF KPI box ───────────────────────────────────────────────────────────────
+pw.Widget _pdfKpi(String label, String value, pdflib.PdfColor color) =>
+    pw.Container(
+      padding: const pw.EdgeInsets.all(10),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(
+            color: const pdflib.PdfColor.fromInt(0xFFD1FAE5), width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Text(label,
+              style: pw.TextStyle(
+                  font: pw.Font.times(),
+                  fontSize: 8,
+                  color: const pdflib.PdfColor.fromInt(0xFF6B7280))),
+          pw.SizedBox(height: 4),
+          pw.Text(value,
+              style: pw.TextStyle(
+                  font: pw.Font.timesBold(), fontSize: 13, color: color)),
+        ],
+      ),
+    );

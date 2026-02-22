@@ -6,15 +6,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "role",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "fullName",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -24,15 +24,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "fullName",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -42,15 +42,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "isActive",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -60,15 +60,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "fullName",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -78,15 +78,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "role",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -96,15 +96,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "userEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -114,15 +114,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -132,15 +132,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "period",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "officeEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -150,15 +150,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "officeEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "generatedAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -168,15 +168,74 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "period",
-          "order": "ASC"
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "period",      "order": "ASCENDING"  },
+        { "fieldPath": "generatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "employeeUid", "order": "ASCENDING"  },
+        { "fieldPath": "generatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "officeEmail", "order": "ASCENDING"  },
+        { "fieldPath": "generatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "officeEmail", "order": "ASCENDING"  },
+        { "fieldPath": "period",      "order": "ASCENDING"  },
+        { "fieldPath": "generatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payrolls",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "department",  "order": "ASCENDING"  },
+        { "fieldPath": "generatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leaves",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "companyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "userEmail",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -186,33 +245,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
-        },
-        {
-          "fieldPath": "userEmail",
-          "order": "ASC"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESC"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "leaves",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -222,15 +263,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "userEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -240,15 +281,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -258,15 +299,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "userEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -276,15 +317,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -294,15 +335,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "userEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -312,15 +353,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -330,15 +371,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "agentEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -348,15 +389,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -366,15 +407,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "customerEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -384,15 +425,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -402,16 +443,32 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "agentEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "payment_slips",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status",     "order": "ASCENDING"  },
+        { "fieldPath": "verifiedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payment_slips",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {
@@ -420,15 +477,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "type",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -438,15 +495,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         },
         {
           "fieldPath": "amount",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -456,15 +513,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "dueDate",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "category",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -474,15 +531,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "category",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "dueDate",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -492,15 +549,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "agentEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -510,15 +567,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -528,15 +585,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "agentEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "lastUpdated",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -546,15 +603,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -564,15 +621,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "workOrderNo",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "lastUpdated",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -582,15 +639,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "stage",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "lastUpdated",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -600,15 +657,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -618,15 +675,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "category",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "updatedAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -636,15 +693,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -654,15 +711,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -672,15 +729,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "agentEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -690,15 +747,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "assignedTo",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "dueDate",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -708,15 +765,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "dueDate",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -726,15 +783,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "submittedBy",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -744,15 +801,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "againstEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -762,15 +819,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -780,15 +837,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "from",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -798,15 +855,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "toEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -816,19 +873,19 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "toEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "isRead",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -838,15 +895,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -856,15 +913,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         },
         {
           "fieldPath": "title",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -874,15 +931,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "userEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -892,15 +949,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "agentEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "timestamp",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -910,15 +967,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -928,15 +985,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "requestingDept",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -946,15 +1003,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -964,15 +1021,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "assignedTo",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -982,15 +1039,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "projectId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1000,15 +1057,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "submittedBy",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1018,15 +1075,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "projectId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1036,15 +1093,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "type",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1054,15 +1111,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "employeeEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1072,15 +1129,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "userEmail",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1090,15 +1147,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1108,15 +1165,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "workOrderNo",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1126,15 +1183,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "status",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
       ]
     },
@@ -1144,15 +1201,15 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "year",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "department",
-          "order": "ASC"
+          "order": "ASCENDING"
         }
       ]
     },
@@ -1162,16 +1219,122 @@
       "fields": [
         {
           "fieldPath": "companyId",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "type",
-          "order": "ASC"
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "date",
-          "order": "DESC"
+          "order": "DESCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "taxes",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "category",  "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cash_flow",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "type",      "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ledger",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "credit", "order": "ASCENDING"  },
+        { "fieldPath": "date",   "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "userId",      "order": "ASCENDING"  },
+        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "loans",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "userId",      "order": "ASCENDING"  },
+        { "fieldPath": "status",      "order": "ASCENDING"  },
+        { "fieldPath": "requestedAt", "order": "ASCENDING"  }
+      ]
+    },
+    {
+      "collectionGroup": "payslips",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "employeeUid", "order": "ASCENDING"  },
+        { "fieldPath": "sentAt",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payslips",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "officeEmail", "order": "ASCENDING"  },
+        { "fieldPath": "sentAt",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "rnd_requests",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "requesterEmail", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "daily_production",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "managerEmail",    "order": "ASCENDING"  },
+        { "fieldPath": "productionDate",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "ownerEmail", "order": "ASCENDING"  },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "toEmail",   "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "toEmail",   "order": "ASCENDING"  },
+        { "fieldPath": "isRead",    "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hr_documents",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "type",      "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
   ],

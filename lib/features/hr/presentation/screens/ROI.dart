@@ -161,7 +161,7 @@ class _ROIPageState extends State<ROIPage> {
             _buildHeader(context),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: usersQ.snapshots(),
+        stream: usersQ.snapshots(),
                 builder: (_, snap) {
                   if (!snap.hasData) {
                     return const Center(child: CircularProgressIndicator(color: _primary));
@@ -181,9 +181,9 @@ class _ROIPageState extends State<ROIPage> {
                     }).toList();
                   }
 
-                  return ListView(
+              return ListView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                    children: [
+                children: [
                       const SizedBox(height: 16),
 
                       // ── Hero Card ──────────────────────────────
@@ -196,7 +196,7 @@ class _ROIPageState extends State<ROIPage> {
 
                       // ── Find Employee ──────────────────────────
                       Text('Find Employee', style: _ts(16, w: FontWeight.w600)),
-                      const SizedBox(height: 12),
+                  const SizedBox(height: 12),
                       _FilterCard(
                         departments: _departments,
                         employeeNames: employeeNames,
@@ -230,28 +230,28 @@ class _ROIPageState extends State<ROIPage> {
                           PdfExportButton(users: users, range: _range),
                         ]),
                         const SizedBox(height: 10),
-                        if (users.isEmpty)
+                  if (users.isEmpty)
                           _EmptyState()
-                        else
-                          ...users.map((u) {
-                            final um = u.data();
-                            final name  = (um['fullName'] ?? um['name'] ?? '').toString().trim();
-                            final email = (um['email'] ?? um['officeEmail'] ?? '').toString().trim();
+                  else
+                    ...users.map((u) {
+                      final um = u.data();
+                      final name  = (um['fullName'] ?? um['name'] ?? '').toString().trim();
+                      final email = (um['email'] ?? um['officeEmail'] ?? '').toString().trim();
                             final dept  = (um['department'] ?? '').toString().trim();
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 10),
                               child: EmployeeRoiTile(
                                 name: name.isEmpty ? (email.isEmpty ? u.id : email) : name,
-                                email: email,
+                        email: email,
                                 department: dept,
                                 range: _range,
                               ),
-                            );
-                          }),
+                      );
+                    }),
                       ],
-                    ],
-                  );
-                },
+                ],
+              );
+            },
               ),
             ),
           ],
@@ -395,14 +395,14 @@ class _HeroCardState extends State<_HeroCard> {
           builder: (_, paySnap) {
             final incentiveByEmail = <String, double>{};
             if (incSnap.hasData) {
-              for (final d in incSnap.data!.docs) {
-                final m = d.data();
-                final f = _num(m['totalIncentive']);
-                if (f <= 0) continue;
-                final ts = m['timestamp'];
+        for (final d in incSnap.data!.docs) {
+          final m = d.data();
+          final f = _num(m['totalIncentive']);
+          if (f <= 0) continue;
+          final ts = m['timestamp'];
                 if (!_tsInRange(ts, fromTs, toTs)) continue;
-                final ue = (m['userEmail'] ?? '').toString().toLowerCase();
-                final ae = (m['agentEmail'] ?? '').toString().toLowerCase();
+          final ue = (m['userEmail'] ?? '').toString().toLowerCase();
+          final ae = (m['agentEmail'] ?? '').toString().toLowerCase();
                 if (emails.contains(ue)) incentiveByEmail.update(ue, (v) => v + f, ifAbsent: () => f);
                 else if (emails.contains(ae)) incentiveByEmail.update(ae, (v) => v + f, ifAbsent: () => f);
               }
@@ -642,7 +642,7 @@ class _StatItem extends StatelessWidget {
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
       ),
       child: Column(
-        children: [
+            children: [
           Container(
             width: 34, height: 34,
             decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(999)),
@@ -1277,8 +1277,8 @@ class _EmployeeTileCard extends StatelessWidget {
                     Text(emp.department.isEmpty ? emp.email : emp.department,
                         style: _ts(11, c: _muted)),
                   ]),
-                ),
-                Container(
+                  ),
+                  Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: roiColor.withValues(alpha: 0.1),
@@ -1365,11 +1365,11 @@ class RoiDetailsDialog extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8))],
         ),
-        child: Column(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
+            children: [
             // Header
-            Container(
+                    Container(
               padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(colors: [_dark, _dark2],
@@ -1389,7 +1389,7 @@ class RoiDetailsDialog extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
+              Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(emp.name, style: _ts(15, w: FontWeight.w700, c: Colors.white),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -1455,9 +1455,9 @@ class RoiDetailsDialog extends StatelessWidget {
                     _HowItWorks(),
                   ],
                 ),
+                ),
               ),
-            ),
-          ],
+            ],
         ),
       ),
     );
@@ -1689,7 +1689,7 @@ class _PdfExportButtonState extends State<PdfExportButton> {
             decoration: pw.BoxDecoration(color: light, borderRadius: pw.BorderRadius.circular(8)),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-              children: [
+        children: [
                 _pdfStat('Total Employees', '$totalEmp', dark),
                 _pdfStat('Average ROI', _pct(avgRoi), green),
                 _pdfStat('Best ROI', best == null ? '—' : _pct(best.roi), green),
@@ -1783,10 +1783,10 @@ class _PdfExportButtonState extends State<PdfExportButton> {
       onTap: _loading ? null : _export,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
+      decoration: BoxDecoration(
           color: _dark,
-          borderRadius: BorderRadius.circular(10),
-        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           _loading
               ? const SizedBox(width: 13, height: 13,

@@ -779,13 +779,13 @@ class _RequestCard extends StatelessWidget {
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(.03),
             blurRadius: 12, offset: const Offset(0, 5))],
       ),
-      child: Padding(
+            child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             _Avatar(name: employeeName),
             const SizedBox(width: 10),
-            Expanded(
+                      Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(employeeName,
                     style: GoogleFonts.ubuntu(
@@ -846,7 +846,7 @@ class _RequestCard extends StatelessWidget {
           ]),
 
           if (hrNote.isNotEmpty) ...[
-            const SizedBox(height: 8),
+                  const SizedBox(height: 8),
             _NoteBox(label: 'HR Note', note: hrNote, color: WC.cyan),
           ],
           if (adminNote.isNotEmpty) ...[

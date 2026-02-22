@@ -1,10 +1,10 @@
 // lib/features/admin/presentation/widgets/admin_dashboard_summary.dart
 //
-// Non-grid layout:
-//   • Period filter chips (horizontal scroll)
-//   • Hero radial card  — Profit (large) + Expense / Revenue / Budget sub-values
-//   • Insight orbit row — Top Agent · Top Buyer · Attendance · Top Product
-//     as compact floating pills in a single horizontal-scroll row
+// One big hero card (~50% screen) containing:
+//   • Period filter chips (top row inside card)
+//   • Profit hero value + Revenue / Expense / Budget sub-stats
+//   • 2×2 insight grid (Top Agent, Top Buyer, Attendance, Top Product)
+// All packed into a single gradient card — no separate floating sections.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,16 +14,16 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/admin_allbuyer.dart';
 
-// ── Palette: premium purple/indigo only ───────────────────────────────────────
-const Color _ink     = Color(0xFF0F172A);
-const Color _sub     = Color(0xFF64748B);
-const Color _border  = Color(0xFFEAE4F4);
-const Color _card    = Color(0xFFFFFFFF);
-const Color _purple  = Color(0xFF2A0A4B);
-const Color _indigo  = Color(0xFF4F46E5);
+// ── Palette ───────────────────────────────────────────────────────────────────
+const Color _ink      = Color(0xFF0F172A);
+const Color _sub      = Color(0xFF64748B);
+const Color _border   = Color(0xFFEAE4F4);
+const Color _card     = Color(0xFFFFFFFF);
+const Color _purple   = Color(0xFF2A0A4B);
+const Color _indigo   = Color(0xFF4F46E5);
 const Color _indigoLt = Color(0xFF818CF8);
-const Color _violet  = Color(0xFF6D28D9);
-const Color _accent  = Color(0xFF7C3AED); // single accent for sub-stats & orbit
+const Color _violet   = Color(0xFF6D28D9);
+const Color _accent   = Color(0xFF7C3AED);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 String _fmt(num n) {
@@ -47,7 +47,7 @@ String _fmtShort(num n) {
 
 String _initials(String s) {
   if (s.isEmpty) return 'U';
-  final at = s.indexOf('@');
+  final at   = s.indexOf('@');
   final base = (at > 0 ? s.substring(0, at) : s).trim();
   final parts = base.split(RegExp(r'[._\s-]+')).where((e) => e.isNotEmpty).toList();
   if (parts.isEmpty) return base[0].toUpperCase();
@@ -69,24 +69,21 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
   bool   _loading = true;
   String _filter  = 'this_month';
 
-  double _sales    = 0; // total revenue (invoices)
+  double _sales    = 0;
   double _expenses = 0;
   double _budget   = 0;
   int    _buyers   = 0;
 
-  // Profit = revenue − expenses (can be negative)
   double get _profit => _sales - _expenses;
 
-  String _topAgentEmail  = '';
-  double _topAgentSales  = 0;
-  String _topBuyerKey    = '';
-  double _topBuyerSales  = 0;
-
+  String _topAgentEmail = '';
+  double _topAgentSales = 0;
+  String _topBuyerKey   = '';
+  double _topBuyerSales = 0;
   String _topProduct    = '';
   int    _topProductQty = 0;
-
-  int _present = 0;
-  int _absent  = 0;
+  int    _present       = 0;
+  int    _absent        = 0;
 
   final Map<String, String> _avatarCache = {};
 
@@ -153,11 +150,9 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
           .get();
 
       double sales = 0;
-      final Map<String, double> byAgent  = {};
-      final Map<String, int>    ordAgent = {};
-      final Map<String, double> byBuyer  = {};
-      final Map<String, int>    ordBuyer = {};
-      final Map<String, int>    prodQty  = {};
+      final Map<String, double> byAgent = {};
+      final Map<String, double> byBuyer = {};
+      final Map<String, int>    prodQty = {};
 
       for (final doc in invSnap.docs) {
         final d   = doc.data();
@@ -165,10 +160,8 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
         final bk  = (d['customerEmail'] ?? d['customerName'] ?? 'Unknown').toString();
         final val = (d['grandTotal'] is num) ? (d['grandTotal'] as num).toDouble() : 0.0;
         sales += val;
-        byAgent[ag]  = (byAgent[ag]  ?? 0) + val;
-        ordAgent[ag] = (ordAgent[ag] ?? 0) + 1;
-        byBuyer[bk]  = (byBuyer[bk]  ?? 0) + val;
-        ordBuyer[bk] = (ordBuyer[bk] ?? 0) + 1;
+        byAgent[ag] = (byAgent[ag] ?? 0) + val;
+        byBuyer[bk] = (byBuyer[bk] ?? 0) + val;
         final items = d['items'];
         if (items is List) {
           for (final it in items) {
@@ -192,7 +185,8 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
 
       String tProd = ''; int tQty = 0;
       if (prodQty.isNotEmpty) {
-        final sorted = prodQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        final sorted = prodQty.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
         tProd = sorted.first.key;
         tQty  = sorted.first.value;
       }
@@ -236,21 +230,21 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
       }
 
       if (mounted) {
-        setState(() {
-          _sales          = sales;
-          _expenses       = exp;
-          _budget         = budSnap.docs.isNotEmpty
+      setState(() {
+          _sales         = sales;
+          _expenses      = exp;
+          _budget        = budSnap.docs.isNotEmpty
               ? ((budSnap.docs.first.data()['amount'] ?? 0) as num).toDouble()
               : 0;
-          _buyers         = buySnap.docs.length;
-          _topAgentEmail  = tAgentKey ?? '';
-          _topAgentSales  = tAgentVal;
-          _topBuyerKey    = tBuyerKey ?? '';
-          _topBuyerSales  = tBuyerVal;
-          _topProduct     = tProd;
-          _topProductQty  = tQty;
-          _present        = present;
-          _absent         = absent;
+          _buyers        = buySnap.docs.length;
+          _topAgentEmail = tAgentKey ?? '';
+          _topAgentSales = tAgentVal;
+          _topBuyerKey   = tBuyerKey ?? '';
+          _topBuyerSales = tBuyerVal;
+          _topProduct    = tProd;
+          _topProductQty = tQty;
+          _present       = present;
+          _absent        = absent;
         });
       }
     } catch (_) {
@@ -263,349 +257,301 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final pct = _budget > 0
-        ? (_sales / _budget * 100).clamp(0, 100).toDouble()
-        : 0.0;
+    final screenH = MediaQuery.of(context).size.height;
+    final cardH   = (screenH * 0.50).clamp(320.0, 480.0);
 
+    final pct      = _budget > 0 ? (_sales / _budget * 100).clamp(0, 100).toDouble() : 0.0;
     final attTotal = _present + _absent;
     final attPct   = attTotal > 0 ? (_present / attTotal * 100).round() : 0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── Period filter chips ──────────────────────────────────────────
-        SizedBox(
-          height: 32,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: _filters.map((f) {
-              final active = _filter == f.$1;
-              return GestureDetector(
-                onTap: () {
-                  if (_filter == f.$1) return;
-                  setState(() => _filter = f.$1);
-                  _fetch();
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  margin: const EdgeInsets.only(right: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: active ? _purple : _card,
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(
-                        color: active ? _purple : _border, width: 1.2),
-                    boxShadow: active
-                        ? [BoxShadow(
-                            color: _purple.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2))]
-                        : [],
-                  ),
-                  child: Text(f.$2,
-                      style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: active ? Colors.white : _sub)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      child: AnimatedBuilder(
+        animation: _pulseAnim,
+        builder: (context, _) {
+          return Container(
+            height: cardH,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1E0040), Color(0xFF2A0A4B), Color(0xFF4C1D95)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: _purple.withValues(alpha: 0.45),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
                 ),
-              );
-            }).toList(),
-          ),
-        ),
-
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 4, 12, 0),
-            child: LinearProgressIndicator(
-              minHeight: 2,
-              backgroundColor: Color(0xFFE8E0F4),
-              color: _purple,
+              ],
             ),
-          ),
-
-        const SizedBox(height: 10),
-
-        // ── Hero radial card ─────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: _HeroCard(
-            loading:   _loading,
-            profit:    _profit,
-            revenue:   _sales,
-            expenses:  _expenses,
-            budgetPct: pct,
-            budgetSet: _budget > 0,
-            pulseAnim: _pulseAnim,
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // ── Insight 2×2 grid cards ───────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 2.0,
-            children: [
-              _InsightCard(
-                icon: Icons.person_rounded,
-                label: 'Top Agent',
-                value: _topAgentEmail.isEmpty
-                    ? '—'
-                    : _topAgentEmail.split('@').first,
-                sub: _topAgentEmail.isEmpty
-                    ? 'No data yet'
-                    : _fmtShort(_topAgentSales),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E0040), Color(0xFF3B0764)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                accentColor: _indigoLt,
-                avatarUrl: _avatarCache[_topAgentEmail],
-                initials: _initials(_topAgentEmail.isEmpty ? 'A' : _topAgentEmail),
-              ),
-              _InsightCard(
-                icon: Icons.business_rounded,
-                label: 'Top Buyer',
-                value: _topBuyerKey.isEmpty
-                    ? '—'
-                    : (_topBuyerKey.contains('@')
-                        ? _topBuyerKey.split('@').first
-                        : _topBuyerKey),
-                sub: _topBuyerKey.isEmpty
-                    ? 'No data yet'
-                    : _fmtShort(_topBuyerSales),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF2E1065), Color(0xFF4C1D95)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                accentColor: _violet,
-                initials: _initials(_topBuyerKey.isEmpty ? 'B' : _topBuyerKey),
-                onTap: _topBuyerKey.isEmpty
-                    ? null
-                    : () => Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const AdminAllBuyersPage())),
-              ),
-              _InsightCard(
-                icon: Icons.how_to_reg_rounded,
-                label: 'Attendance',
-                value: _loading ? '—' : '$_present / $attTotal',
-                sub: attTotal == 0
-                    ? 'No records today'
-                    : '$attPct% present',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                accentColor: _accent,
-                initials: '✓',
-              ),
-              _InsightCard(
-                icon: Icons.inventory_2_rounded,
-                label: 'Top Product',
-                value: _loading
-                    ? '—'
-                    : (_topProduct.isEmpty ? 'None' : _topProduct),
-                sub: _topProductQty > 0
-                    ? '$_topProductQty units sold'
-                    : 'No sales yet',
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                accentColor: _indigoLt,
-                initials: '★',
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 4),
-      ],
-    );
-  }
-}
-
-// ── Hero radial card ──────────────────────────────────────────────────────────
-class _HeroCard extends StatelessWidget {
-  final bool   loading;
-  final double profit;   // revenue − expenses (primary hero value)
-  final double revenue;  // total sales (shown as sub-stat)
-  final double expenses;
-  final double budgetPct;
-  final bool   budgetSet;
-  final Animation<double> pulseAnim;
-
-  const _HeroCard({
-    required this.loading,
-    required this.profit,
-    required this.revenue,
-    required this.expenses,
-    required this.budgetPct,
-    required this.budgetSet,
-    required this.pulseAnim,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final sw = MediaQuery.of(context).size.width - 24; // full width minus padding
-    return AnimatedBuilder(
-      animation: pulseAnim,
-      builder: (context, child) {
-        return Container(
-          width: sw,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1E0040), Color(0xFF2A0A4B), Color(0xFF4C1D95)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: _purple.withValues(alpha: 0.45),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Decorative radial rings
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _RingPainter(
-                    scale: pulseAnim.value,
-                    progress: budgetSet ? (budgetPct / 100).clamp(0, 1) : 0,
+            child: Stack(
+              children: [
+                // Decorative rings
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: CustomPaint(
+                      painter: _RingPainter(
+                        scale: _pulseAnim.value,
+                        progress: _budget > 0 ? (pct / 100).clamp(0, 1) : 0,
+                      ),
+                    ),
                   ),
                 ),
-              ),
 
-              // Content
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // ── Left: Profit hero ────────────────────────────────
-                    Expanded(
-                      flex: 5,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(children: [
-                            Container(
-                              width: 20, height: 20,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(6),
+                // Loading bar
+                if (_loading)
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      child: const LinearProgressIndicator(
+                        minHeight: 2,
+                        backgroundColor: Colors.transparent,
+                        color: _indigoLt,
+                      ),
+                    ),
+                  ),
+
+                // Content
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+                      // ── Period filter chips ──────────────────────────────
+                      SizedBox(
+                        height: 26,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: _filters.map((f) {
+                            final active = _filter == f.$1;
+                            return GestureDetector(
+                              onTap: () {
+                                if (_filter == f.$1) return;
+                                setState(() => _filter = f.$1);
+                                _fetch();
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                margin: const EdgeInsets.only(right: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: active
+                                      ? Colors.white.withValues(alpha: 0.2)
+                                      : Colors.white.withValues(alpha: 0.07),
+                                  borderRadius: BorderRadius.circular(99),
+                                  border: Border.all(
+                                    color: active
+                                        ? Colors.white.withValues(alpha: 0.5)
+                                        : Colors.white.withValues(alpha: 0.12),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(f.$2,
+                                    style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: active ? Colors.white : Colors.white54)),
                               ),
-                              child: Icon(
-                                profit >= 0
-                                    ? Icons.trending_up_rounded
-                                    : Icons.trending_down_rounded,
-                                color: Colors.white, size: 12),
-                            ),
-                            const SizedBox(width: 5),
-                            Text('Profit',
-                                style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white54)),
-                          ]),
-                          const SizedBox(height: 4),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              loading ? '…' : _fmt(profit.abs()),
-                              style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  height: 1),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            loading
-                                ? ''
-                                : profit < 0
-                                    ? 'Net loss'
-                                    : 'Net profit',
-                            style: GoogleFonts.inter(
-                                fontSize: 9,
-                                color: profit < 0
-                                    ? const Color(0xFFFCA5A5)
-                                    : Colors.white38,
-                                fontWeight: FontWeight.w400),
-                          ),
-                        ],
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
 
-                    // ── Divider ──────────────────────────────────────────
-                    Container(
-                      width: 1,
-                      height: 52,
-                      margin: const EdgeInsets.symmetric(horizontal: 12),
-                      color: Colors.white12,
-                    ),
+                      const SizedBox(height: 12),
 
-                    // ── Right: Sub-values ────────────────────────────────
-                    Expanded(
-                      flex: 4,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      // ── Profit hero + sub-stats row ──────────────────────
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          _SubStat(
-                            icon: Icons.receipt_long_rounded,
-                            label: 'Expense',
-                            value: loading ? '…' : _fmtShort(expenses),
-                            accent: _accent,
+                          // Profit
+                          Expanded(
+                            flex: 5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(children: [
+                                  Container(
+                                    width: 18, height: 18,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                    child: Icon(
+                                      _profit >= 0
+                                          ? Icons.trending_up_rounded
+                                          : Icons.trending_down_rounded,
+                                      color: Colors.white, size: 11),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text('Profit',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white54)),
+                                ]),
+                                const SizedBox(height: 3),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    _loading ? '…' : _fmt(_profit.abs()),
+                                    style: GoogleFonts.spaceGrotesk(
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        height: 1),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _loading
+                                      ? ''
+                                      : _profit < 0 ? 'Net loss' : 'Net profit',
+                                  style: GoogleFonts.inter(
+                                      fontSize: 9,
+                                      color: _profit < 0
+                                          ? const Color(0xFFFCA5A5)
+                                          : Colors.white38),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          _SubStat(
-                            icon: Icons.trending_up_rounded,
-                            label: 'Revenue',
-                            value: loading ? '…' : _fmtShort(revenue),
-                            accent: _indigoLt,
+
+                          // Divider
+                          Container(
+                            width: 1, height: 52,
+                            margin: const EdgeInsets.symmetric(horizontal: 12),
+                            color: Colors.white12,
                           ),
-                          const SizedBox(height: 8),
-                          _SubStat(
-                            icon: Icons.donut_small_rounded,
-                            label: 'Budget',
-                            value: loading
-                                ? '…'
-                                : (budgetSet
-                                    ? '${budgetPct.toStringAsFixed(0)}%'
-                                    : 'Not set'),
-                            accent: _violet,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+
+                          // Sub-stats
+                          Expanded(
+                            flex: 4,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+            children: [
+                                _SubStat(
+                                  icon: Icons.receipt_long_rounded,
+                                  label: 'Expense',
+                                  value: _loading ? '…' : _fmtShort(_expenses),
+                                  accent: _accent,
+                                ),
+                                const SizedBox(height: 6),
+                                _SubStat(
+                                  icon: Icons.trending_up_rounded,
+                                  label: 'Revenue',
+                                  value: _loading ? '…' : _fmtShort(_sales),
+                                  accent: _indigoLt,
+                                ),
+                                const SizedBox(height: 6),
+                                _SubStat(
+                                  icon: Icons.donut_small_rounded,
+                                  label: 'Budget',
+                                  value: _loading
+                                      ? '…'
+                                      : (_budget > 0
+                                          ? '${pct.toStringAsFixed(0)}%'
+                                          : 'Not set'),
+                                  accent: _violet,
+                                ),
+                              ],
+                            ),
               ),
             ],
           ),
-        );
-      },
+
+                      const SizedBox(height: 12),
+
+                      // ── Divider ──────────────────────────────────────────
+                      Container(height: 1, color: Colors.white10),
+
+                      const SizedBox(height: 10),
+
+                      // ── 2×2 Insight grid ─────────────────────────────────
+                      Expanded(
+                        child: GridView.count(
+                          crossAxisCount: 2,
+                          shrinkWrap: false,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 2.6,
+                          children: [
+                            _InsightCell(
+                              icon: Icons.person_rounded,
+                              label: 'Top Agent',
+                              value: _topAgentEmail.isEmpty
+                                  ? '—'
+                                  : _topAgentEmail.split('@').first,
+                              sub: _topAgentEmail.isEmpty
+                                  ? 'No data'
+                                  : _fmtShort(_topAgentSales),
+                              accentColor: _indigoLt,
+                              avatarUrl: _avatarCache[_topAgentEmail],
+                              initials: _initials(
+                                  _topAgentEmail.isEmpty ? 'A' : _topAgentEmail),
+                            ),
+                            _InsightCell(
+                              icon: Icons.business_rounded,
+                              label: 'Top Buyer',
+                              value: _topBuyerKey.isEmpty
+                                  ? '—'
+                                  : (_topBuyerKey.contains('@')
+                                      ? _topBuyerKey.split('@').first
+                                      : _topBuyerKey),
+                              sub: _topBuyerKey.isEmpty
+                                  ? 'No data'
+                                  : _fmtShort(_topBuyerSales),
+                              accentColor: _violet,
+                              initials: _initials(
+                                  _topBuyerKey.isEmpty ? 'B' : _topBuyerKey),
+                              onTap: _topBuyerKey.isEmpty
+                                  ? null
+                                  : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) =>
+                                              const AdminAllBuyersPage())),
+                            ),
+                            _InsightCell(
+                              icon: Icons.how_to_reg_rounded,
+                              label: 'Attendance',
+                              value: _loading ? '—' : '$_present / $attTotal',
+                              sub: attTotal == 0
+                                  ? 'No records'
+                                  : '$attPct% present',
+                              accentColor: _accent,
+                              initials: '✓',
+                            ),
+                            _InsightCell(
+                              icon: Icons.inventory_2_rounded,
+                              label: 'Top Product',
+                              value: _loading
+                                  ? '—'
+                                  : (_topProduct.isEmpty ? 'None' : _topProduct),
+                              sub: _topProductQty > 0
+                                  ? '$_topProductQty units'
+                                  : 'No sales',
+                              accentColor: _indigoLt,
+                              initials: '★',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -613,9 +559,9 @@ class _HeroCard extends StatelessWidget {
 // ── Sub-stat row inside hero ──────────────────────────────────────────────────
 class _SubStat extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
+  final String   label;
+  final String   value;
+  final Color    accent;
 
   const _SubStat({
     required this.icon,
@@ -661,24 +607,22 @@ class _SubStat extends StatelessWidget {
   }
 }
 
-// ── Insight card (2×2 grid, matches hero card style) ─────────────────────────
-class _InsightCard extends StatelessWidget {
-  final IconData     icon;
-  final String       label;
-  final String       value;
-  final String       sub;
-  final Gradient     gradient;
-  final Color        accentColor;
-  final String       initials;
-  final String?      avatarUrl;
+// ── Insight cell (inside hero card, semi-transparent) ─────────────────────────
+class _InsightCell extends StatelessWidget {
+  final IconData      icon;
+  final String        label;
+  final String        value;
+  final String        sub;
+  final Color         accentColor;
+  final String        initials;
+  final String?       avatarUrl;
   final VoidCallback? onTap;
 
-  const _InsightCard({
+  const _InsightCell({
     required this.icon,
     required this.label,
     required this.value,
     required this.sub,
-    required this.gradient,
     required this.accentColor,
     required this.initials,
     this.avatarUrl,
@@ -691,101 +635,74 @@ class _InsightCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: _purple.withValues(alpha: 0.35),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         ),
-        child: Stack(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
           children: [
-            // Decorative circle
-            Positioned(
-              right: -12, top: -12,
-              child: Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
-                ),
+            // Icon / avatar
+            Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: avatarUrl != null && avatarUrl!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        avatarUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Center(
+                          child: Text(initials,
+                              style: GoogleFonts.inter(
+                                  color: accentColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10)),
+                  ),
+                ),
+              )
+                  : Icon(icon, color: accentColor, size: 15),
             ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Icon / avatar
-                  Container(
-                    width: 34, height: 34,
-                    decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: avatarUrl != null && avatarUrl!.isNotEmpty
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              avatarUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
-                                child: Text(initials,
-                                    style: GoogleFonts.inter(
-                                        color: accentColor,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 11)),
-                              ),
-                            ),
-                          )
-                        : Icon(icon, color: accentColor, size: 16),
-                  ),
-                  const SizedBox(width: 8),
-                  // Text
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white54,
-                                letterSpacing: 0.3)),
-                        const SizedBox(height: 2),
-                        Text(value,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.spaceGrotesk(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                                height: 1.1)),
-                        const SizedBox(height: 2),
-                        Text(sub,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                                fontSize: 9,
-                                color: accentColor,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                  if (onTap != null)
-                    Icon(Icons.chevron_right_rounded,
-                        size: 14, color: Colors.white38),
+                  Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white54,
+                          letterSpacing: 0.3)),
+                  const SizedBox(height: 1),
+                  Text(value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1.1)),
+                  const SizedBox(height: 1),
+                  Text(sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                          fontSize: 8,
+                          color: accentColor,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
+            if (onTap != null)
+              Icon(Icons.chevron_right_rounded, size: 12, color: Colors.white38),
           ],
         ),
       ),
@@ -796,16 +713,15 @@ class _InsightCard extends StatelessWidget {
 // ── Ring painter (decorative radial arcs on hero) ─────────────────────────────
 class _RingPainter extends CustomPainter {
   final double scale;
-  final double progress; // 0..1 for budget arc
+  final double progress;
 
   const _RingPainter({required this.scale, required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width * 0.5;
+    final cx = size.width  * 0.5;
     final cy = size.height * 0.5;
 
-    // Outer decorative ring
     final outerPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.04)
       ..style = PaintingStyle.stroke
@@ -813,7 +729,6 @@ class _RingPainter extends CustomPainter {
     canvas.drawCircle(
         Offset(cx * 1.6, cy * 0.3), size.width * 0.55 * scale, outerPaint);
 
-    // Inner decorative ring
     final innerPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.06)
       ..style = PaintingStyle.stroke
@@ -821,7 +736,6 @@ class _RingPainter extends CustomPainter {
     canvas.drawCircle(
         Offset(cx * 1.7, cy * 0.2), size.width * 0.32 * scale, innerPaint);
 
-    // Budget progress arc (bottom-right corner)
     if (progress > 0) {
       final trackPaint = Paint()
         ..color = Colors.white.withValues(alpha: 0.08)

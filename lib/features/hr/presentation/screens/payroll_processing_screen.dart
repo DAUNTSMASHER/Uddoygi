@@ -7,6 +7,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/features/payments/data/piprapay_repository.dart';
+import 'package:uddoygi/features/payments/domain/models/beneficiary_model.dart';
 
 class PayrollProcessingScreen extends StatefulWidget {
   const PayrollProcessingScreen({super.key});
@@ -490,6 +492,18 @@ class _PayrollProcessingScreenState extends State<PayrollProcessingScreen> {
                               style: const TextStyle(color: Colors.black54, fontSize: 12),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          // ── Send via PipraPay ──────────────────────────
+                          _SendPayrollButton(
+                            cid:          _cid,
+                            employeeUid:  (d['employeeUid'] as String?) ?? '',
+                            employeeName: (d['employeeName'] ?? d['employeeId'] ?? '').toString(),
+                            netSalary:    (d['netSalary'] is num)
+                                ? (d['netSalary'] as num).toDouble()
+                                : double.tryParse(d['netSalary']?.toString() ?? '0') ?? 0,
+                            period:       (d['period'] ?? selectedMonth).toString(),
+                            payrollDocId: doc.id,
+                          ),
                         ],
                       ),
                     ),
@@ -863,7 +877,7 @@ class _EmployeePickerSheetState extends State<_EmployeePickerSheet> {
                   return ListView.separated(
                     shrinkWrap: true,
                     itemCount: docs.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (context, index) => const Divider(height: 1),
                     itemBuilder: (_, i) {
                       final d = docs[i];
                       final m = d.data();
@@ -903,4 +917,531 @@ class _EmployeePickerSheetState extends State<_EmployeePickerSheet> {
       ),
     );
   }
+}
+
+/* ==================== Send via PipraPay Button ==================== */
+
+class _SendPayrollButton extends StatefulWidget {
+  final String cid;
+  final String employeeUid;
+  final String employeeName;
+  final double netSalary;
+  final String period;
+  final String payrollDocId;
+
+  const _SendPayrollButton({
+    required this.cid,
+    required this.employeeUid,
+    required this.employeeName,
+    required this.netSalary,
+    required this.period,
+    required this.payrollDocId,
+  });
+
+  @override
+  State<_SendPayrollButton> createState() => _SendPayrollButtonState();
+}
+
+class _SendPayrollButtonState extends State<_SendPayrollButton> {
+  bool _loading = false;
+
+  static const Color _green = Color(0xFF065F46);
+  static const Color _red   = Color(0xFFDC2626);
+
+  Future<void> _send() async {
+    if (widget.cid.isEmpty) return;
+    setState(() => _loading = true);
+
+    try {
+      final repo     = PipraPayRepository(cid: widget.cid);
+      final settings = await repo.getSettings();
+
+      if (!settings.enabled) {
+        _snack('PipraPay is not enabled. Configure it in Payment Settings.', error: true);
+        return;
+      }
+
+      // Look up employee payment info from users collection
+      Map<String, dynamic>? empData;
+      if (widget.employeeUid.isNotEmpty) {
+        final snap = await DB.colSync(widget.cid, C.users)
+            .doc(widget.employeeUid)
+            .get();
+        empData = snap.data();
+      }
+
+      final paymentMethod  = (empData?['paymentMethod']  as String?) ?? '';
+      final paymentAccount = (empData?['paymentAccount'] as String?) ?? '';
+      final paymentName    = (empData?['paymentName']    as String?) ?? widget.employeeName;
+      final bankName       = (empData?['bankName']       as String?) ?? '';
+      final paymentVerified = (empData?['paymentVerified'] as bool?) ?? false;
+
+      if (!mounted) return;
+
+      if (paymentAccount.isEmpty) {
+        _snack('Employee has no payment info. Ask them to update it.', error: true);
+        return;
+      }
+
+      // Show confirmation sheet
+      final confirmed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _PayrollSendConfirmSheet(
+          employeeName:    widget.employeeName,
+          netSalary:       widget.netSalary,
+          period:          widget.period,
+          paymentMethod:   paymentMethod,
+          paymentAccount:  paymentAccount,
+          paymentName:     paymentName,
+          bankName:        bankName,
+          paymentVerified: paymentVerified,
+          currency:        settings.currency,
+          sandboxMode:     settings.sandboxMode,
+        ),
+      );
+
+      if (confirmed != true || !mounted) return;
+
+      // Build beneficiary from employee payment info
+      final beneficiary = BeneficiaryModel(
+        id:            widget.employeeUid.isNotEmpty
+            ? widget.employeeUid
+            : widget.payrollDocId,
+        name:          paymentName,
+        emailOrMobile: paymentAccount,
+        type:          BeneficiaryType.employee,
+        accountNumber: paymentAccount,
+        bankName:      bankName,
+        notes:         'Salary ${widget.period}',
+      );
+
+      // Upsert beneficiary in Firestore
+      await DB.colSync(widget.cid, C.beneficiaries)
+          .doc(beneficiary.id)
+          .set({
+        ...beneficiary.toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Initiate payment
+      final result = await repo.initiatePayment(
+        beneficiary: beneficiary,
+        amount:      widget.netSalary,
+        settings:    settings,
+        notes:       'Salary ${widget.period} — ${widget.employeeName}',
+      );
+
+      if (!mounted) return;
+
+      // Show checkout URL
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _CheckoutDialog(
+          result:      result,
+          sandboxMode: settings.sandboxMode,
+        ),
+      );
+    } catch (e) {
+      if (mounted) _snack('Payment failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _snack(String msg, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: error ? _red : _green,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: _green,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+        ),
+        icon: _loading
+            ? const SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Icon(Icons.send_rounded, size: 16),
+        label: Text(
+          _loading ? 'Preparing…' : 'Send via PipraPay',
+          style: const TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 13),
+        ),
+        onPressed: _loading ? null : _send,
+      ),
+    );
+  }
+}
+
+/* ==================== Payroll Send Confirmation Sheet ==================== */
+
+class _PayrollSendConfirmSheet extends StatelessWidget {
+  final String employeeName;
+  final double netSalary;
+  final String period;
+  final String paymentMethod;
+  final String paymentAccount;
+  final String paymentName;
+  final String bankName;
+  final bool   paymentVerified;
+  final String currency;
+  final bool   sandboxMode;
+
+  const _PayrollSendConfirmSheet({
+    required this.employeeName,
+    required this.netSalary,
+    required this.period,
+    required this.paymentMethod,
+    required this.paymentAccount,
+    required this.paymentName,
+    required this.bankName,
+    required this.paymentVerified,
+    required this.currency,
+    required this.sandboxMode,
+  });
+
+  static const Color _green = Color(0xFF065F46);
+  static const Color _amber = Color(0xFFD97706);
+  static final _money = NumberFormat.currency(
+      locale: 'en', symbol: '৳', decimalDigits: 0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(
+          top: MediaQuery.of(context).size.height * 0.2),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Confirm Payment',
+                    style: TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 16),
+
+                // Amount hero
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF065F46), Color(0xFF10B981)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(children: [
+                    Text(
+                      _money.format(netSalary),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      '$currency • $period Salary',
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 12),
+                    ),
+                    if (sandboxMode) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _amber.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text('SANDBOX MODE',
+                            style: TextStyle(
+                                color: _amber,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900)),
+                      ),
+                    ],
+                  ]),
+                ),
+
+                const SizedBox(height: 14),
+
+                // Recipient info
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: paymentVerified
+                        ? const Color(0xFF065F46).withValues(alpha: 0.06)
+                        : _amber.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: paymentVerified
+                            ? const Color(0xFF065F46).withValues(alpha: 0.2)
+                            : _amber.withValues(alpha: 0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(
+                          paymentVerified
+                              ? Icons.verified_rounded
+                              : Icons.warning_amber_rounded,
+                          color: paymentVerified
+                              ? _green
+                              : _amber,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          paymentVerified
+                              ? 'Verified payment info'
+                              : 'Unverified — double-check before sending',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: paymentVerified ? _green : _amber),
+                        ),
+                      ]),
+                      const SizedBox(height: 10),
+                      _Row('To',      employeeName),
+                      _Row('Method',  paymentMethod.isEmpty ? '—' : paymentMethod),
+                      _Row('Account', paymentAccount),
+                      if (paymentName.isNotEmpty)
+                        _Row('Name',  paymentName),
+                      if (bankName.isNotEmpty)
+                        _Row('Bank',  bankName),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancel',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _green,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: const Text('Send Payment',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15)),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Row(this.label, this.value);
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(children: [
+          SizedBox(
+            width: 60,
+            child: Text('$label:',
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black38)),
+          ),
+          Expanded(
+            child: Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      );
+}
+
+/* ==================== Checkout Dialog ==================== */
+
+class _CheckoutDialog extends StatelessWidget {
+  final InitiatePaymentResult result;
+  final bool sandboxMode;
+  const _CheckoutDialog(
+      {required this.result, required this.sandboxMode});
+
+  static const Color _green = Color(0xFF065F46);
+  static const Color _amber = Color(0xFFD97706);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20)),
+      title: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: _green.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.check_circle_rounded,
+              color: _green, size: 20),
+        ),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text('Payment Initiated',
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w800)),
+        ),
+      ]),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (sandboxMode)
+            Container(
+              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: _amber.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: _amber.withValues(alpha: 0.3)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.science_rounded,
+                    color: _amber, size: 14),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text('Sandbox — no real money moved',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: _amber,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ]),
+            ),
+          _DRow('Order ID', result.orderId),
+          if (result.invoiceId.isNotEmpty)
+            _DRow('Invoice', result.invoiceId),
+          const SizedBox(height: 10),
+          const Text('Complete payment at:',
+              style: TextStyle(
+                  fontSize: 11, color: Colors.black45)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _green.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: _green.withValues(alpha: 0.2)),
+            ),
+            child: SelectableText(
+              result.checkoutUrl,
+              style: const TextStyle(
+                  fontSize: 11,
+                  color: _green,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: _green),
+          icon: const Icon(Icons.open_in_browser_rounded, size: 14),
+          label: const Text('Open Checkout'),
+          onPressed: () async {
+            final uri = Uri.tryParse(result.checkoutUrl);
+            if (uri != null) {
+              // ignore: deprecated_member_use
+              // url_launcher is already a dependency
+            }
+            if (context.mounted) Navigator.pop(context);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _DRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _DRow(this.label, this.value);
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(children: [
+          Text('$label: ',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black45)),
+          Expanded(
+            child: Text(value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700)),
+          ),
+        ]),
+      );
 }

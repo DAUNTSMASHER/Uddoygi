@@ -76,23 +76,23 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
     final d = now.day.toString().padLeft(2, '0');
     try {
       final recs = await DB.firestore.collectionGroup('records').get();
-      int present = 0, late = 0, total = 0, leaveToday = 0;
-      for (final r in recs.docs) {
-        final parentId = r.reference.parent.parent?.id ?? '';
-        final parts = parentId.split('-');
-        if (parts.length != 3) continue;
-        final status = (r.data()['status'] ?? '').toString().toLowerCase();
-        if (parts[0] == y && parts[1] == m) {
-          if (status == 'present') present++;
-          if (status == 'late') late++;
-          total++;
-        }
-        if (parts[0] == y && parts[1] == m && parts[2] == d) {
-          if (status == 'leave') leaveToday++;
-        }
+    int present = 0, late = 0, total = 0, leaveToday = 0;
+    for (final r in recs.docs) {
+      final parentId = r.reference.parent.parent?.id ?? '';
+      final parts = parentId.split('-');
+      if (parts.length != 3) continue;
+      final status = (r.data()['status'] ?? '').toString().toLowerCase();
+      if (parts[0] == y && parts[1] == m) {
+        if (status == 'present') present++;
+        if (status == 'late') late++;
+        total++;
       }
-      final avg = total > 0 ? ((present + late) / total) * 100 : 0.0;
-      return _AttendanceQuick(avgPercent: avg, leaveToday: leaveToday);
+      if (parts[0] == y && parts[1] == m && parts[2] == d) {
+        if (status == 'leave') leaveToday++;
+      }
+    }
+    final avg = total > 0 ? ((present + late) / total) * 100 : 0.0;
+    return _AttendanceQuick(avgPercent: avg, leaveToday: leaveToday);
     } catch (_) {
       return const _AttendanceQuick();
     }
@@ -149,7 +149,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
 
                         // ── Department breakdown ──────────────────────────────
                         SliverToBoxAdapter(
-                          child: Padding(
+              child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                             child: _SectionLabel(
                               icon: Icons.donut_small_rounded,
@@ -218,15 +218,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen>
                               crossAxisSpacing: 12,
                               mainAxisSpacing: 12,
                               childAspectRatio: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
+              ),
+            ),
+          ),
+        ],
                     );
                   },
                 );
               },
-            ),
+      ),
     );
   }
 }
@@ -584,13 +584,13 @@ class _ActionCard extends StatelessWidget {
             ],
           ),
           padding: const EdgeInsets.all(16),
-          child: Column(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Top: icon + arrow
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              children: [
                   Container(
                     width: 42, height: 42,
                     decoration: BoxDecoration(

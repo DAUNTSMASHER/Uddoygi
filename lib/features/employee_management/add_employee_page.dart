@@ -342,9 +342,9 @@ class _AddEmployeePageState extends State<AddEmployeePage>
           message: 'This employee has no email address on record. '
               'Please edit their profile to add an email first.',
           isError: true,
-        );
-        return;
-      }
+      );
+      return;
+    }
 
       // ── PATH A: Direct update using stored password ──────────────────────
       final stored  = (empData['_initialPassword']     as String?)?.trim() ?? '';
@@ -394,14 +394,14 @@ class _AddEmployeePageState extends State<AddEmployeePage>
         }
 
         if (updated) {
-          if (!mounted) return;
+      if (!mounted) return;
           _showInfo(
             title: 'Password Updated',
             message: 'The password for ${_selectedEmp!.emailShown} has been '
                 'updated successfully. They can now log in with the new password.',
           );
-          _newPassCtl.clear();
-          _confirmPassCtl.clear();
+      _newPassCtl.clear();
+      _confirmPassCtl.clear();
           setState(() { _selectedUid = null; _selectedEmp = null; });
           return;
         }
@@ -476,11 +476,11 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                   style: GoogleFonts.inter(color: _muted, fontSize: 13)),
               const SizedBox(height: 14),
               TextField(
-                controller: ctl,
+            controller: ctl,
                 obscureText: obs,
                 autofocus: true,
                 style: GoogleFonts.inter(fontSize: 14),
-                decoration: InputDecoration(
+            decoration: InputDecoration(
                   hintText: 'Admin password',
                   hintStyle: GoogleFonts.inter(color: _muted),
                   filled: true,
@@ -488,12 +488,12 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: BorderSide.none),
-                  suffixIcon: IconButton(
+              suffixIcon: IconButton(
                     icon: Icon(obs ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                         size: 18, color: _muted),
                     onPressed: () => ss(() => obs = !obs),
-                  ),
-                ),
+              ),
+            ),
               ),
             ],
           ),
@@ -578,7 +578,7 @@ class _AddEmployeePageState extends State<AddEmployeePage>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        children: [
             // Explanation
             Container(
               padding: const EdgeInsets.all(14),
@@ -670,8 +670,8 @@ class _AddEmployeePageState extends State<AddEmployeePage>
             width: 32, height: 32,
             decoration: BoxDecoration(
               color: (isError ? _danger : _success).withOpacity(.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
+        borderRadius: BorderRadius.circular(8),
+      ),
             child: Icon(
               isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
               color: isError ? _danger : _success, size: 18),
@@ -720,17 +720,17 @@ class _AddEmployeePageState extends State<AddEmployeePage>
           ),
         ),
         bottom: TabBar(
-          controller: _tab,
-          indicatorColor: Colors.white,
+              controller: _tab,
+              indicatorColor: Colors.white,
           indicatorWeight: 3,
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
           unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
-          labelColor: Colors.white,
+              labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
-          tabs: const [
+              tabs: const [
             Tab(icon: Icon(Icons.person_add_rounded, size: 18), text: 'Add Employee'),
             Tab(icon: Icon(Icons.lock_reset_rounded, size: 18), text: 'Reset Password'),
-          ],
+              ],
         ),
       ),
       body: TabBarView(
@@ -744,8 +744,8 @@ class _AddEmployeePageState extends State<AddEmployeePage>
 
   Widget _buildAddTab() {
     return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
+            padding: const EdgeInsets.all(16),
+            children: [
         // Info banner
         _InfoBanner(
           icon: Icons.info_outline_rounded,
@@ -758,8 +758,8 @@ class _AddEmployeePageState extends State<AddEmployeePage>
         _SectionCard(
           title: 'Employee Details',
           icon: Icons.badge_rounded,
-          child: Form(
-            key: _formKey,
+                child: Form(
+                  key: _formKey,
             child: Column(children: [
               _Field(
                 label: 'Employee ID',
@@ -774,7 +774,7 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                 hint: 'employee@example.com',
                 icon: Icons.email_outlined,
                 controller: _emailCtl,
-                keyboardType: TextInputType.emailAddress,
+                        keyboardType: TextInputType.emailAddress,
                 onChanged: _onEmailChanged,
                 validator: (v) => (v != null && v.contains('@')) ? null : 'Enter a valid email',
               ),
@@ -811,8 +811,8 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                 )
               else ...[
                 // Send OTP button
-                SizedBox(
-                  width: double.infinity,
+                      SizedBox(
+                        width: double.infinity,
                   height: 42,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
@@ -870,14 +870,14 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                           filled: true,
                           fillColor: _bg,
                           border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none),
                           contentPadding: const EdgeInsets.symmetric(
                               vertical: 14, horizontal: 12),
-                        ),
+                          ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                              const SizedBox(width: 10),
                     SizedBox(
                       height: 50,
                       child: FilledButton(
@@ -959,8 +959,8 @@ class _AddEmployeePageState extends State<AddEmployeePage>
 
   Widget _buildResetTab() {
     return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
+            padding: const EdgeInsets.all(16),
+            children: [
         _InfoBanner(
           icon: Icons.shield_outlined,
           text: 'Select an employee and set a new password. '
@@ -990,38 +990,38 @@ class _AddEmployeePageState extends State<AddEmployeePage>
 
             // Employee list
             if (_cid.isNotEmpty)
-              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: DB.colSync(_cid, C.users)
                     .where('department', isEqualTo: _recoverDept)
-                    .snapshots(),
+                          .snapshots(),
                 builder: (_, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
+                        if (snap.connectionState == ConnectionState.waiting) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: LinearProgressIndicator(),
                     );
                   }
                   final docs  = snap.data?.docs ?? [];
-                  final items = docs.map((d) {
-                    final m = d.data();
-                    return _Emp(
+                        final items = docs.map((d) {
+                          final m = d.data();
+                          return _Emp(
                       uid:        d.id,
-                      employeeId: (m['employeeId'] ?? '').toString(),
+                            employeeId: (m['employeeId'] ?? '').toString(),
                       fullName:   (m['fullName']   ?? 'Unnamed').toString(),
-                      emailShown: (m['officeEmail'] ?? m['email'] ?? '').toString(),
-                      department: (m['department'] ?? '').toString(),
+                            emailShown: (m['officeEmail'] ?? m['email'] ?? '').toString(),
+                            department: (m['department'] ?? '').toString(),
                       isHead:     (m['isHead'] ?? false) == true,
-                    );
-                  }).toList();
+                          );
+                        }).toList();
 
                   if (_selectedUid != null &&
                       !items.any((e) => e.uid == _selectedUid)) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) setState(() { _selectedUid = null; _selectedEmp = null; });
                     });
-                  }
+                        }
 
-                  if (items.isEmpty) {
+                        if (items.isEmpty) {
                     return Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -1089,7 +1089,7 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                                  children: [
                                   Row(children: [
                                     Expanded(
                                       child: Text(
@@ -1126,15 +1126,15 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                               const Icon(Icons.check_circle_rounded,
                                   color: _primary, size: 20),
                           ]),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
+                                ),
+                              );
+                            }).toList(),
+                        );
+                      },
+                    ),
           ]),
         ),
-        const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
         // Selected employee indicator
         if (_selectedEmp != null)
@@ -1189,7 +1189,7 @@ class _AddEmployeePageState extends State<AddEmployeePage>
               label: 'New Password (optional — leave blank to send reset link)',
               hint: 'Min 6 characters',
               icon: Icons.lock_outlined,
-              controller: _newPassCtl,
+                      controller: _newPassCtl,
               obscure: !_newPassVisible,
               suffix: IconButton(
                 icon: Icon(
@@ -1197,13 +1197,13 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                   size: 18, color: _muted),
                 onPressed: () => setState(() => _newPassVisible = !_newPassVisible),
               ),
-            ),
-            const SizedBox(height: 12),
+                    ),
+                    const SizedBox(height: 12),
             _Field(
               label: 'Confirm New Password',
               hint: 'Re-enter the password',
               icon: Icons.lock_outlined,
-              controller: _confirmPassCtl,
+                      controller: _confirmPassCtl,
               obscure: !_confirmPassVisible,
               suffix: IconButton(
                 icon: Icon(
@@ -1211,10 +1211,10 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                   size: 18, color: _muted),
                 onPressed: () => setState(() => _confirmPassVisible = !_confirmPassVisible),
               ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
               height: 50,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
@@ -1223,18 +1223,18 @@ class _AddEmployeePageState extends State<AddEmployeePage>
                       borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: (_loading || _selectedEmp == null) ? null : _resetPassword,
-                icon: _loading
+                        icon: _loading
                     ? const SizedBox(width: 18, height: 18,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Icon(Icons.lock_reset_rounded, size: 18),
                 label: Text(_loading ? 'Updating…' : 'Reset Password',
                     style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15)),
-              ),
-            ),
-            const SizedBox(height: 8),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
             Text(
               'Your admin password will be required to confirm.',
-              textAlign: TextAlign.center,
+                      textAlign: TextAlign.center,
               style: GoogleFonts.inter(fontSize: 11, color: _muted),
             ),
           ]),
@@ -1443,7 +1443,7 @@ class _DeptSelector extends StatelessWidget {
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
+      decoration: BoxDecoration(
             color: _bg,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: _border),
@@ -1563,7 +1563,7 @@ class _RecentlyAdded extends StatelessWidget {
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
+          decoration: BoxDecoration(
                   color: _bg,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _border),
@@ -1585,9 +1585,9 @@ class _RecentlyAdded extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                         Row(children: [
                           Text(id,
                               style: GoogleFonts.inter(
@@ -1595,10 +1595,10 @@ class _RecentlyAdded extends StatelessWidget {
                                   fontSize: 13,
                                   color: _fg)),
                           const SizedBox(width: 6),
-                          Container(
+                Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                               color: _deptChipColor(dept).withOpacity(.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -1614,9 +1614,9 @@ class _RecentlyAdded extends StatelessWidget {
                             style: GoogleFonts.inter(
                                 fontSize: 12, color: _muted),
                             overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
+              ],
+            ),
+          ),
                   Text(when,
                       style: GoogleFonts.inter(
                           fontSize: 11, color: _muted)),
@@ -1672,7 +1672,7 @@ class _SmtpStep extends StatelessWidget {
           Container(
             width: 22, height: 22,
             margin: const EdgeInsets.only(top: 1),
-            decoration: BoxDecoration(
+  decoration: BoxDecoration(
               color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),

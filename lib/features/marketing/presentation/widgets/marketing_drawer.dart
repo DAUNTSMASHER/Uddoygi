@@ -8,7 +8,7 @@ import 'package:uddoygi/profile.dart';
 const Color _darkBlue = Color(0xFF0D47A1);
 
 class MarketingDrawer extends StatefulWidget {
-  const MarketingDrawer({Key? key}) : super(key: key);
+  const MarketingDrawer({super.key});
 
   @override
   State<MarketingDrawer> createState() => _MarketingDrawerState();
@@ -140,6 +140,11 @@ class _MarketingDrawerState extends State<MarketingDrawer> {
                   '/marketing/orders'),
               _drawerItem(context, 'Loan Requests',
                   Icons.request_page_outlined, '/marketing/loan_request'),
+              const Divider(),
+              _drawerItem(context, 'My Salary & Payslips',
+                  Icons.payments_outlined, '/common/salary'),
+              _drawerItem(context, 'My Incentives',
+                  Icons.star_outline_rounded, '/marketing/renumeration'),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),

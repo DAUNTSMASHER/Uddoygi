@@ -62,6 +62,11 @@ android {
 dependencies {
     // Core library desugaring (required when using Java 8+ APIs on lower minsdk)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // ML Kit text recognition — Latin script (used by document extractor).
+    // Declaring this explicitly gives R8 the real classes so the release build
+    // does not fail with "Missing class" errors for the recogniser options.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }
 
 flutter {
