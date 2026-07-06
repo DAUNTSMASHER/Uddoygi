@@ -17,10 +17,11 @@ import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const Color _brand    = Color(0xFF4F46E5); // indigo-600
-const Color _brandMid = Color(0xFF6366F1); // indigo-500
-const Color _surface  = Color(0xFFF5F3FF); // indigo-50
+const Color _brand    = Color(0xFF065F46); // HR Green
+const Color _brandMid = Color(0xFF059669); // Emerald
+const Color _surface  = Color(0xFFF8FAFC); // Slate 50
 const Color _red      = Color(0xFFDC2626);
+
 
 const _categories = <String>[
   'Rent', 'Utilities', 'Payroll', 'Supplies',
@@ -110,11 +111,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       ),
     );
 
-    final headerBg  = const PdfColor.fromInt(0xFF4F46E5);
-    final rowAlt    = const PdfColor.fromInt(0xFFF5F3FF);
-    final lineClr   = const PdfColor.fromInt(0xFFE0E7FF);
-    final textDark  = const PdfColor.fromInt(0xFF1E1B4B);
+    final headerBg  = const PdfColor.fromInt(0xFF065F46);
+    final rowAlt    = const PdfColor.fromInt(0xFFF0FDF4);
+    final lineClr   = const PdfColor.fromInt(0xFFDCFCE7);
+    final textDark  = const PdfColor.fromInt(0xFF064E3B);
     final textMuted = const PdfColor.fromInt(0xFF6B7280);
+
 
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
@@ -181,11 +183,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
           children: [
             _pdfKpi('Total Expenses', '৳ ${numFmt.format(total)}',
-                const PdfColor.fromInt(0xFF4F46E5)),
+                const PdfColor.fromInt(0xFF065F46)),
             _pdfKpi('Entries', '${docs.length}',
                 const PdfColor.fromInt(0xFF0891B2)),
             _pdfKpi('Category Filter', _categoryFilter ?? 'All',
                 const PdfColor.fromInt(0xFF065F46)),
+
           ],
         ),
         pw.SizedBox(height: 16),
@@ -302,6 +305,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 fontWeight: FontWeight.w800,
                 fontSize: 18)),
         iconTheme: const IconThemeData(color: Colors.white),
+
           actions: [
             IconButton(
               tooltip: 'History',
@@ -334,18 +338,23 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       child: CircularProgressIndicator(color: _brand));
               }
               final docs = snap.data?.docs ?? [];
-                final filtered = _categoryFilter == null
-                    ? docs
-                    : docs
-                        .where((d) =>
-                            (d.data() as Map<String, dynamic>)['category'] ==
-                            _categoryFilter)
-                        .toList();
+              final filtered = docs.where((d) {
+                final m = d.data() as Map<String, dynamic>;
+                
+                // Real-life accuracy: exclude voided records from current totals/list
+                if ((m['status'] ?? '') == 'voided') return false;
+                
+                // Apply category filter if set
+                if (_categoryFilter != null && m['category'] != _categoryFilter) return false;
+                
+                return true;
+              }).toList();
 
               num total = 0;
               for (final d in filtered) {
                   total += _n((d.data() as Map<String, dynamic>)['amount']);
               }
+
 
               return Column(
                 children: [
@@ -375,6 +384,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       ),
                     ),
                     const Divider(height: 1),
+
 
                     // ── Summary hero ─────────────────────────────────────────
                     Container(

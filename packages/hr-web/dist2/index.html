@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="উদ্যোগী HR Portal — সংগঠিত কোম্পানি, সফল ব্যবসা" />
+    <meta property="og:title" content="উদ্যোগী HR Portal" />
+    <meta property="og:description" content="Manage payroll, attendance, leaves and more from any device." />
+    <meta property="og:image" content="/logo.png" />
+    <meta name="theme-color" content="#1B3A6B" />
+    <title>উদ্যোগী HR Portal</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <!-- Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+      html { background: #F4F6F9; }
+      #root:empty {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #F4F6F9;
+      }
+      #root:empty::after {
+        content: '';
+        width: 40px;
+        height: 40px;
+        border: 3px solid #1B3A6B;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script type="module" crossorigin src="/assets/index-jAFagZDu.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-QA1udKep.js">
+    <link rel="modulepreload" crossorigin href="/assets/firebase-BrdbnqNB.js">
+    <link rel="modulepreload" crossorigin href="/assets/charts-rZVpff8L.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-B7KEuQle.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

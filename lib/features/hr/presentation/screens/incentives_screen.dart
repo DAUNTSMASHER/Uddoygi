@@ -1,86 +1,71 @@
-// lib/features/hr/presentation/screens/incentive_hr_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/features/incentive_calculation/hr_incentive_calculator_screen.dart';
 import 'package:uddoygi/features/incentive_calculation/incentive_history_screen.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 
+// ── Constants ─────────────────────────────────────────────────────────────
+const _brandGreen = Color(0xFF065F46);
 
+// ─────────────────────────────────────────────────────────────────────────────
 class IncentivehrScreen extends StatelessWidget {
   const IncentivehrScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: const Text('Incentive Dashboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        backgroundColor: const Color(0xFF003087),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
+        title: Text('Incentive Dashboard', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18)),
       ),
-      backgroundColor: const Color(0xB8E2EBFF),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          children: [
-            _HrIncentiveTile(
-              label: 'Incentive Calculator',
-              icon: Icons.calculate,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const HRIncentiveCalculatorScreen()),
-              ),
-            ),
-
-            _HrIncentiveTile(
-              label: 'Incentive History',
-              icon: Icons.history,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const IncentiveHistoryScreen()),
-              ),
-            ),
-          ],
-        ),
+      body: GridView.count(
+        padding: const EdgeInsets.all(UddoygiDesign.space20),
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        childAspectRatio: 1.1,
+        children: [
+          _IncentiveTile(
+            label: 'Calculator',
+            subtitle: 'Estimate rewards',
+            icon: Icons.calculate_rounded,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HRIncentiveCalculatorScreen())),
+          ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+          _IncentiveTile(
+            label: 'History',
+            subtitle: 'Past payouts',
+            icon: Icons.history_rounded,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncentiveHistoryScreen())),
+          ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
+        ],
       ),
     );
   }
 }
 
-class _HrIncentiveTile extends StatelessWidget {
-  final String label;
+class _IncentiveTile extends StatelessWidget {
+  final String label, subtitle;
   final IconData icon;
   final VoidCallback onTap;
-
-  const _HrIncentiveTile({required this.label, required this.icon, required this.onTap});
+  const _IncentiveTile({required this.label, required this.subtitle, required this.icon, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 3,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 38, color: Colors.indigo.shade900),
-              const SizedBox(height: 12),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.black87),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => UCard(
+    onTap: onTap,
+    padding: const EdgeInsets.all(20),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(width: 48, height: 48, decoration: BoxDecoration(color: _brandGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: _brandGreen)),
+        const SizedBox(height: 12),
+        Text(label, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+        Text(subtitle, style: GoogleFonts.plusJakartaSans(fontSize: 10, color: Colors.grey[400], fontWeight: FontWeight.w700)),
+      ],
+    ),
+  );
 }

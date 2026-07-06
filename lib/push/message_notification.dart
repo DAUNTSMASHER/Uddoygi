@@ -38,6 +38,7 @@ class MessageNotificationService {
   Future<void> _attach(User user) async {
     final uid = user.uid;
     final cid = await LocalStorageService.getSavedCompanyId() ?? '';
+    if (cid.isEmpty) return;
     final col = DB.colSync(cid, C.notifications);
 
     _notifSub = col

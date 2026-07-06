@@ -1,7 +1,7 @@
-// lib/main.dart
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_theme.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -106,17 +106,10 @@ class _UddyogiAppState extends State<UddyogiApp> {
       ...appRoutes,
     };
 
-    final ubuntu = GoogleFonts.ubuntuTextTheme();
     return MaterialApp(
       navigatorKey: messageNavigatorKey,
       title: 'Uddyogi - Smart Company Management',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        textTheme: ubuntu,
-        primaryTextTheme: ubuntu,
-      ),
+      theme: buildAppTheme(),
       debugShowCheckedModeBanner: false,
       initialRoute: _computeInitialRoute(),
       routes: mergedRoutes,
@@ -181,10 +174,15 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
       await DevicePresence.instance.start();
 
       // Fetch user doc from new path: data/{companyId}/users/{uid}
+      debugPrint('[Auth] Fetching user data for ${cred.user!.uid} in company $companyId');
       final snap = await DB.colSync(companyId, C.users)
           .doc(cred.user!.uid)
           .get();
-      if (!snap.exists) throw Exception('User data not found.');
+      if (!snap.exists) {
+        debugPrint('[Auth] User data document NOT FOUND at data/$companyId/users/${cred.user!.uid}');
+        throw Exception('User data not found.');
+      }
+      debugPrint('[Auth] User data found: ${snap.data()}');
 
       final data = snap.data()!;
 

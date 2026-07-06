@@ -1,21 +1,25 @@
-// lib/features/marketing/presentation/screens/all_invoices_screen.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'payment_slip_screen.dart';
 
-/// ------- Brand tokens -------
-const Color _indigo  = Color(0xFF0D47A1);
-const Color _accent  = Color(0xFF448AFF);
-const Color _chipBg  = Color(0xFFEFF3FF);
-const Color _surface = Color(0xFFF7F9FC);
+const Color _indigo = Color(0xFF2563EB);
+const Color _indigoDk = Color(0xFF1E3A8A);
+const Color _chipBg = Color(0xFFEFF6FF);
+const Color _surface = Color(0xFFF8FAFC);
+const Color _border = Color(0xFFE2E8F0);
+const Color _fg = Color(0xFF0F172A);
+const Color _muted = Color(0xFF64748B);
+const double _radius = 12.0;
+const double _radiusCard = 16.0;
 
 class AllInvoicesScreen extends StatefulWidget {
   const AllInvoicesScreen({Key? key}) : super(key: key);
@@ -29,11 +33,10 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   String? agentEmail;
   String? agentUid;
 
-  // UI state
   String _query = '';
   DateTime? _fromDate;
   DateTime? _toDate;
-  String _statusFilter = 'All'; // quick status filter
+  String _statusFilter = 'All';
 
   @override
   void initState() {
@@ -44,7 +47,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     _loadUserIdentity();
   }
 
-  // ---------- Helpers (ID / user) ----------
   Future<void> _loadUserIdentity() async {
     final user = FirebaseAuth.instance.currentUser;
     String? email = user?.email;
@@ -71,7 +73,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     }
   }
 
-  // ---------- Small utils ----------
   String _money(num v) => v.toStringAsFixed(2);
   String _niceDate(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
@@ -123,9 +124,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     if (customerId == null || customerId.isEmpty) {
       return CircleAvatar(
         radius: 22,
-        backgroundColor: _indigo.withOpacity(.10),
-        child: Text(_initials(fallbackName),
-            style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
+        backgroundColor: _indigo.withValues(alpha: 0.12),
+        child: Text(_initials(fallbackName), style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, color: _indigo)),
       );
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -139,9 +139,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
         }
         return CircleAvatar(
           radius: 22,
-          backgroundColor: _indigo.withOpacity(.10),
-          child: Text(_initials(name),
-              style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
+          backgroundColor: _indigo.withValues(alpha: 0.12),
+          child: Text(_initials(name), style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, color: _indigo)),
         );
       },
     );
@@ -162,14 +161,14 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: c.withOpacity(.10),
+        color: c.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: c.withOpacity(.35)),
+        border: Border.all(color: c.withValues(alpha: 0.35)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.circle, size: 8, color: c),
         const SizedBox(width: 6),
-        Text(status, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c)),
+        Text(status, style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: c)),
       ]),
     );
   }
@@ -198,7 +197,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
   void _clearRange() => setState(() { _fromDate = null; _toDate = null; });
 
-  // ---------- PDF ----------
   Future<void> _generatePdf(Map<String, dynamic> inv) async {
     final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
 
@@ -284,7 +282,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
-  // ---------- Details ----------
   void _showDetails(String docId, Map<String, dynamic> inv) {
     final itemsRaw = (inv['items'] as List?) ?? [];
     final items = itemsRaw
@@ -298,8 +295,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_radiusCard + 2)),
       ),
       builder: (_) => DraggableScrollableSheet(
         expand: false,
@@ -307,37 +304,32 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
         maxChildSize: .95,
         builder: (_, controller) => SingleChildScrollView(
           controller: controller,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ---------- Header (no overflow) ----------
               Row(
                 children: [
-                  const Icon(Icons.receipt_long, color: _indigo),
-                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(_radius), border: Border.all(color: _border)),
+                    child: const Icon(Icons.receipt_long_rounded, color: _indigo, size: 24),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Invoice #${inv['invoiceNo'] ?? ''}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: _indigo,
-                      ),
+                      style: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w800, color: _fg),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
 
-              // Status
               _statusPill(status),
-
               const SizedBox(height: 12),
-
-              // ---------- Quick facts ----------
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -364,10 +356,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
               const Divider(),
               const SizedBox(height: 8),
 
-              const Text('Items', style: TextStyle(fontWeight: FontWeight.w800)),
+              Text('Items', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 15, color: _fg)),
               const SizedBox(height: 6),
-
-              // ---------- Items ----------
               ...items.map((it) {
                 final qty = (it['qty'] as num?) ?? 0;
                 final unit = (it['unitPrice'] ?? it['unit_price'] ?? 0) as num;
@@ -376,11 +366,11 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.black12),
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(_radius),
+                    border: Border.all(color: _border),
                   ),
                   child: Row(
                     children: [
@@ -388,9 +378,7 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${it['model'] ?? ''}',
-                                style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
+                            Text('${it['model'] ?? ''}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14, color: _fg)),
                             const SizedBox(height: 2),
                             Wrap(
                               spacing: 8,
@@ -417,10 +405,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
               }),
 
               const SizedBox(height: 8),
-              const Divider(),
+              const Divider(height: 1),
               const SizedBox(height: 8),
-
-              // ---------- Totals ----------
               Align(
                 alignment: Alignment.centerRight,
                 child: Column(
@@ -431,20 +417,15 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                     const SizedBox(height: 4),
                     Text(
                       'Grand Total: ৳${_money((inv['grandTotal'] as num?) ?? 0)}',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 16, color: _indigo),
                     ),
                   ],
                 ),
               ),
 
               const SizedBox(height: 16),
-
-              // ---------- Slip status in details ----------
               _buildSlipStatusBanner(docId, inv),
-
               const SizedBox(height: 12),
-
-              // ---------- Actions ----------
               Row(
                 children: [
                   Expanded(
@@ -476,7 +457,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              // Payment slip button
               _buildAddSlipButton(context, docId, inv),
             ],
           ),
@@ -485,7 +465,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
-  // ---------- Edit (bottom sheet form) ----------
   void _showEditInvoice(String docId, Map<String, dynamic> inv) {
     final formKey = GlobalKey<FormState>();
 
@@ -563,8 +542,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_radiusCard + 2)),
       ),
       builder: (_) => DraggableScrollableSheet(
         expand: false,
@@ -579,11 +558,16 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
               key: formKey,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  const Icon(Icons.edit_note, color: _indigo),
-                  const SizedBox(width: 8),
-                  Text('Edit Invoice #${inv['invoiceNo'] ?? ''}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _indigo)),
-                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _border)),
+                    child: const Icon(Icons.edit_note_rounded, color: _indigo, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Edit Invoice #${inv['invoiceNo'] ?? ''}',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 17, fontWeight: FontWeight.w700, color: _fg)),
+                  ),
                   _statusPill(statusLabel),
                 ]),
                 const SizedBox(height: 12),
@@ -943,17 +927,18 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
-  // ---------- UI Bits ----------
   Widget _infoChip(IconData icon, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: _chipBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.black12),
+        color: _chipBg,
+        borderRadius: BorderRadius.circular(_radius),
+        border: Border.all(color: _border),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 14, color: _indigo),
         const SizedBox(width: 6),
-        Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        Text(text, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: _fg)),
       ]),
     );
   }
@@ -961,8 +946,8 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   Widget _tinyTag(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.black12), borderRadius: BorderRadius.circular(10)),
-      child: Text(text, style: const TextStyle(fontSize: 10, color: Colors.black87)),
+      decoration: BoxDecoration(color: _surface, border: Border.all(color: _border), borderRadius: BorderRadius.circular(8)),
+      child: Text(text, style: GoogleFonts.plusJakartaSans(fontSize: 10, color: _muted)),
     );
   }
 
@@ -970,16 +955,18 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_radiusCard),
+        border: Border.all(color: _border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(width: 6, height: 18, decoration: BoxDecoration(color: _indigo, borderRadius: BorderRadius.circular(4))),
-          const SizedBox(width: 8),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800, color: _indigo)),
+          Container(width: 4, height: 18, decoration: BoxDecoration(color: _indigo, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 10),
+          Text(title, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14, color: _indigo)),
         ]),
         const SizedBox(height: 10),
         child,
@@ -987,7 +974,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
-  // ---------- Build ----------
   @override
   Widget build(BuildContext context) {
     if (agentEmail == null && agentUid == null) {
@@ -998,7 +984,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       );
     }
 
-    // 🔥 Directly query ALL invoices belonging to the logged-in agent.
     final invoicesRef = DB.colSync(_cid, C.invoices);
 
     Filter ownerFilter;
@@ -1043,7 +1028,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
                 var docs = invSnap.data?.docs ?? [];
 
-                // Local UI filters: search, date range, status
                 final filtered = docs.where((d) {
                   final m    = d.data();
                   final invN = (m['invoiceNo'] ?? '').toString().toLowerCase();
@@ -1071,7 +1055,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                       (dt.isAtSameMomentAs(_toDate!)   || dt.isBefore(_toDate!));
                 }).toList();
 
-                // Only count/sum invoices where payment is taken
                 final paidOnly = filtered.where((d) {
                   final m = d.data();
                   final pay = m['payment'];
@@ -1085,7 +1068,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
                   0, (sum, d) => sum + ((d.data()['grandTotal'] as num?) ?? 0),
                 );
 
-                // Pending = total of invoices without verified payment
                 final pendingAmount = filtered.fold<num>(0, (sum, d) {
                   final m      = d.data();
                   final slip   = (m['slipStatus'] as String?) ?? '';
@@ -1127,70 +1109,68 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: _indigoDk,
       foregroundColor: Colors.white,
-      title: const Text('All Invoices', style: TextStyle(fontWeight: FontWeight.w800)),
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [_indigo, _accent],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-      ),
+      title: Text('All Invoices', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 18)),
     );
   }
 
   Widget _filtersBar() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: _border)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
       child: Column(
         children: [
           TextField(
             onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            style: GoogleFonts.plusJakartaSans(fontSize: 14),
             decoration: InputDecoration(
-              hintText: 'Search invoice # or customer…',
-              prefixIcon: const Icon(Icons.search),
+              hintText: 'Search invoice or customer',
+              hintStyle: GoogleFonts.plusJakartaSans(color: _muted, fontSize: 14),
+              prefixIcon: Icon(Icons.search_rounded, color: _muted, size: 22),
               filled: true,
-              fillColor: Colors.grey[50],
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.blueGrey.shade100),
-              ),
-              focusedBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-                borderSide: BorderSide(color: _indigo, width: 1.5),
-              ),
+              fillColor: _surface,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(_radius), borderSide: const BorderSide(color: _border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_radius), borderSide: const BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(_radius), borderSide: const BorderSide(color: _indigo, width: 1.5)),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.date_range),
+                  icon: const Icon(Icons.calendar_today_rounded, size: 18),
                   label: Text(
                     (_fromDate == null || _toDate == null)
-                        ? 'Filter by date range'
-                        : '${_niceDate(_fromDate!)} → ${_niceDate(_toDate!)}',
+                        ? 'Date range'
+                        : '${_niceDate(_fromDate!)} – ${_niceDate(_toDate!)}',
+                    style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _indigo,
-                    side: const BorderSide(color: _indigo),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: const BorderSide(color: _border),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
                   ),
                   onPressed: _pickRange,
                 ),
               ),
-              const SizedBox(width: 8),
-              if (_fromDate != null || _toDate != null)
-                IconButton(
-                  tooltip: 'Clear',
+              if (_fromDate != null || _toDate != null) ...[
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  style: IconButton.styleFrom(backgroundColor: _chipBg, foregroundColor: _indigo),
                   onPressed: _clearRange,
-                  icon: const Icon(Icons.clear, color: Colors.redAccent),
+                  icon: const Icon(Icons.clear_rounded, size: 20),
+                  tooltip: 'Clear date',
                 ),
+              ],
             ],
           ),
         ],
@@ -1199,27 +1179,27 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   }
 
   Widget _statusQuickFilters() {
-    const options = ['All','Invoice Created','Payment Requested','Payment Taken','Shipped','Delivered'];
+    const options = ['All', 'Invoice Created', 'Payment Requested', 'Payment Taken', 'Shipped', 'Delivered'];
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: _border))),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: [
           for (final o in options) ...[
-            ChoiceChip(
-              label: Text(o, style: const TextStyle(fontWeight: FontWeight.w600)),
+            FilterChip(
+              label: Text(o, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600)),
               selected: _statusFilter == o,
-              selectedColor: _chipBg,
+              selectedColor: _indigo.withValues(alpha: 0.12),
+              checkmarkColor: _indigo,
+              labelStyle: TextStyle(color: _statusFilter == o ? _indigo : _fg),
+              side: BorderSide(color: _statusFilter == o ? _indigo : _border),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
               onSelected: (_) => setState(() => _statusFilter = o),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: Colors.blueGrey.shade100),
-              ),
             ),
             const SizedBox(width: 8),
-          ]
+          ],
         ]),
       ),
     );
@@ -1228,16 +1208,24 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   Widget _emptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long, size: 64, color: Colors.blueGrey.shade300),
-            const SizedBox(height: 12),
-            const Text('No invoices match your filters', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text('Try clearing the search or adjusting the date/status filters.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.blueGrey.shade600)),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _chipBg,
+                borderRadius: BorderRadius.circular(_radiusCard),
+                border: Border.all(color: _border),
+              ),
+              child: Icon(Icons.receipt_long_rounded, size: 56, color: _muted),
+            ),
+            const SizedBox(height: 20),
+            Text('No invoices match your filters', style: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w700, color: _fg)),
+            const SizedBox(height: 8),
+            Text('Clear search or adjust date and status filters.',
+                textAlign: TextAlign.center, style: GoogleFonts.plusJakartaSans(fontSize: 13, color: _muted)),
           ],
         ),
       ),
@@ -1246,19 +1234,20 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
   Widget _statsHeader({required int count, required double total, double pending = 0}) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        gradient: const LinearGradient(colors: [_indigo, _accent]),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_radiusCard),
+        border: Border.all(color: _border),
+        boxShadow: [BoxShadow(color: _indigo.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
           _statBox('Paid', '$count'),
-          const SizedBox(width: 8),
+          Container(width: 1, height: 36, color: _border),
           _statBox('Received', '৳${_money(total)}'),
-          const SizedBox(width: 8),
+          Container(width: 1, height: 36, color: _border),
           _statBox('Pending', '৳${_money(pending)}', warn: pending > 0),
         ],
       ),
@@ -1267,25 +1256,21 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
 
   Widget _statBox(String label, String value, {bool warn = false}) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(.92), borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          children: [
-            Text(label, style: const TextStyle(fontSize: 11, color: Colors.black87)),
-            const SizedBox(height: 4),
-            Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900,
-                    color: warn ? Colors.orange.shade700 : _indigo)),
-          ],
-        ),
+      child: Column(
+        children: [
+          Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 11, color: _muted, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w800,
+                  color: warn ? Colors.orange.shade700 : _indigo)),
+        ],
       ),
     );
   }
 
-  // ---------- Slip status banner (inside details sheet) ----------
   Widget _buildSlipStatusBanner(String docId, Map<String, dynamic> inv) {
     final slipStatus    = (inv['slipStatus'] as String?) ?? '';
     final slipSubmitted = (inv['slipSubmitted'] as bool?) ?? false;
@@ -1324,22 +1309,23 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
       Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.07),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.25)),
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(_radius),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Row(children: [
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(fontSize: 13,
-                  fontWeight: FontWeight.w700, color: color)),
-              const SizedBox(height: 2),
-              Text(sub, style: const TextStyle(fontSize: 11, color: Colors.black45)),
-            ],
-          )),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+                const SizedBox(height: 2),
+                Text(sub, style: GoogleFonts.plusJakartaSans(fontSize: 11, color: _muted)),
+              ],
+            ),
+          ),
         ]),
       );
 
@@ -1380,7 +1366,6 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
     );
   }
 
-  // ---------- Slip status badge ----------
   Widget _slipBadge(Map<String, dynamic> inv) {
     final slipStatus    = (inv['slipStatus'] as String?) ?? '';
     final slipSubmitted = (inv['slipSubmitted'] as bool?) ?? false;
@@ -1411,18 +1396,17 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
   Widget _miniPill(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: color.withOpacity(0.3)),
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 11, color: color),
       const SizedBox(width: 4),
-      Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+      Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
     ]),
   );
 
-  // ---------- Responsive card ----------
   Widget _invoiceCard(String docId, Map<String, dynamic> inv) {
     final customer   = (inv['customerName'] ?? 'N/A').toString();
     final total      = ((inv['grandTotal'] as num?) ?? 0).toDouble();
@@ -1454,170 +1438,137 @@ class _AllInvoicesScreenState extends State<AllInvoicesScreen> {
         (inv['payment'] as Map)['taken'] == true) ||
         status.toLowerCase().contains('payment taken');
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: slipStatus == 'verified'
-            ? const BorderSide(color: Color(0xFF16A34A), width: 1.5)
-            : BorderSide.none,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_radiusCard),
+        border: Border.all(
+          color: slipStatus == 'verified' ? const Color(0xFF16A34A) : _border,
+          width: slipStatus == 'verified' ? 1.5 : 1,
+        ),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2))],
       ),
-      elevation: 1,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _showDetails(docId, inv),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: LayoutBuilder(
-            builder: (ctx, constraints) {
-              final bool compact = constraints.maxWidth < 360;
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // LEFT: avatar (fixed)
-                      _customerAvatar(customerId, customer),
-
-                      const SizedBox(width: 10),
-
-                      // MIDDLE: name, tracking, qty (flexible)
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Name
-                            Text(
-                              customer,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: compact ? 14 : 16,
-                                fontWeight: FontWeight.w900,
-                                color: _indigo,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(_radiusCard),
+          onTap: () => _showDetails(docId, inv),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                final bool compact = constraints.maxWidth < 360;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _customerAvatar(customerId, customer),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customer,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: compact ? 14 : 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: _fg,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-
-                            // Tracking + Qty in a single row
-                            Row(
-                              children: [
-                                const Icon(Icons.local_shipping_outlined,
-                                    size: 16, color: Colors.black54),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    tracking.isEmpty ? 'No Tracking' : tracking,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.local_shipping_outlined, size: 16, color: _muted),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      tracking.isEmpty ? 'No tracking' : tracking,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: _muted),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Qty: $totalQty',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 8),
-
-                      // RIGHT: top small country, bottom big amount (constrained)
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 140),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              countrySmall.isEmpty ? '🌐' : countrySmall,
-                              textAlign: TextAlign.right,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              '৳${_money(total)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                fontSize: compact ? 16 : 18,
-                                fontWeight: FontWeight.w900,
-                                color: _indigo,
+                                  const SizedBox(width: 6),
+                                  Text('Qty: $totalQty', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: _muted)),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-                  const Divider(height: 1),
-                  const SizedBox(height: 8),
-
-                  // Status + slip badge row
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      _statusPill(status),
-                      _slipBadge(inv),
-                    ],
-                  ),
-
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    Text(
-                      _niceDate(date),
-                      style: const TextStyle(fontSize: 11, color: Colors.black54),
-                    ),
-                    const Spacer(),
-                    // Payment Slip button — only when payment not yet taken/verified
-                    if (!paymentTaken && slipStatus != 'verified')
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => PaymentSlipScreen(
-                            invoiceId:    docId,
-                            invoiceNo:    (inv['invoiceNo'] ?? '').toString(),
-                            invoiceTotal: total,
-                          )),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: _indigo,
-                            borderRadius: BorderRadius.circular(8),
+                            ],
                           ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.upload_file_rounded,
-                                size: 13, color: Colors.white),
-                            const SizedBox(width: 5),
-                            const Text('Add Slip',
-                                style: TextStyle(fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white)),
-                          ]),
                         ),
-                      ),
-                  ]),
-                ],
-              );
-            },
+                        const SizedBox(width: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 120),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                countrySmall.isEmpty ? '🌐' : countrySmall,
+                                textAlign: TextAlign.right,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600, color: _muted),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '৳${_money(total)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: compact ? 15 : 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: _indigo,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Divider(height: 1, color: _border),
+                    const SizedBox(height: 10),
+                    Wrap(spacing: 8, runSpacing: 6, children: [_statusPill(status), _slipBadge(inv)]),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(_niceDate(date), style: GoogleFonts.plusJakartaSans(fontSize: 11, color: _muted)),
+                        const Spacer(),
+                        if (!paymentTaken && slipStatus != 'verified')
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => PaymentSlipScreen(
+                                invoiceId: docId,
+                                invoiceNo: (inv['invoiceNo'] ?? '').toString(),
+                                invoiceTotal: total,
+                              )),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _indigo,
+                                borderRadius: BorderRadius.circular(_radius),
+                              ),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.upload_file_rounded, size: 14, color: Colors.white),
+                                const SizedBox(width: 5),
+                                Text('Add Slip', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                              ]),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),

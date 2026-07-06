@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:uddoygi/services/drive_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -124,16 +124,14 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
   }
 
   Future<List<_UploadedFile>> _uploadPendingFiles(String noticeId) async {
-    final storage = FirebaseStorage.instance;
     final List<_UploadedFile> uploaded = [];
     for (final f in _pendingFiles) {
-      final path =
-          'notices/$noticeId/files/${DateTime.now().millisecondsSinceEpoch}_${f.name}';
-      final ref = storage.ref(path);
-      final task =
-      await ref.putData(f.bytes, SettableMetadata(contentType: f.mime));
-      final url = await task.ref.getDownloadURL();
-      uploaded.add(_UploadedFile(name: f.name, url: url));
+      final result = await DriveStorageService.instance.uploadFromBytes(
+        f.bytes,
+        pathPrefix: 'notices',
+        customName: '${noticeId}_${DateTime.now().millisecondsSinceEpoch}_${f.name}',
+      );
+      uploaded.add(_UploadedFile(name: f.name, url: result.viewUrl));
     }
     return uploaded;
   }

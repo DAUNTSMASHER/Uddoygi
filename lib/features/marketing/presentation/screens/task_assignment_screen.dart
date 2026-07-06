@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:uddoygi/services/drive_storage_service.dart';
 import 'package:mime/mime.dart';
 
 /// ===== Palette (blue bars + white labels) =====
@@ -1080,37 +1080,35 @@ class _TaskActions extends StatelessWidget {
 
       for (final f in picked.files) {
         final String fileName = f.name;
-        final String objectPath = 'tasks/$docId/submissions/$uid/$fileName';
-
-        // Guess a content-type from path/bytes (may be null)
         final String? contentType = lookupMimeType(
           f.path ?? fileName,
-          headerBytes: f.bytes, // safe even if null
+          headerBytes: f.bytes,
         );
 
-        final ref = FirebaseStorage.instance.ref(objectPath);
-
-        UploadTask uploadTask;
-        final metadata = SettableMetadata(contentType: contentType);
-
+        DriveUploadResult driveResult;
         if (f.bytes != null) {
-          uploadTask = ref.putData(f.bytes!, metadata);
+          driveResult = await DriveStorageService.instance.uploadFromBytes(
+            f.bytes!,
+            pathPrefix: 'tasks_submissions',
+            customName: '${docId}_${uid}_${DateTime.now().millisecondsSinceEpoch}_$fileName',
+          );
         } else if (f.path != null) {
-          uploadTask = ref.putFile(File(f.path!), metadata);
+          driveResult = await DriveStorageService.instance.uploadFile(
+            File(f.path!),
+            pathPrefix: 'tasks_submissions',
+            customName: '${docId}_${uid}_${DateTime.now().millisecondsSinceEpoch}_$fileName',
+          );
         } else {
-          continue; // skip unknown source
+          continue;
         }
-
-        final snap = await uploadTask.whenComplete(() {});
-        final url = await snap.ref.getDownloadURL();
 
         attachments.add({
           'name': fileName,
-          'url' : url,
+          'url' : driveResult.viewUrl,
           'type': contentType ?? 'application/octet-stream',
           'size': f.size,
-          'ext' : f.extension, // optional, helpful for UI
-          'path': objectPath,  // optional, if you ever need to delete
+          'ext' : f.extension,
+          'path': driveResult.fileId,
         });
       }
     }

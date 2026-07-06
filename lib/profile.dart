@@ -3,9 +3,11 @@ import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../storage/drive.dart';
-
-const Color _darkBlue = Color(0xFF2A0A4B); // app brand purple
+import 'package:uddoygi/widgets/u_card.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ProfilePage extends StatefulWidget {
   final String userId;
@@ -18,19 +20,23 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   String _cid = '';
+  static const Color _brandColor = Color(0xFF2A0A4B);
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> get _profileStream {
     if (_cid.isEmpty) return const Stream.empty();
     return DB.colSync(_cid, C.users).doc(widget.userId).snapshots();
   }
 
-  Future<void> _pickAndUpload(
-      String field,
-      DocumentReference<Map<String, dynamic>> ref,
-      String empId,
-      FileType type,
-      ) async {
-    final result = await FilePicker.platform.pickFiles(type: type);
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
+    });
+  }
+
+  Future<void> _pickAndUpload(String field, DocumentReference<Map<String, dynamic>> ref, String empId) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
     if (result?.files.single.path == null) return;
     final url = await Navigator.push<String?>(
       context,
@@ -38,7 +44,7 @@ class _ProfilePageState extends State<ProfilePage> {
         builder: (_) => DrivePage(
           uid: widget.userId,
           field: field,
-          userEmail: '',      // DrivePage only needs uid & field here
+          userEmail: '',
           employeeId: empId,
         ),
       ),
@@ -48,99 +54,10 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _editField(
-      DocumentReference<Map<String, dynamic>> ref,
-      String key,
-      String label,
-      String currentValue,
-      ) async {
-    if (key == 'dateOfBirth') {
-      DateTime initial = DateTime.now();
-      final parts = currentValue.split('/');
-      if (parts.length == 3) {
-        final d = int.tryParse(parts[0]);
-        final m = int.tryParse(parts[1]);
-        final y = int.tryParse(parts[2]);
-        if (d != null && m != null && y != null) {
-          initial = DateTime(y, m, d);
-        }
-      }
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: initial,
-        firstDate: DateTime(1900),
-        lastDate: DateTime.now(),
-      );
-      if (picked != null && mounted) {
-        await ref.update({key: Timestamp.fromDate(picked)});
-      }
-      return;
-    }
-
-    final ctrl = TextEditingController(text: currentValue);
-    final updated = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Edit $label'),
-        content: TextField(controller: ctrl, decoration: InputDecoration(labelText: label)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, ctrl.text), child: const Text('Save')),
-        ],
-      ),
-    );
-    if (updated != null && updated != currentValue && mounted) {
-      await ref.update({key: updated});
-    }
-  }
-
-  String _fmtDate(Timestamp ts) {
-    final d = ts.toDate();
-    return '${d.day.toString().padLeft(2, '0')}/'
-        '${d.month.toString().padLeft(2, '0')}/'
-        '${d.year}';
-  }
-
-  Widget _header(String title) {
-    return Container(
-      width: double.infinity,
-      color: _darkBlue,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Text(title,
-          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _row(String label, String value, {VoidCallback? onTap, IconData? icon}) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Icon(icon ?? Icons.info, color: _darkBlue, size: 20),
-      title: Text(label, style: const TextStyle(fontSize: 14)),
-      subtitle: Text(value, style: const TextStyle(fontSize: 12)),
-      trailing: onTap != null ? Icon(Icons.edit, color: _darkBlue, size: 18) : null,
-      onTap: onTap,
-    );
-  }
-  @override
-  void initState() {
-    super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
-  }
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('My Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        backgroundColor: _darkBlue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
+      backgroundColor: const Color(0xFFF8F9FE),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _profileStream,
         builder: (ctx, snap) {
@@ -149,86 +66,195 @@ class _ProfilePageState extends State<ProfilePage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final doc = snap.data!;
-          final data = doc.data()!;
-          final ref = doc.reference;
-          final empId = (data['employeeId'] as String?) ?? '';
+          final d = snap.data!.data()!;
+          final ref = snap.data!.reference;
+          final fullName = (d['fullName'] ?? '').toString();
+          final name = (d['name'] ?? fullName).toString();
+          final designation = (d['designation'] ?? 'Employee').toString();
+          final profileUrl = (d['profilePhotoUrl'] ?? '').toString();
+          final empId = (d['employeeId'] ?? '').toString();
 
-          final fullName = (data['fullName'] as String?)?.trim() ?? '';
-          final name     = (data['name'] as String?) ?? fullName;
-          final phone    = (data['personalPhone'] as String?) ?? '';
-          final dob      = data['dateOfBirth'] is Timestamp
-              ? _fmtDate(data['dateOfBirth'])
-              : (data['dateOfBirth'] as String?) ?? '';
-          final photoUrl = (data['profilePhotoUrl'] as String?) ?? '';
-
-          final cvUrl        = (data['cvUrl'] as String?) ?? '';
-          final ndaUrl       = (data['ndaUrl'] as String?) ?? '';
-          final certs        = (data['certifications'] as List?)?.join(', ') ?? '';
-          final trainingRecs = (data['trainingRecords'] as List?)?.join(', ') ?? '';
-          final prevEmps     = (data['previousEmployers'] as List?)?.join(', ') ?? '';
-          final reviews      = (data['probationReviews'] as List?)?.join(', ') ?? '';
-
-          return ListView(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: [
-              Center(
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: _darkBlue,
-                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                  child: photoUrl.isEmpty
-                      ? Text(name.isNotEmpty ? name[0] : '?',
-                      style: const TextStyle(fontSize: 36, color: Colors.white))
-                      : null,
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Container(
+                  height: 340,
+                  child: Stack(
+                    children: [
+                      Container(
+                        height: 300,
+                        decoration: const BoxDecoration(
+                          color: _brandColor,
+                          borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+                        ),
+                      ),
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                                onPressed: () => Navigator.pop(context),
+                              ),
+                              const Spacer(),
+                              Text('My Profile', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                              const Spacer(),
+                              const SizedBox(width: 48),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 80,
+                        left: 0, right: 0,
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _pickAndUpload('profilePhotoUrl', ref, empId),
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                    child: CircleAvatar(
+                                      radius: 54,
+                                      backgroundColor: Colors.grey[200],
+                                      backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
+                                      child: profileUrl.isEmpty
+                                          ? Text(name.isNotEmpty ? name[0] : '?',
+                                              style: GoogleFonts.outfit(fontSize: 40, color: _brandColor, fontWeight: FontWeight.w900))
+                                          : null,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 0, right: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                      child: const Icon(Icons.camera_alt_rounded, size: 16, color: _brandColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(name, style: GoogleFonts.outfit(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text(designation, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _StatBit(label: 'Experience', value: '4.5 Years'),
+                                const SizedBox(width: 48),
+                                _StatBit(label: 'Performance', value: 'Exceeds'),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton.icon(
-                  icon: const Icon(Icons.camera_alt, color: _darkBlue),
-                  label: const Text('Change Photo', style: TextStyle(color: _darkBlue, fontSize: 14)),
-                  onPressed: () => _pickAndUpload('profilePhotoUrl', ref, empId, FileType.image),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                  child: UCard(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      children: [
+                        _ActionRow(icon: Icons.person_outline_rounded, title: 'Personal Information'),
+                        _Divider(),
+                        _ActionRow(icon: Icons.business_center_outlined, title: 'Work Experience'),
+                        _Divider(),
+                        _ActionRow(icon: Icons.account_balance_wallet_outlined, title: 'Payment Details'),
+                        _Divider(),
+                        _ActionRow(icon: Icons.lock_outline_rounded, title: 'Security Settings'),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
-              _header('Personal Information'),
-              _row('Full Name', fullName,
-                  onTap: () => _editField(ref, 'fullName', 'Full Name', fullName), icon: Icons.person),
-              _row('Name', name,
-                  onTap: () => _editField(ref, 'name', 'Name', name), icon: Icons.account_circle),
-              _row('Date of Birth', dob,
-                  onTap: () => _editField(ref, 'dateOfBirth', 'Date of Birth', dob),
-                  icon: Icons.cake),
-              _row('Phone', phone,
-                  onTap: () => _editField(ref, 'personalPhone', 'Personal Phone', phone),
-                  icon: Icons.phone),
-              _header('Documents & Certifications'),
-              _row('CV', cvUrl,
-                  onTap: () => _pickAndUpload('cvUrl', ref, empId, FileType.any),
-                  icon: Icons.insert_drive_file),
-              _row('NDA', ndaUrl,
-                  onTap: () => _pickAndUpload('ndaUrl', ref, empId, FileType.any),
-                  icon: Icons.description),
-              _row('Certifications', certs,
-                  onTap: () => _editField(ref, 'certifications', 'Certifications', certs),
-                  icon: Icons.school),
-              _row('Training Records', trainingRecs,
-                  onTap: () =>
-                      _editField(ref, 'trainingRecords', 'Training Records', trainingRecs),
-                  icon: Icons.history_edu),
-              _row('Previous Employers', prevEmps,
-                  onTap: () => _editField(
-                      ref, 'previousEmployers', 'Previous Employers', prevEmps),
-                  icon: Icons.business_center),
-              _row('Probation Reviews', reviews,
-                  onTap: () => _editField(
-                      ref, 'probationReviews', 'Probation Reviews', reviews),
-                  icon: Icons.rate_review),
-              const SizedBox(height: 24),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: UCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Account Overview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: _brandColor)),
+                        const SizedBox(height: 16),
+                        _InfoItem(label: 'Employee ID', value: empId),
+                        _InfoItem(label: 'Office Email', value: d['officeEmail'] ?? d['email'] ?? ''),
+                        _InfoItem(label: 'Joining Date', value: '12 Jan 2021'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
-          );
+          ).animate().fadeIn(duration: 400.ms);
         },
+      ),
+    );
+  }
+}
+
+class _StatBit extends StatelessWidget {
+  final String label, value;
+  const _StatBit({required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(label, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w400)),
+        const SizedBox(height: 4),
+        Text(value, style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  const _ActionRow({required this.icon, required this.title});
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.grey[700], size: 22),
+      title: Text(title, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600)),
+      trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey[400], size: 20),
+      onTap: () {},
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Divider(height: 1, color: Colors.grey[100], indent: 56, endIndent: 20);
+  }
+}
+
+class _InfoItem extends StatelessWidget {
+  final String label, value;
+  const _InfoItem({required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

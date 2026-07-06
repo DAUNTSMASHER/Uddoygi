@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:uddoygi/services/drive_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -117,16 +117,28 @@ class _ProductsPageState extends State<ProductsPage> {
 
   // ——— image helpers ———
   Future<void> _pickImage({ImageSource source = ImageSource.gallery}) async {
-    final x = await _picker.pickImage(source: source, imageQuality: 80);
-    if (x != null) setState(() => _pickedImage = File(x.path));
+    try {
+      final x = await _picker.pickImage(source: source, imageQuality: 80);
+      if (x != null) setState(() => _pickedImage = File(x.path));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking image: $e')));
+      }
+    }
   }
 
   Future<String> _uploadImage(File image) async {
-    final ref = FirebaseStorage.instance
-        .ref()
-        .child('product_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await ref.putFile(image);
-    return await ref.getDownloadURL();
+    try {
+      final result = await DriveStorageService.instance.uploadFile(
+        image,
+        pathPrefix: 'product_images',
+        customName: '${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      return result.viewUrl;
+    } catch (e) {
+      rethrow;
+    }
   }
 
   // ——— form helpers ———
@@ -149,32 +161,39 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Future<void> _addProduct() async {
     if (!_formKey.currentState!.validate()) return;
-    String? imageUrl;
-    if (_pickedImage != null) imageUrl = await _uploadImage(_pickedImage!);
+    try {
+      String? imageUrl;
+      if (_pickedImage != null) imageUrl = await _uploadImage(_pickedImage!);
 
-    final data = {
-      'gender': _gender,
-      'model_name': _model.text.trim(),
-      'size': _size.text.trim(),
-      'density': _density.text.trim(),
-      'curl': _curl.text.trim(),
-      'colour': _colour.text.trim(),
-      'unit_price': double.tryParse(_price.text) ?? 0,
-      'notes': _notes.text.trim(),
-      'production_time': _time.text.trim(),
-      'production_cost': double.tryParse(_cost.text) ?? 0,
-      'createdAt': FieldValue.serverTimestamp(),
-      'createdBy': widget.userEmail,
-      'archived': false,
-      if (imageUrl != null) 'imageUrl': imageUrl,
-    };
+      final data = {
+        'gender': _gender,
+        'model_name': _model.text.trim(),
+        'size': _size.text.trim(),
+        'density': _density.text.trim(),
+        'curl': _curl.text.trim(),
+        'colour': _colour.text.trim(),
+        'unit_price': double.tryParse(_price.text) ?? 0,
+        'notes': _notes.text.trim(),
+        'production_time': _time.text.trim(),
+        'production_cost': double.tryParse(_cost.text) ?? 0,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdBy': widget.userEmail,
+        'archived': false,
+        if (imageUrl != null) 'imageUrl': imageUrl,
+      };
 
-    await DB.colSync(_cid, C.products).add(data);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('✅ Product added')),
-    );
-    _resetForm();
+      await DB.colSync(_cid, C.products).add(data);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Product added')),
+      );
+      _resetForm();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add product: $e')));
+      }
+    }
   }
 
   void _prefillForm(Map<String, dynamic> p) {
@@ -366,30 +385,37 @@ class _ProductsPageState extends State<ProductsPage> {
               style: ElevatedButton.styleFrom(backgroundColor: _darkBlue),
               onPressed: () async {
                 if (!_editFormKey.currentState!.validate()) return;
-                String? imageUrl;
-                if (_pickedImage != null) {
-                  imageUrl = await _uploadImage(_pickedImage!);
+                try {
+                  String? imageUrl;
+                  if (_pickedImage != null) {
+                    imageUrl = await _uploadImage(_pickedImage!);
+                  }
+                  final data = {
+                    'gender': _gender,
+                    'model_name': _model.text.trim(),
+                    'size': _size.text.trim(),
+                    'density': _density.text.trim(),
+                    'curl': _curl.text.trim(),
+                    'colour': _colour.text.trim(),
+                    'unit_price': double.tryParse(_price.text) ?? 0,
+                    'notes': _notes.text.trim(),
+                    'production_time': _time.text.trim(),
+                    'production_cost': double.tryParse(_cost.text) ?? 0,
+                    if (imageUrl != null) 'imageUrl': imageUrl,
+                  };
+                  await DB.colSync(_cid, C.products)
+                      .doc(doc.id)
+                      .update(data);
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✅ Product updated')));
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to update product: $e')));
+                  }
                 }
-                final data = {
-                  'gender': _gender,
-                  'model_name': _model.text.trim(),
-                  'size': _size.text.trim(),
-                  'density': _density.text.trim(),
-                  'curl': _curl.text.trim(),
-                  'colour': _colour.text.trim(),
-                  'unit_price': double.tryParse(_price.text) ?? 0,
-                  'notes': _notes.text.trim(),
-                  'production_time': _time.text.trim(),
-                  'production_cost': double.tryParse(_cost.text) ?? 0,
-                  if (imageUrl != null) 'imageUrl': imageUrl,
-                };
-                await DB.colSync(_cid, C.products)
-                    .doc(doc.id)
-                    .update(data);
-                if (!mounted) return;
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ Product updated')));
               },
               child: const Text('Save'),
             ),

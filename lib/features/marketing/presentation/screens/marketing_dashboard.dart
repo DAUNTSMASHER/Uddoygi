@@ -1,30 +1,37 @@
-import 'package:uddoygi/features/common/salary_screen.dart';
+// lib/features/marketing/presentation/screens/marketing_dashboard.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:uddoygi/features/marketing/presentation/screens/sales_screen.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/widgets/u_ai_assistant.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/products.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/renumeration_dashboard.dart';
-import '../widgets/marketing_drawer.dart';
-import 'package:uddoygi/features/common/notification.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/sales_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/campaign_screen.dart';
-import 'package:uddoygi/features/common/stock/stockhistory.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
+import 'package:uddoygi/features/common/stock/stockhistory.dart';
+import 'package:uddoygi/features/common/notification.dart';
+import 'package:uddoygi/features/common/salary_screen.dart';
 import 'package:uddoygi/features/factory/presentation/screens/loan_request_screen.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../widgets/marketing_drawer.dart';
 
-// ── Palette — Blue & White only ───────────────────────────────────────────────
-const Color _bg        = Color(0xFFF0F4FF);
-const Color _primary   = Color(0xFF2563EB);
-const Color _primaryDk = Color(0xFF1E3A8A);
-const Color _primaryLt = Color(0xFFEFF6FF);
-const Color _card      = Color(0xFFFFFFFF);
-const Color _border    = Color(0x1A2563EB);
-const Color _fg        = Color(0xFF0F172A);
-const Color _muted     = Color(0xFF94A3B8);
-const Color _badgeRed  = Color(0xFFDC2626);
+// ── Palette (Marketing Blue) ─────────────────────────────────────────────────
+const _primary    = Color(0xFF0D47A1); // Brand Blue
+const _accent     = Color(0xFF1D5DF1); // Vibrant Blue
+const _bg         = Color(0xFFF6F8FF); // Light Surface
+const _card       = Color(0xFFFFFFFF);
+const _fg         = Color(0xFF1E293B);
+const _muted      = Color(0xFF64748B);
+const _danger     = Color(0xFFEF4444);
+const _primaryDk   = Color(0xFF0D47A1);
+const _primaryLt   = Color(0xFFE3F2FD); // Very Light Blue
+const _badgeRed    = Color(0xFFDC2626);
+const _border      = Color(0xFFE2E8F0);
 
 const Set<String> _runningStages = {
   'submitted to factory',
@@ -56,28 +63,39 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
   String? photoUrl;
   String _search = '';
   int _currentTab = 0;
+  bool _showMetrics = true; // Metrics vs Workspace toggle
 
   Stream<int> _notifStream = Stream.value(0);
   Stream<int> _msgStream   = Stream.value(0);
 
-  final List<_DashItem> _allItems = const [
-    _DashItem('Notices',     Icons.notifications_active_rounded, '/marketing/notices'),
-    _DashItem('Clients',     Icons.people_alt_rounded,           '/marketing/clients'),
-    _DashItem('Sales',       Icons.point_of_sale_rounded,        ''),
-    _DashItem('Welfare',     Icons.volunteer_activism_rounded,   '/common/welfare'),
-    _DashItem('Complaints',  Icons.report_problem_rounded,       '/common/complaints'),
-    _DashItem('Messages',    Icons.chat_bubble_outline_rounded,  '/common/messages'),
-    _DashItem('Tasks',       Icons.task_alt_rounded,             '/marketing/task_assignment'),
-    _DashItem('Campaigns',   Icons.campaign_rounded,             ''),
-    _DashItem('Orders',      Icons.shopping_bag_rounded,         '/marketing/orders'),
-    _DashItem('Loans',       Icons.account_balance_rounded,      ''),
-    _DashItem('Products',    Icons.inventory_2_rounded,          ''),
-    _DashItem('Renumeration',Icons.paid_rounded,                 ''),
-    _DashItem('Stock',       Icons.sync_alt_rounded,             ''),
-    _DashItem('Salary',      Icons.account_balance_wallet_rounded, ''),
-    _DashItem('R&D Request', Icons.science_rounded,              '/rnd/request'),
-    _DashItem('Attendance',  Icons.event_available_rounded,      '/marketing/attendance'),
-  ];
+  final Map<String, List<_DashItem>> _groupedItems = const {
+    'Operations': [
+      _DashItem('Clients',     Icons.people_alt_rounded,           '/marketing/clients'),
+      _DashItem('Orders',      Icons.shopping_bag_rounded,         '/marketing/orders'),
+      _DashItem('Tasks',       Icons.task_alt_rounded,             '/marketing/task_assignment'),
+      _DashItem('Products',    Icons.inventory_2_rounded,          ''),
+    ],
+    'Finance & Growth': [
+      _DashItem('Sales',       Icons.point_of_sale_rounded,        ''),
+      _DashItem('Salary',      Icons.account_balance_wallet_rounded, ''),
+      _DashItem('Loans',       Icons.account_balance_rounded,      ''),
+      _DashItem('Renumeration',Icons.paid_rounded,                 ''),
+      _DashItem('Campaigns',   Icons.campaign_rounded,             ''),
+    ],
+    'Support & Collaboration': [
+      _DashItem('Notices',     Icons.notifications_active_rounded, '/marketing/notices'),
+      _DashItem('Messages',    Icons.chat_bubble_outline_rounded,  '/common/messages'),
+      _DashItem('Complaints',  Icons.report_problem_rounded,       '/common/complaints'),
+      _DashItem('Welfare',     Icons.volunteer_activism_rounded,   '/common/welfare'),
+    ],
+    'Misc': [
+      _DashItem('Stock',       Icons.sync_alt_rounded,             ''),
+      _DashItem('R&D Request', Icons.science_rounded,              '/rnd/request'),
+      _DashItem('Attendance',  Icons.event_available_rounded,      '/marketing/attendance'),
+    ],
+  };
+
+  List<_DashItem> get _allItems => _groupedItems.values.expand((x) => x).toList();
 
   @override
   void initState() {
@@ -248,8 +266,8 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
               child: Text(
                 'Hi, $displayName',
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w700, fontSize: 16),
+                style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w800, fontSize: 18),
               ),
             ),
           ],
@@ -281,73 +299,124 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
             MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
         onMessages: () => Navigator.pushNamed(context, '/common/messages'),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => const UAiAssistant(),
+        ),
+        child: const Icon(Icons.auto_awesome, color: Colors.white),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       body: CustomScrollView(
         slivers: [
           // ── Hero overview card ───────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _OverviewHeader(userEmail: email, userUid: uid),
-            ),
-          ),
-
-          // ── Section label + search ───────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(UddoygiDesign.space20, UddoygiDesign.space24, UddoygiDesign.space20, UddoygiDesign.space12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Row(children: [
-                    Container(
-                      width: 4, height: 18,
-                      decoration: BoxDecoration(
-                        color: _primary,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('Quick Actions',
-                        style: GoogleFonts.inter(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: _fg)),
-                  ]),
-                  const SizedBox(height: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _border),
-                      boxShadow: const [
-                        BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
-                      ],
-                    ),
-                    child: TextField(
-                      onChanged: (v) => setState(() => _search = v),
-                      style: GoogleFonts.inter(fontSize: 14, color: _fg),
-                      decoration: InputDecoration(
-                        hintText: 'Search features…',
-                        hintStyle: GoogleFonts.inter(color: _muted, fontSize: 14),
-                        prefixIcon: const Icon(Icons.search_rounded, color: _muted, size: 20),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      ),
-                    ),
+                  _ModeToggle(
+                    value: _showMetrics,
+                    onChanged: (v) => setState(() => _showMetrics = v),
                   ),
                 ],
               ),
-            ),
+            ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.02, end: 0),
           ),
 
-          // ── Feature grid ─────────────────────────────────────────────────
+          if (_showMetrics)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: UddoygiDesign.space20),
+                child: _OverviewHeader(userEmail: email, userUid: uid)
+                    .animate()
+                    .fadeIn(duration: 500.ms)
+                    .slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+              ),
+            ),
+
+          if (!_showMetrics) ...[
+            // ── Section label + search ───────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(UddoygiDesign.space20, UddoygiDesign.space20, UddoygiDesign.space20, UddoygiDesign.space10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.flash_on_rounded, size: 20, color: _primary),
+                      const SizedBox(width: 10),
+                      Text('Quick Actions',
+                          style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                              color: Theme.of(context).colorScheme.onSurface)),
+                    ]),
+                    const SizedBox(height: UddoygiDesign.space12),
+                    UCard(
+                      padding: EdgeInsets.zero,
+                      child: TextField(
+                        onChanged: (v) => setState(() => _search = v),
+                        style: GoogleFonts.outfit(fontSize: 14, color: _fg),
+                        decoration: InputDecoration(
+                          hintText: 'Search features…',
+                          hintStyle: GoogleFonts.outfit(color: _muted, fontSize: 14),
+                          prefixIcon: const Icon(Icons.search_rounded, color: _muted, size: 20),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Categorized Sections ─────────────────────────────────────────
+            ..._buildCategorizedGrids(context),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildCategorizedGrids(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width >= 1000 ? 6 : width >= 780 ? 5 : width >= 560 ? 4 : 3;
+
+    return _groupedItems.entries.map((entry) {
+      final category = entry.key;
+      final items = entry.value.where((it) => it.title.toLowerCase().contains(_search.toLowerCase())).toList();
+
+      if (items.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+      return SliverMainAxisGroup(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(UddoygiDesign.space24, UddoygiDesign.space24, UddoygiDesign.space24, UddoygiDesign.space12),
+              child: Text(
+                category,
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: _muted,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            padding: const EdgeInsets.symmetric(horizontal: UddoygiDesign.space20),
             sliver: SliverGrid(
               delegate: SliverChildBuilderDelegate(
                 (_, i) {
-                  final it = filtered[i];
+                  final it = items[i];
                   return StreamBuilder<int>(
                     stream: _badgeFor(it.title),
                     builder: (_, snap) => _DashTile(
@@ -355,22 +424,22 @@ class _MarketingDashboardState extends State<MarketingDashboard> {
                       icon: it.icon,
                       badge: snap.data ?? 0,
                       onTap: () => _onTap(it),
-                    ),
+                    ).animate(delay: (i * 50).ms).fadeIn().scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1)),
                   );
                 },
-                childCount: filtered.length,
+                childCount: items.length,
               ),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: cols,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
+                crossAxisSpacing: UddoygiDesign.space12,
+                mainAxisSpacing: UddoygiDesign.space12,
                 childAspectRatio: 1.0,
               ),
             ),
           ),
         ],
-      ),
-    );
+      ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.02, end: 0);
+    }).toList();
   }
 }
 
@@ -432,21 +501,26 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
     Query<Map<String, dynamic>> q = DB.colSync(_cid, C.invoices)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(r.a))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(r.b));
+    
+    // If specific email provided, filter by agent
     if (me.isNotEmpty) q = q.where('agentEmail', isEqualTo: me);
+    
     return q.snapshots().map((s) {
       num sum = 0;
       for (final d in s.docs) {
         final m      = d.data();
         final status = (m['status'] ?? '').toString().toLowerCase();
-        final pay    = (m['payment'] is Map) ? Map<String, dynamic>.from(m['payment']) : const <String, dynamic>{};
-        final paid   = (pay['taken'] == true) || status.contains('payment taken') || status.contains('paid');
-        if (!paid) continue;
+        
+        // Consistent with Admin Logic: Exclude voided/canceled/draft
+        if (status == 'voided' || status == 'canceled' || status == 'draft') continue;
+
         final v = m['grandTotal'];
         if (v is num) sum += v;
       }
       return _money(sum);
     });
   }
+
 
   Stream<String> _totalCampaigns() {
     final r = _dates(_range);
@@ -506,7 +580,7 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [_primary, _primaryDk],
+          colors: [_primary, _accent],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -527,7 +601,7 @@ class _OverviewHeaderState extends State<_OverviewHeader> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text('Overview',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.outfit(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
                         fontSize: 15)),
@@ -584,7 +658,7 @@ class _RangeDropdown extends StatelessWidget {
           isDense: true,
           dropdownColor: _primaryDk,
           icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
-          style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+          style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
           items: const [
             DropdownMenuItem(value: _Range.thisMonth, child: Text('This month')),
             DropdownMenuItem(value: _Range.prevMonth, child: Text('Prev month')),
@@ -653,7 +727,7 @@ class _StatCard extends StatelessWidget {
                             snap.data ?? '—',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.outfit(
                                 color: _fg,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 18),
@@ -662,7 +736,7 @@ class _StatCard extends StatelessWidget {
                     Text(label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.outfit(
                             color: _muted, fontSize: 11, fontWeight: FontWeight.w500)),
                   ],
                 );
@@ -843,11 +917,11 @@ class _DueLoanCardState extends State<_DueLoanCard> {
                 Text(text,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.outfit(
                         color: _fg, fontWeight: FontWeight.w800, fontSize: 18)),
                 const SizedBox(height: 2),
                 Text('Due Loan',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.outfit(
                         color: _muted, fontSize: 11, fontWeight: FontWeight.w500)),
               ],
             ),
@@ -880,7 +954,8 @@ class _DashTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        splashColor: _primary.withValues(alpha: 0.06),
+        splashColor: _primaryDk.withValues(alpha: 0.15),
+        highlightColor: _primaryDk.withValues(alpha: 0.12),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
@@ -888,17 +963,6 @@ class _DashTile extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              // Blue top stripe
-              Positioned(
-                top: 0, left: 0, right: 0,
-                child: Container(
-                  height: 3,
-                  decoration: const BoxDecoration(
-                    color: _primary,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                  ),
-                ),
-              ),
               Center(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
@@ -924,7 +988,7 @@ class _DashTile extends StatelessWidget {
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.outfit(
                               color: _fg,
                               fontSize: fs,
                               fontWeight: FontWeight.w600),
@@ -947,7 +1011,7 @@ class _DashTile extends StatelessWidget {
   }
 }
 
-// ── Bottom navigation bar — 4 items only ─────────────────────────────────────
+// ── Bottom navigation bar — Premium notched design ───────────────────────────
 class _BottomBar extends StatelessWidget {
   final int currentTab;
   final Stream<int> msgStream;
@@ -967,75 +1031,99 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = <_NavItem>[
-      _NavItem('Home',     Icons.home_rounded,          onTap: () => onTabChanged(0)),
-      _NavItem('Clients',  Icons.people_alt_rounded,    onTap: onClients),
-      _NavItem('Sales',    Icons.point_of_sale_rounded, onTap: onSales),
-      _NavItem('Messages', Icons.chat_bubble_rounded,   onTap: onMessages, badge: msgStream),
-    ];
-
-    return SafeArea(
+    return BottomAppBar(
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 8,
+      color: _primaryDk,
       child: Container(
-        decoration: const BoxDecoration(
-          color: _primaryDk,
-          border: Border(top: BorderSide(color: Color(0x22FFFFFF))),
-        ),
+        height: 60,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
-          children: items.asMap().entries.map((e) {
-            final idx      = e.key;
-            final it       = e.value;
-            final selected = idx == currentTab;
-            final color    = selected ? Colors.white : Colors.white54;
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _NavItemWidget(
+              label: 'Home',
+              icon: Icons.home_rounded,
+              selected: currentTab == 0,
+              onTap: () => onTabChanged(0),
+            ),
+            _NavItemWidget(
+              label: 'Clients',
+              icon: Icons.people_alt_rounded,
+              selected: currentTab == 1,
+              onTap: onClients,
+            ),
+            const SizedBox(width: 40), // Space for FAB
+            _NavItemWidget(
+              label: 'Sales',
+              icon: Icons.point_of_sale_rounded,
+              selected: currentTab == 2,
+              onTap: onSales,
+            ),
+            _NavItemWidget(
+              label: 'Messages',
+              icon: Icons.chat_bubble_rounded,
+              selected: currentTab == 3,
+              onTap: onMessages,
+              badge: msgStream,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-            final iconWidget = it.badge == null
-                ? Icon(it.icon, color: color, size: 22)
-                : StreamBuilder<int>(
-                    stream: it.badge,
-                    builder: (_, s) => _BadgeIcon(
-                        icon: it.icon, color: color, count: s.data ?? 0),
-                  );
+class _NavItemWidget extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  final Stream<int>? badge;
 
-            return Expanded(
-              child: InkWell(
-                onTap: () {
-                  onTabChanged(idx);
-                  it.onTap();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (selected)
-                        Container(
-                          width: 32, height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(child: iconWidget),
-                        )
-                      else
-                        iconWidget,
-                      const SizedBox(height: 4),
-                      Text(
-                        it.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: color,
-                            fontWeight: selected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            fontSize: 10),
-                      ),
-                    ],
+  const _NavItemWidget({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? Colors.white : Colors.white54;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: color, size: 22),
+                if (badge != null)
+                  StreamBuilder<int>(
+                    stream: badge,
+                    builder: (_, s) {
+                      final n = s.data ?? 0;
+                      if (n <= 0) return const SizedBox.shrink();
+                      return Positioned(
+                        right: -4, top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          constraints: const BoxConstraints(minWidth: 12, minHeight: 12),
+                          child: Text('$n', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                        ),
+                      );
+                    },
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: GoogleFonts.outfit(color: color, fontSize: 10, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+          ],
         ),
       ),
     );
@@ -1153,4 +1241,46 @@ class _DashItem {
   final IconData icon;
   final String route;
   const _DashItem(this.title, this.icon, this.route);
+}
+class _ModeToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _ModeToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: _primary.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ToggleBtn(label: 'Metrics', active: value, onTap: () => onChanged(true)),
+          _ToggleBtn(label: 'Workplace', active: !value, onTap: () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToggleBtn extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _ToggleBtn({required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? _primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(label, style: GoogleFonts.outfit(color: active ? Colors.white : _muted, fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
+    );
+  }
 }

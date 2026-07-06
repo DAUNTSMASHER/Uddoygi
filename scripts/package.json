@@ -1,0 +1,22 @@
+{
+  "name": "uddoygi-scripts",
+  "version": "1.0.0",
+  "description": "Firebase Admin SDK utility scripts for Uddoygi ERP",
+  "scripts": {
+    "fix":            "node fix_company_data.js",
+    "fix:dry":        "node fix_company_data.js --dry-run",
+    "fix:all":        "node fix_company_data.js --stamp-all",
+    "migrate":        "node migrate_to_new_structure.js",
+    "migrate:dry":    "node migrate_to_new_structure.js --dry-run",
+    "rewrite":        "node rewrite_db_paths.js",
+    "rewrite:dry":    "node rewrite_db_paths.js --dry-run",
+    "diagnose":       "node diagnose_google_signin.js",
+    "setup":          "node setup_company.js",
+    "bootstrap":      "node bootstrap_company.js",
+    "bootstrap:dry":  "node bootstrap_company.js --dry-run",
+    "bootstrap:all":  "node bootstrap_company.js --all"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

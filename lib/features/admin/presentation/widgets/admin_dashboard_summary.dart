@@ -144,6 +144,7 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
       final r = _range();
       Timestamp ts(DateTime d) => Timestamp.fromDate(d);
 
+      // ── REVENUE (Marketing) ──
       final invSnap = await DB.colSync(_cid, C.invoices)
           .where('timestamp', isGreaterThanOrEqualTo: ts(r.start))
           .where('timestamp', isLessThanOrEqualTo:    ts(r.end))
@@ -155,18 +156,25 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
       final Map<String, int>    prodQty = {};
 
       for (final doc in invSnap.docs) {
-        final d   = doc.data();
+        final d      = doc.data();
+        final status = (d['status'] ?? '').toString().toLowerCase();
+        
+        // Accurate real-life Revenue (exclude voided/canceled)
+        if (status == 'voided' || status == 'canceled' || status == 'draft') continue;
+
         final ag  = (d['agentEmail']    ?? 'Unknown').toString();
         final bk  = (d['customerEmail'] ?? d['customerName'] ?? 'Unknown').toString();
         final val = (d['grandTotal'] is num) ? (d['grandTotal'] as num).toDouble() : 0.0;
+        
         sales += val;
         byAgent[ag] = (byAgent[ag] ?? 0) + val;
         byBuyer[bk] = (byBuyer[bk] ?? 0) + val;
+        
         final items = d['items'];
         if (items is List) {
           for (final it in items) {
             if (it is Map) {
-              final nm = (it['name'] ?? it['productName'] ?? '').toString();
+              final nm = (it['model'] ?? it['name'] ?? it['productName'] ?? '').toString();
               final q  = ((it['qty'] ?? it['quantity'] ?? 0) as num).toInt();
               if (nm.isNotEmpty && q > 0) prodQty[nm] = (prodQty[nm] ?? 0) + q;
             }
@@ -174,14 +182,38 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
         }
       }
 
-      final buySnap = await DB.colSync(_cid, C.customers).get();
-      final budSnap = await DB.colSync(_cid, C.budget).limit(1).get();
-      final expSnap = await DB.colSync(_cid, C.expenses).get();
+      // ── EXPENSES (HR & Office) ──
+      // 1. Office Expenses
+      final expSnap = await DB.colSync(_cid, C.expenses)
+          .where('dueDate', isGreaterThanOrEqualTo: ts(r.start))
+          .where('dueDate', isLessThanOrEqualTo:    ts(r.end))
+          .get();
+      
+      // 2. Salaries / Payrolls
+      final salSnap = await DB.colSync(_cid, C.salaries)
+          .where('createdAt', isGreaterThanOrEqualTo: ts(r.start))
+          .where('createdAt', isLessThanOrEqualTo:    ts(r.end))
+          .get();
+
       double exp = 0;
       for (final d in expSnap.docs) {
-        final v = d.data()['amount'];
-        if (v is num) exp += v.toDouble();
+        final data = d.data();
+        if ((data['status'] ?? '').toString().toLowerCase() != 'voided') {
+          final v = data['amount'];
+          if (v is num) exp += v.toDouble();
+        }
       }
+      for (final d in salSnap.docs) {
+        final data = d.data();
+        if ((data['status'] ?? '').toString().toLowerCase() != 'voided') {
+          final v = data['amount'] ?? data['netPay'] ?? data['salary'];
+          if (v is num) exp += v.toDouble();
+        }
+      }
+
+      // ── INSIGHTS & METRICS ──
+      final buySnap = await DB.colSync(_cid, C.customers).get();
+      final budSnap = await DB.colSync(_cid, C.budget).limit(1).get();
 
       String tProd = ''; int tQty = 0;
       if (prodQty.isNotEmpty) {
@@ -212,11 +244,8 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
             .get();
         for (final d in attSnap.docs) {
           final s = (d.data()['status'] ?? '').toString().toLowerCase();
-          if (s == 'present') {
-            present++;
-          } else if (s == 'absent') {
-            absent++;
-          }
+          if (s == 'present') present++;
+          else if (s == 'absent') absent++;
         }
       } catch (_) {}
 
@@ -230,7 +259,7 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
       }
 
       if (mounted) {
-      setState(() {
+        setState(() {
           _sales         = sales;
           _expenses      = exp;
           _budget        = budSnap.docs.isNotEmpty
@@ -248,11 +277,11 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
         });
       }
     } catch (_) {
-      // silently ignore — UI shows placeholders
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
 
   // ── Build ─────────────────────────────────────────────────────────────────
   @override

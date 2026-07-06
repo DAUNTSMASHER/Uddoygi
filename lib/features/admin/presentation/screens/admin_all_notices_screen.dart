@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:uddoygi/services/drive_storage_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 
@@ -38,10 +38,12 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
         for (var file in _pickedFiles) {
           final path = file.path!;
           final name = file.name;
-          final ref = FirebaseStorage.instance.ref('notice_attachments/$name-${DateTime.now().millisecondsSinceEpoch}');
-          await ref.putFile(File(path));
-          final url = await ref.getDownloadURL();
-          fileUrls.add(url);
+          final result = await DriveStorageService.instance.uploadFile(
+            File(path),
+            pathPrefix: 'notice_attachments',
+            customName: '$name-${DateTime.now().millisecondsSinceEpoch}',
+          );
+          fileUrls.add(result.viewUrl);
         }
       }
       await DB.colSync(_cid, C.notices).add({

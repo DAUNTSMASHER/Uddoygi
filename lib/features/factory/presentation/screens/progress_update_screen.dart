@@ -215,6 +215,46 @@ class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
       }
     });
 
+    // ── INVENTORY SYNC: Stock In (Factory Output) ───────────────────────────
+    if (isTerminalMove) {
+      final items = (orderData['items'] as List?) ?? [];
+      for (final itm in items) {
+        final m = Map<String, dynamic>.from(itm);
+        final model = m['model'];
+        final color = m['colour'];
+        final size  = m['size'];
+        final qty   = (m['qty'] as int?) ?? 0;
+
+        if (model != null && qty > 0) {
+          final prodSnap = await (await DB.col(C.products))
+              .where('model_name', isEqualTo: model)
+              .where('colour', isEqualTo: color)
+              .where('size', isEqualTo: size)
+              .limit(1)
+              .get();
+
+          if (prodSnap.docs.isNotEmpty) {
+            final pRef = prodSnap.docs.first.reference;
+            batch.update(pRef, {'stock': FieldValue.increment(qty)});
+          }
+        }
+      }
+    }
+
+
+    // Gap A4: Notify Marketing of completion
+    if (isTerminalMove) {
+      final notifRef = DB.colSync(_cid, C.notifications).doc();
+      batch.set(notifRef, {
+        'title': 'Production Completed: #$_selectedOrderNo',
+        'body': 'Order is ready for address validation and shipping.',
+        'target': 'marketing',
+        'timestamp': now,
+        'type': 'production_complete',
+        'refId': _selectedOrderDocId,
+      });
+    }
+
     await batch.commit();
 
     if (!mounted) return;

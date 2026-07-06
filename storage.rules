@@ -1,12 +1,12 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
+// Storage rules for Uddoygi
+// - payment_slips/*: used for payment proof uploads (marketing) and viewing (HR)
+// - Authenticated users can read/write so proof upload and HR review work
 service firebase.storage {
   match /b/{bucket}/o {
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if request.auth != null;
     }
   }
 }

@@ -160,7 +160,6 @@ class _AdminDetailViewState extends State<AdminDetailView> {
                           final empId = user['employeeId'] ?? '';
                           final name = user['name'] ?? 'Unnamed';
                           final dept = user['department'] ?? 'N/A';
-                          final email = user['email'] ?? user['officeemail'] ?? '';
                           final stat = stats[empId] ??
                               {
                                 'present': 0,
@@ -208,7 +207,6 @@ class _AdminDetailViewState extends State<AdminDetailView> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (_) => UserAttendanceView(
-                                        email: email,
                                         employeeId: empId,
                                       ),
                                     ),

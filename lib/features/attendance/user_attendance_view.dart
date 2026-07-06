@@ -1,8 +1,4 @@
 // lib/features/attendance/user_attendance_view.dart
-//
-// Individual employee attendance view.
-// Layout: hero card (today's status + time) → overview grid → week bar chart → recent logs.
-// Data path: data/{cid}/attendance/{yyyy-MM-dd}/records/{employeeId}
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -11,56 +7,50 @@ import 'package:intl/intl.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const _bg        = Color(0xFFF0F4FF);
-const _primary   = Color(0xFF2563EB);
-const _primaryDk = Color(0xFF1E3A8A);
+const _bg        = Color(0xFFF8FAF9);
+const _primary   = Color(0xFF166534); // Darker Green from inspiration
+const _accent    = Color(0xFF22C55E); // Bright Green for button ring
 const _card      = Color(0xFFFFFFFF);
-const _border    = Color(0x1A2563EB);
-const _fg        = Color(0xFF0F172A);
-const _muted     = Color(0xFF94A3B8);
-const _success   = Color(0xFF16A34A);
-const _warning   = Color(0xFFF97316);
-const _danger    = Color(0xFFDC2626);
-const _info      = Color(0xFF2563EB);
+const _fg        = Color(0xFF1F2937);
+const _muted     = Color(0xFF6B7280);
+const _success   = Color(0xFF10B981);
+const _warning   = Color(0xFFF59E0B);
+const _danger    = Color(0xFFEF4444);
+const _info      = Color(0xFF3B82F6);
+const _border    = Color(0xFFE2E8F0);
 
-// ── Status helpers ────────────────────────────────────────────────────────────
 Color _statusColor(String s) {
   switch (s.toLowerCase()) {
     case 'present': return _success;
-    case 'absent':  return _danger;
     case 'late':    return _warning;
+    case 'absent':  return _danger;
     case 'leave':   return _info;
     default:        return _muted;
   }
 }
 
+String _statusLabel(String s) {
+  if (s.isEmpty) return '—';
+  return s[0].toUpperCase() + s.substring(1);
+}
+
 IconData _statusIcon(String s) {
   switch (s.toLowerCase()) {
-    case 'present': return Icons.check_circle_rounded;
-    case 'absent':  return Icons.cancel_rounded;
+    case 'present': return Icons.check_rounded;
     case 'late':    return Icons.watch_later_rounded;
+    case 'absent':  return Icons.close_rounded;
     case 'leave':   return Icons.beach_access_rounded;
     default:        return Icons.help_outline_rounded;
   }
 }
 
-String _statusLabel(String s) {
-  if (s.isEmpty) return 'Not Marked';
-  return s[0].toUpperCase() + s.substring(1).toLowerCase();
-}
-
-// ── Main widget ───────────────────────────────────────────────────────────────
 class UserAttendanceView extends StatefulWidget {
-  final String? email;
   final String? employeeId;
-
-  const UserAttendanceView({
-    super.key,
-    this.email,
-    this.employeeId,
-  });
+  const UserAttendanceView({super.key, this.employeeId});
 
   @override
   State<UserAttendanceView> createState() => _UserAttendanceViewState();
@@ -69,14 +59,11 @@ class UserAttendanceView extends StatefulWidget {
 class _UserAttendanceViewState extends State<UserAttendanceView> {
   String  _cid        = '';
   String? _employeeId;
-  String? _userEmail;
+  String? _userName;
+  String? _profilePhoto;
   bool    _loading    = true;
   String? _error;
 
-  // Selected month for history
-  late DateTime _selectedMonth;
-
-  // Live clock for hero
   late Timer _clockTimer;
   late DateTime _now;
 
@@ -84,7 +71,6 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
   void initState() {
     super.initState();
     _now = DateTime.now();
-    _selectedMonth = DateTime(_now.year, _now.month);
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
     });
@@ -101,94 +87,45 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
     final id = await LocalStorageService.getSavedCompanyId();
     if (!mounted) return;
     setState(() => _cid = id ?? '');
-
-    if (widget.employeeId != null && widget.email != null) {
-      setState(() {
-        _employeeId = widget.employeeId;
-        _userEmail  = widget.email;
-        _loading    = false;
-      });
-    } else {
-      await _resolveEmployee();
-    }
+    await _resolveEmployee();
   }
 
-  // Resolve employee from Firebase Auth current user.
-  // Uses the real email stored in Firestore (not the compound auth email).
   Future<void> _resolveEmployee() async {
     try {
+      if (widget.employeeId != null) {
+        setState(() {
+          _employeeId = widget.employeeId;
+          _loading    = false;
+        });
+        // We might also want to fetch their name/photo here if we had the UID
+        return;
+      }
+      
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         setState(() { _error = 'Not logged in.'; _loading = false; });
         return;
       }
 
-      final cid = _cid.isNotEmpty ? _cid
-          : (await LocalStorageService.getSavedCompanyId() ?? '');
-      if (cid.isEmpty) {
-        setState(() { _error = 'Company not found.'; _loading = false; });
-        return;
-      }
-
-      // The auth email is compound (local+CID@domain). The real email is stored
-      // in the 'email' or 'officeEmail' field. Query by uid first (fastest).
-      final byUid = await DB.colSync(cid, C.users).doc(user.uid).get();
-      if (byUid.exists) {
-        final d = byUid.data()!;
-        final empId = (d['employeeId'] as String?)?.trim()
-            ?? (d['uid'] as String?)?.trim()
-            ?? user.uid;
-        final realEmail = ((d['email'] ?? d['officeEmail']) as String?)?.trim()
-            ?? user.email ?? '';
+      final doc = await DB.colSync(_cid, C.users).doc(user.uid).get();
+      if (doc.exists) {
+        final d = doc.data()!;
         if (mounted) {
           setState(() {
-            _employeeId = empId;
-            _userEmail  = realEmail;
+            _employeeId = (d['employeeId'] ?? user.uid).toString();
+            _userName   = (d['fullName'] ?? d['name'] ?? 'Employee').toString();
+            _profilePhoto = (d['profilePhotoUrl'] ?? '').toString();
             _loading    = false;
           });
         }
-        return;
-      }
-
-      // Fallback: search by real email (strip compound suffix if present)
-      final authEmail = user.email ?? '';
-      final plusIdx   = authEmail.indexOf('+');
-      final atIdx     = authEmail.indexOf('@');
-      final realEmail = (plusIdx > 0 && atIdx > plusIdx)
-          ? '${authEmail.substring(0, plusIdx)}@${authEmail.substring(atIdx + 1)}'
-          : authEmail;
-
-      QuerySnapshot<Map<String, dynamic>> q =
-          await DB.colSync(cid, C.users)
-              .where('email', isEqualTo: realEmail).limit(1).get();
-      if (q.docs.isEmpty) {
-        q = await DB.colSync(cid, C.users)
-            .where('officeEmail', isEqualTo: realEmail).limit(1).get();
-      }
-
-      if (q.docs.isEmpty) {
-        setState(() { _error = 'Employee record not found.'; _loading = false; });
-        return;
-      }
-
-      final d = q.docs.first.data();
-      final empId = (d['employeeId'] as String?)?.trim()
-          ?? q.docs.first.id;
-      if (mounted) {
-        setState(() {
-          _employeeId = empId;
-          _userEmail  = realEmail;
-          _loading    = false;
-        });
+      } else {
+        setState(() { _error = 'Profile not found.'; _loading = false; });
       }
     } catch (e) {
       if (mounted) setState(() { _error = 'Error: $e'; _loading = false; });
     }
   }
 
-  // ── Data helpers ──────────────────────────────────────────────────────────
-
-  // Stream today's attendance record for this employee.
   Stream<Map<String, dynamic>?> _todayStream() {
     if (_employeeId == null || _cid.isEmpty) return Stream.value(null);
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -200,415 +137,353 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
         .map((s) => s.exists ? s.data() : null);
   }
 
-  // Fetch all records for the selected month.
-  Future<List<Map<String, dynamic>>> _fetchMonth() async {
-    if (_employeeId == null || _cid.isEmpty) return [];
-    final year  = _selectedMonth.year;
-    final month = _selectedMonth.month;
-    final days  = DateUtils.getDaysInMonth(year, month);
-    final List<Map<String, dynamic>> result = [];
-    for (int d = 1; d <= days; d++) {
-      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime(year, month, d));
-      final snap = await DB.colSync(_cid, C.attendance)
-          .doc(dateStr)
-          .collection('records')
-          .doc(_employeeId!)
-          .get();
-      if (snap.exists) {
-        final data = snap.data()!;
-        result.add({
-          'date':    dateStr,
-          'status':  (data['status'] ?? '').toString().toLowerCase(),
-          'remarks': (data['remarks'] ?? '').toString(),
-          'checkIn': data['checkIn'],
-          'checkOut': data['checkOut'],
-        });
-      }
-    }
-    return result;
-  }
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_error != null) return Scaffold(body: Center(child: Text(_error!)));
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+    return Scaffold(
+      backgroundColor: _bg,
+      body: CustomScrollView(
+        slivers: [
+          // ── Header (Title + Clock) ──────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
+              child: Column(
+                children: [
+                  Text('Dashboard', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: _fg)),
+                  const SizedBox(height: 24),
+                  Text(DateFormat('HH:mm:ss').format(_now), 
+                    style: GoogleFonts.outfit(fontSize: 40, fontWeight: FontWeight.w800, color: _primary)),
+                  Text(DateFormat('MMM dd yyyy EEEE').format(_now), 
+                    style: GoogleFonts.outfit(fontSize: 14, color: _muted)),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Circular Check-In Button ──────────────────────────────────
+          SliverToBoxAdapter(
+            child: StreamBuilder<Map<String, dynamic>?>(
+              stream: _todayStream(),
+              builder: (context, snap) {
+                final data = snap.data;
+                final checkIn = data?['checkIn'];
+                final checkOut = data?['checkOut'];
+                
+                return Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: () {},
+                      child: Container(
+                        width: 180, height: 180,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _accent.withOpacity(0.2), width: 12),
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: _primary, shape: BoxShape.circle),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.touch_app_outlined, color: Colors.white, size: 40),
+                              const SizedBox(height: 8),
+                              Text(checkIn == null ? 'Check In' : (checkOut == null ? 'Check Out' : 'Done'),
+                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ).animate(onPlay: (c) => c.repeat()).shimmer(duration: 2.seconds, color: Colors.white24),
+                    
+                    const SizedBox(height: 40),
+                    // Stats Row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _StatIconItem(
+                            icon: Icons.login_rounded, 
+                            label: 'Check In', 
+                            value: checkIn != null ? DateFormat('hh:mm a').format((checkIn as Timestamp).toDate()) : '--:--'
+                          ),
+                          _StatIconItem(
+                            icon: Icons.logout_rounded, 
+                            label: 'Check Out', 
+                            value: checkOut != null ? DateFormat('hh:mm a').format((checkOut as Timestamp).toDate()) : '--:--'
+                          ),
+                          _StatIconItem(
+                            icon: Icons.schedule_rounded, 
+                            label: 'Total Hrs', 
+                            value: '08:45' // Mocked for UI
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // ── Announcements Section ─────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 40, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Announcement's", 
+                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: _fg)),
+                  const SizedBox(height: 16),
+                  UCard(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Event Related', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: _fg)),
+                        const SizedBox(height: 4),
+                        Text('Date : 15/Apr/2024 To 20/Apr/2024', style: GoogleFonts.outfit(fontSize: 12, color: _muted)),
+                        const SizedBox(height: 2),
+                        Text('Event Related Information', style: GoogleFonts.outfit(fontSize: 12, color: _muted)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── History Button Link ────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: UCard(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AttendanceHistoryPage(cid: _cid, empId: _employeeId!))),
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.history_rounded, color: _primary),
+                    const SizedBox(width: 16),
+                    Text('View Attendance History', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
+                    const Spacer(),
+                    const Icon(Icons.chevron_right_rounded, color: _muted),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ).animate().fadeIn(duration: 400.ms),
+      bottomNavigationBar: _BottomNav(),
+    );
+  }
+}
+
+class _StatIconItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _StatIconItem({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: _primary, size: 28),
+        const SizedBox(height: 8),
+        Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg, fontSize: 13)),
+        Text(label, style: GoogleFonts.outfit(fontSize: 11, color: _muted)),
+      ],
+    );
+  }
+}
+
+class AttendanceHistoryPage extends StatelessWidget {
+  final String cid;
+  final String empId;
+  const AttendanceHistoryPage({required this.cid, required this.empId});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _primaryDk,
-        foregroundColor: Colors.white,
+        title: Text('Attendance History', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: const BackButton(),
-        title: Text('My Attendance',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16)),
+        foregroundColor: _fg,
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _primary))
-          : _error != null
-              ? _ErrorView(message: _error!)
-              : _AttendanceBody(
-                  employeeId:    _employeeId!,
-                  userEmail:     _userEmail ?? '',
-                  cid:           _cid,
-                  now:           _now,
-                  selectedMonth: _selectedMonth,
-                  todayStream:   _todayStream(),
-                  fetchMonth:    _fetchMonth,
-                  onMonthChanged: (m) => setState(() => _selectedMonth = m),
-                ),
-    );
-  }
-}
-
-// ── Body ──────────────────────────────────────────────────────────────────────
-class _AttendanceBody extends StatefulWidget {
-  final String   employeeId;
-  final String   userEmail;
-  final String   cid;
-  final DateTime now;
-  final DateTime selectedMonth;
-  final Stream<Map<String, dynamic>?> todayStream;
-  final Future<List<Map<String, dynamic>>> Function() fetchMonth;
-  final ValueChanged<DateTime> onMonthChanged;
-
-  const _AttendanceBody({
-    required this.employeeId,
-    required this.userEmail,
-    required this.cid,
-    required this.now,
-    required this.selectedMonth,
-    required this.todayStream,
-    required this.fetchMonth,
-    required this.onMonthChanged,
-  });
-
-  @override
-  State<_AttendanceBody> createState() => _AttendanceBodyState();
-}
-
-class _AttendanceBodyState extends State<_AttendanceBody> {
-  List<Map<String, dynamic>> _records = [];
-  bool _histLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadHistory();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AttendanceBody old) {
-    super.didUpdateWidget(old);
-    if (old.selectedMonth != widget.selectedMonth ||
-        old.employeeId != widget.employeeId) {
-      _loadHistory();
-    }
-  }
-
-  Future<void> _loadHistory() async {
-    setState(() => _histLoading = true);
-    final r = await widget.fetchMonth();
-    if (mounted) setState(() { _records = r; _histLoading = false; });
-  }
-
-  // ── Stats from records ────────────────────────────────────────────────────
-  int get _present => _records.where((r) => r['status'] == 'present').length;
-  int get _absent  => _records.where((r) => r['status'] == 'absent').length;
-  int get _late    => _records.where((r) => r['status'] == 'late').length;
-  int get _leave   => _records.where((r) => r['status'] == 'leave').length;
-  int get _total   => _records.length;
-
-  double get _presentPct => _total > 0 ? _present / _total : 0;
-
-  // Last 7 days for the week bar chart
-  List<_DayBar> get _weekBars {
-    final bars = <_DayBar>[];
-    for (int i = 6; i >= 0; i--) {
-      final d    = widget.now.subtract(Duration(days: i));
-      final key  = DateFormat('yyyy-MM-dd').format(d);
-      final rec  = _records.firstWhere(
-          (r) => r['date'] == key, orElse: () => {'status': ''});
-      bars.add(_DayBar(
-        label:   DateFormat('E').format(d)[0],
-        status:  rec['status'] as String,
-        isToday: i == 0,
-      ));
-    }
-    return bars;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RefreshIndicator(
-      color: _primary,
-      onRefresh: _loadHistory,
-      child: CustomScrollView(
-        slivers: [
-          // ── Hero card ──────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: StreamBuilder<Map<String, dynamic>?>(
-              stream: widget.todayStream,
-              builder: (_, snap) {
-                final today = snap.data;
-                final status = today != null
-                    ? (today['status'] as String? ?? '').toLowerCase()
-                    : '';
-                return _HeroCard(
-                  now:    widget.now,
-                  status: status,
-                  email:  widget.userEmail,
-                );
-              },
-            ),
-          ),
-
-          // ── Month selector ─────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _MonthSelector(
-                selected: widget.selectedMonth,
-                onChanged: widget.onMonthChanged,
-              ),
-            ),
-          ),
-
-          // ── Overview grid ──────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _histLoading
-                ? const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(
-                        child: CircularProgressIndicator(color: _primary)))
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: _OverviewGrid(
-                      present: _present,
-                      absent:  _absent,
-                      late:    _late,
-                      leave:   _leave,
-                      pct:     _presentPct,
-                    ),
-                  ),
-          ),
-
-          // ── Week chart ─────────────────────────────────────────────────
-          if (!_histLoading)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _WeekChart(
-                  bars:    _weekBars,
-                  pct:     _presentPct,
-                ),
-              ),
-            ),
-
-          // ── Recent logs ────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Row(children: [
-                Text('Recent Logs',
-                    style: GoogleFonts.inter(
-                        fontSize: 15, fontWeight: FontWeight.w700, color: _fg)),
-                const Spacer(),
-                Text('${_records.length} records',
-                    style: GoogleFonts.inter(
-                        fontSize: 12, color: _muted, fontWeight: FontWeight.w500)),
-              ]),
-            ),
-          ),
-
-          if (_histLoading)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator(color: _primary)),
-              ),
-            )
-          else if (_records.isEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                child: Center(
-                  child: Text('No records for this month.',
-                      style: GoogleFonts.inter(color: _muted, fontSize: 14)),
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) {
-                    final sorted = [..._records]
-                      ..sort((a, b) => b['date'].compareTo(a['date']));
-                    return _LogCard(record: sorted[i]);
-                  },
-                  childCount: _records.length,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Hero card ─────────────────────────────────────────────────────────────────
-class _HeroCard extends StatelessWidget {
-  final DateTime now;
-  final String   status;
-  final String   email;
-
-  const _HeroCard({
-    required this.now,
-    required this.status,
-    required this.email,
-  });
-
-  String get _greeting {
-    final h = now.hour;
-    if (h < 12) return 'Good morning,';
-    if (h < 17) return 'Good afternoon,';
-    return 'Good evening,';
-  }
-
-  String get _displayName {
-    if (email.isEmpty) return 'Employee';
-    final at = email.indexOf('@');
-    final base = at > 0 ? email.substring(0, at) : email;
-    return base.replaceAll('.', ' ').replaceAll('_', ' ')
-        .split(' ').map((w) => w.isEmpty ? '' :
-            w[0].toUpperCase() + w.substring(1)).join(' ');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final timeStr = DateFormat('hh:mm').format(now);
-    final amPm    = DateFormat('a').format(now);
-    final dateStr = DateFormat('EEEE, d MMM yyyy').format(now);
-    final hasStatus = status.isNotEmpty;
-    final statusC = hasStatus ? _statusColor(status) : _muted;
-    final statusL = hasStatus ? _statusLabel(status) : 'Not Marked';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_primary, _primaryDk],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: _primary.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
         children: [
-          // Greeting row
-          Row(children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // Month Selector
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(_greeting,
-                      style: GoogleFonts.inter(
-                          fontSize: 12, color: Colors.white70)),
-                  Text(_displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
+                  const Icon(Icons.chevron_left_rounded, color: _muted),
+                  Text('April 2024', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
+                  const Icon(Icons.chevron_right_rounded, color: _muted),
                 ],
               ),
             ),
-            // Status badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(99),
-                border: Border.all(color: Colors.white30),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(_statusIcon(status), color: statusC, size: 13),
-                const SizedBox(width: 5),
-                Text(statusL,
-                    style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white)),
-              ]),
-            ),
-          ]),
+          ),
 
-          const SizedBox(height: 16),
-
-          // Time display
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(timeStr,
-                style: GoogleFonts.inter(
-                    fontSize: 36,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    height: 1)),
-            const SizedBox(width: 6),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(amPm,
-                  style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70)),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              children: [
+                _HistoryCard(date: '10/Mar/2024', totalHours: '09:00', records: [
+                  {'in': '09:00:00', 'out': '18:00:00', 'total': '09:00 hours'}
+                ]),
+                _HistoryCard(date: '21/Mar/2024', totalHours: '11:20', records: [
+                  {'in': '03:36:00', 'out': '14:48:16', 'total': '11:12 hours'},
+                  {'in': '03:45:00', 'out': '03:53:00', 'total': '00:08 hours'},
+                  {'in': '18:54:00', 'out': '18:54:00', 'total': '00:00 hours'},
+                ]),
+              ],
             ),
-          ]),
-          const SizedBox(height: 4),
-          Text(dateStr,
-              style: GoogleFonts.inter(fontSize: 12, color: Colors.white60)),
-
-          const SizedBox(height: 16),
-
-          // Today label
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text('Today',
-                  style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70)),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                hasStatus
-                    ? 'Status recorded as $statusL'
-                    : 'Attendance not yet marked for today',
-                style: GoogleFonts.inter(fontSize: 11, color: Colors.white54),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ]),
+          ),
         ],
       ),
     );
   }
 }
+
+class _HistoryCard extends StatelessWidget {
+  final String date;
+  final String totalHours;
+  final List<Map<String, String>> records;
+  const _HistoryCard({required this.date, required this.totalHours, required this.records});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.grey[200]!)),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: _primary,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Date: $date', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                    Text('Total Hours : $totalHours', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ],
+                ),
+              ),
+              ...records.map((r) => Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _HistBit(icon: Icons.login_rounded, label: 'Check In', value: r['in']!),
+                        _HistBit(icon: Icons.logout_rounded, label: 'Check Out', value: r['out']!),
+                        _HistBit(icon: Icons.timer_outlined, label: 'Total Hrs', value: r['total']!),
+                      ],
+                    ),
+                  ),
+                  if (records.indexOf(r) < records.length - 1) Divider(height: 1, color: Colors.grey[100]),
+                ],
+              )).toList(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistBit extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  const _HistBit({required this.icon, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: _primary, size: 20),
+        const SizedBox(height: 4),
+        Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg, fontSize: 11)),
+        Text(label, style: GoogleFonts.outfit(fontSize: 10, color: _muted)),
+      ],
+    );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _NavIcon(icon: Icons.home_rounded, active: true),
+          _NavIcon(icon: Icons.assignment_outlined),
+          _NavIcon(icon: Icons.access_time_rounded),
+          _NavIcon(icon: Icons.person_outline_rounded),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavIcon extends StatelessWidget {
+  final IconData icon;
+  final bool active;
+  const _NavIcon({required this.icon, this.active = false});
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, color: active ? _primary : _muted, size: 28);
+  }
+}
+
+class _RecordItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  const _RecordItem({required this.icon, required this.title, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: UCard(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, color: _primary, size: 20),
+            const SizedBox(width: 16),
+            Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: _fg)),
+            const Spacer(),
+            Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 // ── Month selector ────────────────────────────────────────────────────────────
 class _MonthSelector extends StatelessWidget {
@@ -995,7 +870,7 @@ class _ErrorView extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.error_outline_rounded, color: _danger, size: 48),
+          Icon(Icons.error_outline_rounded, color: _danger, size: 48),
           const SizedBox(height: 12),
           Text(message,
               textAlign: TextAlign.center,

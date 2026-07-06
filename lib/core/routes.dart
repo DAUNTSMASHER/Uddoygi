@@ -23,6 +23,20 @@ import 'package:uddoygi/features/admin/presentation/screens/admin_research.dart'
 import 'package:uddoygi/features/admin/presentation/screens/company_profile_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_settings_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/smtp_settings_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/company_monitoring_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_order_analysis_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_insights_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_monitoring_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_orders_management_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_products_inventory_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_rdscreen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_campaigns_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_customers_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_team_sales_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_hr_efficiency_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_sales_pipeline_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_net_profitability_screen.dart';
+import 'package:uddoygi/features/admin/presentation/screens/admin_qc_screen.dart';
 
 // 🔬 R&D Department
 import 'package:uddoygi/features/rnd/presentation/screens/rnd_dashboard.dart';
@@ -117,6 +131,8 @@ import 'package:uddoygi/features/common/presentation/screens/messages_screen.dar
 import 'package:uddoygi/features/common/presentation/screens/welfare_screen.dart';
 import 'package:uddoygi/features/common/presentation/screens/complaints_screen.dart';
 import 'package:uddoygi/features/common/salary_screen.dart';
+import 'package:uddoygi/features/common/presentation/screens/supplier_management_screen.dart';
+import 'package:uddoygi/features/common/presentation/screens/supplier_detail_screen.dart';
 
 final Map<String, WidgetBuilder> appRoutes = {
   '/login':              (context) => const LoginScreenWrapper(),
@@ -135,7 +151,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/employees/recommendation': (context) => const SubmitRecommendationPage(),
   '/admin/employees/promotions': (context) => const TransitionsPage(),
   '/admin/reports': (context) => const ReportsScreen(),
-  '/admin/research': (context) => const AdminResearchScreen(),
+  '/admin/research': (context) => const AdminRDScreen(),
   '/admin/reports/incentives': (context) => const IncentiveScreen(),
   '/admin/welfare': (context) => const WelfareSchemeScreen(),
   '/admin/complaints': (context) => const ComplaintsScreen(),
@@ -146,6 +162,17 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/settings':  (context) => const AdminSettingsScreen(),
   '/admin/smtp':      (context) => const SmtpSettingsScreen(),
   '/admin/rnd/approval': (context) => const RndApprovalScreen(),
+  '/admin/monitoring': (context) => const AdminMonitoringScreen(),
+  '/admin/orders/analysis': (context) => const AdminOrdersManagementScreen(),
+  '/admin/products/inventory': (context) => const AdminProductsInventoryScreen(),
+  '/admin/efficiency': (context) => const AdminHREfficiencyScreen(),
+  '/admin/pipeline': (context) => const AdminSalesPipelineScreen(),
+  '/admin/profitability': (context) => const AdminNetProfitabilityScreen(),
+  '/admin/sales/insights': (context) => const AdminInsightsScreen(),
+  '/admin/campaigns': (context) => const AdminCampaignsScreen(),
+  '/admin/customers': (context) => const AdminCustomersScreen(),
+  '/admin/team_sales': (context) => const AdminTeamSalesScreen(),
+  '/admin/qc_reports': (context) => const AdminQCReportScreen(),
 
   // 🔬 R&D Department
   '/rnd/dashboard':  (context) => const RndDashboard(),
@@ -257,13 +284,18 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/factory/salary_overtime': (context) => const SalaryScreen(),
   '/marketing/attendance':  (context) => const FactoryAttendanceScreen(),
   '/admin/attendance':      (context) => const FactoryAttendanceScreen(),
-  '/admin/salary':          (context) => const SalaryScreen(),
+  '/admin/salary':          (context) => const SalaryManagementScreen(),
 
   // 🔁 Common
   '/common/messages': (context) => const MessagesScreen(),
   '/common/welfare': (context) => const WelfareScreen(),
   '/common/complaints': (context) => const ComplaintScreen(),
   '/common/salary': (context) => const SalaryScreen(),
+  '/common/suppliers': (context) => const SupplierManagementScreen(),
+  '/common/suppliers/detail': (context) {
+    final sid = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+    return SupplierDetailScreen(supplierId: sid);
+  },
 };
 
 // ── Helper: auto-loads companyId from local storage ──────────────────────────
@@ -303,9 +335,9 @@ class _CidLoaderState extends State<_CidLoader> {
   }
 }
 
-// ── Helper: wraps HR screens with desktop sidebar on wide screens ─────────────
-// On desktop (≥ 900 px): renders child inside HrWebShell (sidebar + top bar).
-// On mobile: passes child through unchanged.
+// ── Helper: wraps HR screens so top bar (10%) and bottom bar (8%) are consistent ─
+// Always uses HrWebShell: on desktop shows sidebar + top bar; on mobile shows
+// 10% top bar, body, 8% bottom bar. All HR pages get the same bar space.
 class _HrRoute extends StatelessWidget {
   final String title;
   final Widget child;
@@ -313,8 +345,6 @@ class _HrRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
-    if (!isDesktop) return child;
     return HrWebShell(title: title, child: child);
   }
 }

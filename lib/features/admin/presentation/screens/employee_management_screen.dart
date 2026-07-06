@@ -21,12 +21,12 @@ const Color _sub   = Color(0xFF64748B);
 
 // Accent palette for dept chips
 const _deptColors = {
-  'HR & Accounts':  Color(0xFF0891B2),
-  'Marketing':      Color(0xFF16A34A),
-  'Factory':        Color(0xFFB45309),
-  'Admin':          Color(0xFF7C3AED),
-  'R&D':            Color(0xFFDB2777),
-  'Others':         Color(0xFF64748B),
+  'HR & Accounts':  Color(0xFF8B5CF6), // Violet
+  'Marketing':      Color(0xFFA855F7), // Purple
+  'Factory':        Color(0xFFD946EF), // Fuchsia
+  'Admin':          Color(0xFF7C3AED), // Brand
+  'R&D':            Color(0xFF6366F1), // Indigo
+  'Others':         Color(0xFF4C1D95), // Deep Purple
 };
 
 class EmployeeManagementScreen extends StatefulWidget {

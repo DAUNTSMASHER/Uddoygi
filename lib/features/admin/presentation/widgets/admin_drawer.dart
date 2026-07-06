@@ -97,7 +97,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 height: 190,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.indigo, _darkBlue],
+                    colors: [const Color(0xFF4C1D95), _darkBlue],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),

@@ -1,8 +1,11 @@
+// lib/features/auth/presentation/screens/splash_screen.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:uddoygi/main.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,11 +22,9 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     if (kIsWeb) {
-      // On web, skip video entirely — go straight to login immediately.
       WidgetsBinding.instance.addPostFrameCallback((_) => _goToLogin());
     } else {
       _initVideo();
-      // Fallback: always navigate after 4 seconds regardless of video state.
       Timer(const Duration(seconds: 4), _goToLogin);
     }
   }
@@ -37,15 +38,10 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
       setState(() => _controller = ctrl);
+      ctrl.setLooping(true);
       ctrl.play();
-      ctrl.addListener(() {
-        if (ctrl.value.position >= ctrl.value.duration) {
-          _goToLogin();
-        }
-      });
     } catch (_) {
       ctrl.dispose();
-      // Video unavailable — fallback timer will handle navigation.
     }
   }
 
@@ -65,51 +61,81 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // On web this renders briefly before the post-frame callback fires.
-    if (kIsWeb) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF065F46),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.business_center_rounded,
-                  color: Colors.white, size: 56),
-              SizedBox(height: 16),
-              Text('Uddyogi',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.5)),
-              SizedBox(height: 8),
-              Text('HR & Company Management',
-                  style: TextStyle(
-                      color: Colors.white70, fontSize: 14)),
-              SizedBox(height: 32),
-              CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final ctrl = _controller;
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: (ctrl != null && ctrl.value.isInitialized)
-          ? SizedBox.expand(
+      backgroundColor: const Color(0xFF0F172A),
+      body: Stack(
+        children: [
+          // ── Video Background ──────────────────────────────────────────────
+          if (_controller != null && _controller!.value.isInitialized)
+            Positioned.fill(
               child: FittedBox(
                 fit: BoxFit.cover,
                 child: SizedBox(
-                  width: ctrl.value.size.width,
-                  height: ctrl.value.size.height,
-                  child: VideoPlayer(ctrl),
+                  width: _controller!.value.size.width,
+                  height: _controller!.value.size.height,
+                  child: VideoPlayer(_controller!),
                 ),
               ),
-            )
-          : const Center(child: CircularProgressIndicator()),
+            ),
+          
+          // ── Dark Overlay ──────────────────────────────────────────────────
+          Positioned.fill(child: Container(color: Colors.black.withOpacity(0.4))),
+
+          // ── Centered Content ──────────────────────────────────────────────
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 40, offset: const Offset(0, 20))
+                    ],
+                  ),
+                  child: Image.asset('assets/icons/app_icon.png', width: 80, height: 80),
+                ).animate().scale(duration: 800.ms, curve: Curves.easeOutBack).fadeIn(),
+                
+                const SizedBox(height: 32),
+                
+                Text('uddyogi', 
+                  style: GoogleFonts.outfit(
+                    color: Colors.white, 
+                    fontSize: 48, 
+                    fontWeight: FontWeight.w900, 
+                    letterSpacing: -2
+                  ),
+                ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
+                
+                const SizedBox(height: 8),
+                
+                Text('PREMIUM ERP SOLUTIONS', 
+                  style: GoogleFonts.outfit(
+                    color: Colors.white.withOpacity(0.6), 
+                    fontSize: 12, 
+                    fontWeight: FontWeight.w700, 
+                    letterSpacing: 4
+                  ),
+                ).animate().fadeIn(delay: 600.ms),
+              ],
+            ),
+          ),
+
+          // ── Bottom Progress ───────────────────────────────────────────────
+          Positioned(
+            bottom: 60,
+            left: 0, right: 0,
+            child: const Center(
+              child: SizedBox(
+                width: 40, height: 40,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              ),
+            ).animate().fadeIn(delay: 1.seconds),
+          ),
+        ],
+      ),
     );
   }
 }

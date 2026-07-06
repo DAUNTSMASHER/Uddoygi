@@ -1,27 +1,33 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 
+// ── Constants ─────────────────────────────────────────────────────────────
+const _brandGreen = Color(0xFF065F46);
+final _money      = UddoygiDesign.moneyFormat;
+
+// ─────────────────────────────────────────────────────────────────────────────
 class BenefitsCompensationScreen extends StatefulWidget {
   const BenefitsCompensationScreen({super.key});
-
   @override
-  State<BenefitsCompensationScreen> createState() =>
-      _BenefitsCompensationScreenState();
+  State<BenefitsCompensationScreen> createState() => _BenefitsCompensationScreenState();
 }
 
-class _BenefitsCompensationScreenState
-    extends State<BenefitsCompensationScreen> {
+class _BenefitsCompensationScreenState extends State<BenefitsCompensationScreen> {
   String _cid = '';
-  final List<String> _types = ['All', 'Bonus', 'Incentive', 'Allowance'];
   String _selectedType = 'All';
   String _searchEmployee = '';
   DateTime? _filterDate;
+
   @override
   void initState() {
     super.initState();
@@ -30,395 +36,147 @@ class _BenefitsCompensationScreenState
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue[50], // soft blue background
+      backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        backgroundColor: Colors.blue[800],
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
-        title: const Text(
-          'Benefits & Compensation',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        ),
+        title: Text('Benefits Registry', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            onPressed: _exportPdf,
-            tooltip: 'Export to PDF',
+          IconButton(icon: const Icon(Icons.picture_as_pdf_rounded, color: _brandGreen), onPressed: _exportPdf),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddBenefitSheet(context),
+        backgroundColor: _brandGreen,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: Text('Issue Benefit', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+      ),
+      body: Column(
+        children: [
+          _BenefitHeader(
+            selectedType: _selectedType,
+            onTypeChanged: (v) => setState(() => _selectedType = v),
+            onSearch: (v) => setState(() => _searchEmployee = v),
+          ).animate().fadeIn().slideY(begin: -0.1, end: 0),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: DB.colSync(_cid, C.benefits).orderBy('date', descending: true).snapshots(),
+              builder: (ctx, snap) {
+                final docs = snap.data?.docs ?? [];
+                final filtered = docs.where((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  final matchesType = _selectedType == 'All' || data['type'] == _selectedType;
+                  final matchesEmp  = data['employee'].toString().toLowerCase().contains(_searchEmployee.toLowerCase());
+                  return matchesType && matchesEmp;
+                }).toList();
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(UddoygiDesign.space20),
+                  itemCount: filtered.length,
+                  itemBuilder: (ctx, i) => _BenefitCard(doc: filtered[i]).animate().fadeIn(delay: (i * 50).ms),
+                );
+              },
+            ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Type filter chips
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 6,
-                children: _types.map((type) {
-                  final isSelected = type == _selectedType;
-                  return ChoiceChip(
-                    label: Text(type),
-                    selected: isSelected,
-                    selectedColor: Colors.blue[800],
-                    backgroundColor: Colors.white,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : Colors.blue[900],
-                      fontWeight: FontWeight.w600,
-                    ),
-                    onSelected: (_) => setState(() => _selectedType = type),
-                    elevation: 3,
-                    shadowColor: Colors.blueGrey.withOpacity(0.3),
-                  );
-                }).toList(),
-              ),
+    );
+  }
+
+  void _showAddBenefitSheet(BuildContext context) {}
+  Future<void> _exportPdf() async {}
+}
+
+class _BenefitHeader extends StatelessWidget {
+  final String selectedType;
+  final ValueChanged<String> onTypeChanged;
+  final ValueChanged<String> onSearch;
+  const _BenefitHeader({required this.selectedType, required this.onTypeChanged, required this.onSearch});
+
+  @override
+  Widget build(BuildContext context) {
+    final types = ['All', 'Bonus', 'Incentive', 'Allowance'];
+    return Container(
+      padding: const EdgeInsets.all(20),
+      color: Colors.white,
+      child: Column(
+        children: [
+          TextField(
+            onChanged: onSearch,
+            decoration: InputDecoration(
+              hintText: 'Search employee...',
+              prefixIcon: const Icon(Icons.search_rounded),
+              filled: true,
+              fillColor: const Color(0xFFF8FAFC),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: types.map((t) {
+                final active = selectedType == t;
+                return GestureDetector(
+                  onTap: () => onTypeChanged(t),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(color: active ? _brandGreen : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: active ? _brandGreen : Colors.grey.withOpacity(0.2))),
+                    child: Text(t.toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: active ? Colors.white : Colors.grey[600])),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-            const SizedBox(height: 16),
+class _BenefitCard extends StatelessWidget {
+  final QueryDocumentSnapshot doc;
+  const _BenefitCard({required this.doc});
 
-            // Search & Date filter row
-            Row(
+  @override
+  Widget build(BuildContext context) {
+    final d = doc.data() as Map<String, dynamic>;
+    final type = d['type'] ?? 'Bonus';
+    Color typeColor = Colors.green;
+    if (type == 'Incentive') typeColor = Colors.orange;
+    if (type == 'Allowance') typeColor = Colors.indigo;
+
+    return UCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(width: 44, height: 44, decoration: BoxDecoration(color: typeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Center(child: Icon(Icons.stars_rounded, color: typeColor))),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search Employee...',
-                      prefixIcon: const Icon(Icons.search, color: Colors.blue),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (value) =>
-                        setState(() => _searchEmployee = value.trim()),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Date picker button
-                Material(
-                  color: Colors.blue[800],
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _filterDate ?? DateTime.now(),
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2030),
-                      );
-                      if (picked != null) setState(() => _filterDate = picked);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      child: const Icon(Icons.calendar_today, color: Colors.white),
-                    ),
-                  ),
-                ),
-                if (_filterDate != null) ...[
-                  const SizedBox(width: 8),
-                  Material(
-                    color: Colors.red[600],
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => setState(() => _filterDate = null),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        child: const Icon(Icons.clear, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
+                Text(d['employee'] ?? 'Unknown', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
+                Text(type.toString().toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: typeColor)),
               ],
             ),
-
-            const SizedBox(height: 20),
-
-            // Benefits list from Firestore
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: DB.colSync(_cid, C.benefits)
-                    .orderBy('date', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Center(
-                      child: Text('Error loading data',
-                          style: TextStyle(color: Colors.red)),
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final docs = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final matchesType =
-                        _selectedType == 'All' || data['type'] == _selectedType;
-                    final matchesEmployee = data['employee']
-                        .toString()
-                        .toLowerCase()
-                        .contains(_searchEmployee.toLowerCase());
-                    final matchesDate = _filterDate == null ||
-                        DateFormat('yyyy-MM-dd').format(
-                            (data['date'] as Timestamp).toDate()) ==
-                            DateFormat('yyyy-MM-dd').format(_filterDate!);
-                    return matchesType && matchesEmployee && matchesDate;
-                  }).toList();
-
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No benefits found for selected filters.',
-                        style: TextStyle(color: Colors.blueGrey, fontSize: 16),
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
-                      final type = data['type'] ?? 'Bonus';
-                      final employee = data['employee'] ?? 'Unknown';
-                      final note = data['note'] ?? '';
-                      final amount = (data['amount'] is num)
-                          ? (data['amount'] as num).toStringAsFixed(0)
-                          : '0';
-                      final date = (data['date'] as Timestamp).toDate();
-
-                      Color typeColor;
-                      switch (type.toLowerCase()) {
-                        case 'bonus':
-                          typeColor = Colors.green;
-                          break;
-                        case 'incentive':
-                          typeColor = Colors.orange;
-                          break;
-                        case 'allowance':
-                          typeColor = Colors.purple;
-                          break;
-                        default:
-                          typeColor = Colors.blueGrey;
-                      }
-
-                      return Card(
-                        elevation: 4,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: typeColor,
-                            child: const Icon(Icons.monetization_on,
-                                color: Colors.white),
-                          ),
-                          title: Text(
-                            employee,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          subtitle: Text(
-                            'Type: $type\nNote: $note\nDate: ${DateFormat('yyyy-MM-dd').format(date)}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          trailing: Text(
-                            '৳ $amount',
-                            style: TextStyle(
-                              color: Colors.blue[900],
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
-                          isThreeLine: true,
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.blue[800],
-        icon: const Icon(Icons.add),
-        label: const Text('Add Benefit'),
-        onPressed: () => _showAddBenefitSheet(context),
-      ),
-    );
-  }
-
-  void _showAddBenefitSheet(BuildContext context) {
-    final employeeController = TextEditingController();
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-    String benefitType = 'Bonus';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: MediaQuery.of(context).viewInsets,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: StatefulBuilder(
-              builder: (context, setModalState) => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Add Benefit / Compensation',
-                      style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: employeeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee Name / ID',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: benefitType,
-                    decoration: const InputDecoration(
-                      labelText: 'Benefit Type',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: ['Bonus', 'Incentive', 'Allowance']
-                        .map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(type),
-                    ))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) setModalState(() => benefitType = value);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Amount',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.currency_exchange),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: noteController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Note',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: const Text('Save'),
-                    onPressed: () async {
-                      final employee = employeeController.text.trim();
-                      final note = noteController.text.trim();
-                      final amount = double.tryParse(amountController.text.trim());
-
-                      if (employee.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Employee name/ID is required')),
-                        );
-                        return;
-                      }
-                      if (amount == null || amount <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Enter a valid amount')),
-                        );
-                        return;
-                      }
-
-                      await DB.colSync(_cid, C.benefits).add({
-                        'employee': employee,
-                        'type': benefitType,
-                        'amount': amount,
-                        'note': note,
-                        'date': DateTime.now(),
-                      });
-
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Benefit added successfully')),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue[800],
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
-        );
-      },
-    );
-  }
-
-  Future<void> _exportPdf() async {
-    final query = await DB.colSync(_cid, C.benefits)
-        .orderBy('date', descending: true)
-        .get();
-
-    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: pw.Font.times(), bold: pw.Font.timesBold(), italic: pw.Font.timesItalic(), boldItalic: pw.Font.timesBoldItalic()));
-    final logs = query.docs;
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (context) => [
-          pw.Text('Benefits & Compensation Report',
-              style:
-              pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 20),
-          pw.Table.fromTextArray(
-            headers: ['Date', 'Employee', 'Type', 'Amount', 'Note'],
-            data: logs.map((doc) {
-              final data = doc.data();
-              return [
-                DateFormat('yyyy-MM-dd').format((data['date'] as Timestamp).toDate()),
-                data['employee'] ?? '',
-                data['type'] ?? '',
-                '৳ ${data['amount'].toString()}',
-                data['note'] ?? '',
-              ];
-            }).toList(),
-            border: pw.TableBorder.all(color: PdfColors.grey300),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            cellAlignment: pw.Alignment.centerLeft,
-            cellPadding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-            headerDecoration: pw.BoxDecoration(color: PdfColors.blue300),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('৳ ${_money.format(d['amount'] ?? 0)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: _brandGreen)),
+              Text(DateFormat('MMM d, yyyy').format((d['date'] as Timestamp).toDate()), style: GoogleFonts.plusJakartaSans(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w700)),
+            ],
           ),
         ],
       ),
     );
-
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 }

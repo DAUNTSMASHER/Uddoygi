@@ -14,13 +14,21 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
-const Color _indigo = Color(0xFF0D47A1);
-const Color _accent = Color(0xFF448AFF);
+// Design system: clean, low-fatigue invoice form
+const Color _indigo = Color(0xFF2563EB);
+const Color _indigoDk = Color(0xFF1E3A8A);
+const Color _accent = Color(0xFF3B82F6);
 const Color _cardBG = Colors.white;
-const Color _chipBg = Color(0xFFEFF3FF);
+const Color _chipBg = Color(0xFFEFF6FF);
+const Color _border = Color(0xFFE2E8F0);
+const Color _fg = Color(0xFF0F172A);
+const Color _muted = Color(0xFF64748B);
+const double _radius = 12.0;
+const double _radiusCard = 16.0;
 
 class NewInvoicesScreen extends StatefulWidget {
   const NewInvoicesScreen({Key? key}) : super(key: key);
@@ -75,6 +83,11 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   String _phoneIso = '';      // e.g., BD
   String _phoneDial = '';     // e.g., +880
   String _phoneNational = ''; // national part only
+
+  // UI: which step is in view (for step indicator)
+  int _currentStep = 0;
+  final ScrollController _scrollController = ScrollController();
+  final List<GlobalKey> _stepKeys = List.generate(4, (_) => GlobalKey());
 
   // Pipeline (limit to Payment Taken)
   static const List<String> kFullSteps = [
@@ -149,6 +162,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _shippingController.dispose();
     _taxController.dispose();
     _noteController.dispose();
@@ -255,17 +269,22 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     labelText: label,
     isDense: true,
     filled: true,
-    fillColor: Colors.grey[50],
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    fillColor: const Color(0xFFF8FAFC),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFB0BEC5)),
+      borderRadius: BorderRadius.circular(_radius),
+      borderSide: const BorderSide(color: _border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(_radius),
+      borderSide: const BorderSide(color: _border),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(_radius),
       borderSide: const BorderSide(color: _indigo, width: 1.5),
     ),
-    labelStyle: const TextStyle(fontSize: 12),
+    labelStyle: GoogleFonts.plusJakartaSans(fontSize: 13, color: _muted),
+    hintStyle: GoogleFonts.plusJakartaSans(color: _muted),
   );
 
   // ---------- id helpers ----------
@@ -583,7 +602,75 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     };
 
     try {
-      await (await DB.col(C.invoices)).doc(invoiceNo).set(payload);
+      final batch = FirebaseFirestore.instance.batch();
+      
+      // 1. Save Invoice
+      final invRef = (await DB.col(C.invoices)).doc(invoiceNo);
+      batch.set(invRef, payload);
+      
+      // 2. CREATE WORK ORDER (Synchronization Link)
+      final woRef = (await DB.col(C.workOrders)).doc(tracking);
+      final woPayload = {
+        'workOrderNo': tracking,
+        'relatedInvoiceNo': invoiceNo,
+        'buyerName': selectedCustomerName,
+        'customerId': selectedCustomerId,
+        'agentEmail': agentEmail,
+        'timestamp': Timestamp.fromDate(selectedDate),
+        'createdAt': FieldValue.serverTimestamp(),
+        'items': invoiceItems,
+        'totalPieces': _totalPieces(),
+        'status': 'Pending Admin Review',
+        'currentStage': 'Sales Approval',
+        'priority': 'Normal',
+        'revenueValue': grand,
+      };
+      batch.set(woRef, woPayload);
+
+      // 3. INVENTORY SYNC: Reduce Stock (Stock Out)
+      for (final itm in invoiceItems) {
+        final model = itm['model'];
+        final color = itm['colour'];
+        final size  = itm['size'];
+        final qty   = (itm['qty'] as int?) ?? 0;
+        
+        final prodSnap = await (await DB.col(C.products))
+            .where('model_name', isEqualTo: model)
+            .where('colour', isEqualTo: color)
+            .where('size', isEqualTo: size)
+            .limit(1)
+            .get();
+            
+        if (prodSnap.docs.isNotEmpty) {
+          final pRef = prodSnap.docs.first.reference;
+          batch.update(pRef, {'stock': FieldValue.increment(-qty)});
+        }
+      }
+
+      // 4. FINANCIAL SYNC: Cash In (if payment taken)
+      if (_isPaymentTaken) {
+        final amt = double.tryParse(_paymentAmountCtl.text) ?? 0.0;
+        if (amt > 0) {
+          final profRef = DB.colSync(_cid, 'company_profile').doc('main');
+          batch.update(profRef, {'cash_in': FieldValue.increment(amt)});
+          
+          final cfRef = (await DB.col(C.cashFlow)).doc();
+          batch.set(cfRef, {
+            'amount': amt,
+            'type': 'cash_in',
+            'category': 'Sales Revenue',
+            'note': 'Payment for Invoice #$invoiceNo',
+            'invoiceNo': invoiceNo,
+            'agentEmail': agentEmail,
+            'createdAt': FieldValue.serverTimestamp(),
+            'status': 'confirmed',
+          });
+        }
+      }
+
+      await batch.commit();
+
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('✅ Invoice saved (Tracking: $tracking)')),
@@ -799,12 +886,14 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
+    const List<String> stepLabels = ['Buyer & Date', 'Items', 'Shipping', 'Charges'];
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F9FC),
+      backgroundColor: const Color(0xFFF0F4FF),
       appBar: AppBar(
-        backgroundColor: _indigo,
+        backgroundColor: _indigoDk,
         foregroundColor: Colors.white,
-        title: const Text('New Invoice', style: TextStyle(fontWeight: FontWeight.w700)),
+        elevation: 0,
+        title: Text('New Invoice', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 18)),
       ),
       bottomNavigationBar: _summaryBar(
         subtotal: _subtotal(),
@@ -907,20 +996,24 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
         },
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 110),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _onboardingCard(),
-
-                // Buyer & Date
-                _section(
-                  icon: Icons.person_pin_circle,
-                  title: 'Buyer & Date',
+        child: Column(
+          children: [
+            _stepStrip(stepLabels),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 120),
+                child: Form(
+                  key: _formKey,
                   child: Column(
                     children: [
+                      _onboardingCard(),
+                      _sectionKeyed(
+                        0,
+                        icon: Icons.person_pin_circle,
+                        title: 'Buyer & Date',
+                        child: Column(
+                          children: [
                       StreamBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
                         stream: _customersStream(),
                         builder: (context, snapshot) {
@@ -1020,11 +1113,9 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                           ),
                         ],
                       ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-
-                // Status
                 _section(
                   icon: Icons.flag,
                   title: 'Status (up to Payment Taken)',
@@ -1067,14 +1158,13 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                         alignment: Alignment.centerLeft,
                         child: TextButton.icon(
                           onPressed: _addItem,
-                          icon: const Icon(Icons.add, color: _indigo),
-                          label: const Text('Add Item', style: TextStyle(color: _indigo)),
+                          icon: const Icon(Icons.add_rounded, color: _indigo, size: 20),
+                          label: Text('Add item', style: GoogleFonts.plusJakartaSans(color: _indigo, fontWeight: FontWeight.w600)),
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 // Shipping Address (NEW)
                 _section(
                   icon: Icons.local_shipping_outlined,
@@ -1156,7 +1246,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
 
                 // Charges & Notes
                 _section(
-                  icon: Icons.local_shipping,
+                  icon: Icons.receipt_long_rounded,
                   title: 'Charges & Notes',
                   child: Column(
                     children: [
@@ -1216,7 +1306,7 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                           });
                         },
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Payment Taken'),
+                        title: Text('Payment taken', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600)),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
                       AnimatedOpacity(
@@ -1306,45 +1396,109 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
           ),
         ),
       ),
+        ],
+      ),
+    ),
+    );
+  }
+
+  Widget _stepStrip(List<String> labels) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: BoxDecoration(
+        color: _cardBG,
+        border: Border(bottom: BorderSide(color: _border)),
+      ),
+      child: Row(
+        children: List.generate(labels.length * 2 - 1, (idx) {
+          if (idx.isOdd) {
+            final step = idx ~/ 2;
+            return Expanded(
+              child: Container(
+                height: 2,
+                margin: const EdgeInsets.only(bottom: 20),
+                color: step <= _currentStep ? _indigo : _border,
+              ),
+            );
+          }
+          final i = idx ~/ 2;
+          final active = _currentStep == i;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _currentStep = i);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final ctx = _stepKeys[i].currentContext;
+                  if (ctx != null) {
+                    Scrollable.ensureVisible(ctx,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        alignment: 0.1);
+                  }
+                });
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: active ? _indigo : _chipBg,
+                      border: Border.all(
+                          color: active ? _indigo : _border, width: 1.2),
+                    ),
+                    child: Text(
+                      '${i + 1}',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: active ? Colors.white : _muted),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    labels[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                        color: active ? _indigo : _muted),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 
   // ----- widgets -----
   Widget _onboardingCard() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F0FE),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _indigo.withOpacity(.25)),
+        color: _chipBg,
+        borderRadius: BorderRadius.circular(_radius),
+        border: Border.all(color: _indigo.withValues(alpha: 0.2)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.lightbulb_outline, color: _indigo),
+          Icon(Icons.tips_and_updates_outlined, color: _indigo, size: 20),
           const SizedBox(width: 10),
           Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(color: Colors.black87, fontSize: 12),
-                children: const [
-                  TextSpan(
-                      text: 'How this works:\n',
-                      style: TextStyle(fontWeight: FontWeight.w800, color: _indigo)),
-                  TextSpan(
-                      text:
-                      '1) Fill buyer, items, charges and (optionally) payment → Save to create the invoice with an auto tracking number.\n'),
-                  TextSpan(text: '2) To start production, go to the '),
-                  TextSpan(text: 'Work Orders', style: TextStyle(fontWeight: FontWeight.w800)),
-                  TextSpan(
-                      text:
-                      ' section and create a work order using the same tracking number.\n'),
-                  TextSpan(
-                      text:
-                      '3) Use the buttons at the bottom to Save PDF, Share/Send, or Print—just like the sample layout.'),
-                ],
-              ),
+            child: Text(
+              'Fill buyer, items, shipping & charges → Save. Use the tracking number in Work Orders to start production.',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12, color: _fg, height: 1.35),
             ),
           ),
         ],
@@ -1355,16 +1509,20 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   Widget _helpStrip({required IconData icon, required String text}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: _chipBg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(_radius),
+        border: Border.all(color: _border),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: _indigo, size: 16),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 11))),
+          Icon(icon, color: _indigo, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+              child: Text(text,
+                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: _fg, height: 1.35))),
         ],
       ),
     );
@@ -1396,15 +1554,24 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
         : <String>[];
     sizes.sort();
 
-    return Card(
-      color: _cardBG,
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _cardBG,
+        borderRadius: BorderRadius.circular(_radiusCard),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0x06000000),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
             Row(
               children: [
                 Expanded(
@@ -1486,14 +1653,16 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
                     children: [
                       Switch(
                         value: (itm['autoPrice'] as bool?) ?? true,
-                        activeColor: _indigo,
+                        activeTrackColor: _indigo.withValues(alpha: 0.5),
+                        thumbColor: WidgetStateProperty.resolveWith((states) =>
+                            states.contains(WidgetState.selected) ? _indigo : null),
                         onChanged: (val) {
                           setState(() => itm['autoPrice'] = val);
                           _recomputeItem(i);
                         },
                       ),
                       const SizedBox(width: 6),
-                      const Text('Auto price', style: TextStyle(fontSize: 12)),
+                      Text('Auto price', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: _fg)),
                       const SizedBox(width: 4),
                       const Tooltip(
                         message:
@@ -1524,17 +1693,22 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
-              child: Chip(
-                backgroundColor: _chipBg,
-                label: Text(
-                  'Line Total: ৳${_money((items[i]['lineTotal'] as num?)?.toDouble() ?? 0)}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _chipBg,
+                  borderRadius: BorderRadius.circular(_radius),
+                  border: Border.all(color: _border),
+                ),
+                child: Text(
+                  'Line total ৳${_money((items[i]['lineTotal'] as num?)?.toDouble() ?? 0)}',
+                  style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.w700, fontSize: 13, color: _indigo),
                 ),
               ),
             ),
           ],
         ),
-      ),
     );
   }
 
@@ -1559,10 +1733,10 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
               const SizedBox(width: 6),
               Text(
                 kFullSteps[i],
-                style: TextStyle(
+                style: GoogleFonts.plusJakartaSans(
                   fontSize: 11,
                   color: active ? Colors.white : _indigo,
-                  fontWeight: active ? FontWeight.bold : FontWeight.w600,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
                 ),
               ),
             ],
@@ -1572,36 +1746,56 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     );
   }
 
+  Widget _sectionKeyed(int keyIndex, {required IconData icon, required String title, required Widget child}) {
+    return KeyedSubtree(
+      key: _stepKeys[keyIndex],
+      child: _section(icon: icon, title: title, child: child),
+    );
+  }
+
   Widget _section({required IconData icon, required String title, required Widget child}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: _cardBG,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2))],
+        borderRadius: BorderRadius.circular(_radiusCard),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0x08000000),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              gradient: LinearGradient(colors: [_indigo, _accent]),
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: Colors.white,
-                  child: Icon(icon, size: 16, color: _indigo),
+                Container(
+                  width: 4,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: _indigo,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
+                const SizedBox(width: 10),
+                Icon(icon, size: 20, color: _indigo),
                 const SizedBox(width: 8),
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15, fontWeight: FontWeight.w700, color: _fg),
+                ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
             child: child,
           ),
         ],
@@ -1612,20 +1806,25 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
   Widget _infoTile(String label, String value, {IconData? icon}) {
     return Container(
       height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFB0BEC5)),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(_radius),
+        border: Border.all(color: _border),
       ),
       child: Row(
         children: [
           if (icon != null) ...[
             Icon(icon, size: 18, color: _indigo),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
           ],
-          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w700, color: _indigo)),
-          Flexible(child: Text(value, overflow: TextOverflow.ellipsis)),
+          Text('$label: ',
+              style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600, fontSize: 13, color: _indigo)),
+          Flexible(
+              child: Text(value,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.plusJakartaSans(fontSize: 13, color: _fg))),
         ],
       ),
     );
@@ -1642,92 +1841,88 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
     required VoidCallback onPrint,
   }) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, -2))],
+      decoration: BoxDecoration(
+        color: _cardBG,
+        border: Border(top: BorderSide(color: _border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
-                  child: DefaultTextStyle(
-                    style: const TextStyle(fontSize: 12, color: Colors.black87),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Subtotal: ৳${_money(subtotal)}'),
-                        Text('Shipping: ৳${_money(shipping)}'),
-                        Text('Tax: ৳${_money(tax)}'),
-                        const SizedBox(height: 2),
-                        Text('Grand: ৳${_money(grand)}',
-                            style: const TextStyle(fontWeight: FontWeight.w900, color: _indigo)),
-                      ],
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Subtotal ৳${_money(subtotal)}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: _muted)),
+                      Text('Shipping ৳${_money(shipping)} · Tax ৳${_money(tax)}',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: _muted)),
+                      const SizedBox(height: 2),
+                      Text('Grand ৳${_money(grand)}',
+                          style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16, fontWeight: FontWeight.w800, color: _indigo)),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
+                const SizedBox(width: 12),
+                FilledButton.icon(
                   onPressed: onSubmit,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Save'),
-                  style: ElevatedButton.styleFrom(
+                  icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+                  label: Text('Save invoice', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+                  style: FilledButton.styleFrom(
                     backgroundColor: _indigo,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onPdf,
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Save PDF'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _indigo,
-                      side: const BorderSide(color: _indigo),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onShare,
-                    icon: const Icon(Icons.share),
-                    label: const Text('Share'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _indigo,
-                      side: const BorderSide(color: _indigo),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onPrint,
-                    icon: const Icon(Icons.print),
-                    label: const Text('Print'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _indigo,
-                      side: const BorderSide(color: _indigo),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
+                _bottomAction(Icons.picture_as_pdf_outlined, 'PDF', onPdf),
+                const SizedBox(width: 8),
+                _bottomAction(Icons.share_rounded, 'Share', onShare),
+                const SizedBox(width: 8),
+                _bottomAction(Icons.print_rounded, 'Print', onPrint),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomAction(IconData icon, String label, VoidCallback onTap) {
+    return Expanded(
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _indigo,
+          side: const BorderSide(color: _border),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18),
+            const SizedBox(width: 6),
+            Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -1755,10 +1950,10 @@ class _NewInvoicesScreenState extends State<NewInvoicesScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.check_circle, color: Colors.green),
-                    const SizedBox(width: 8),
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 28),
+                    const SizedBox(width: 12),
                     Text('Invoice $invoiceNo created',
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 17, color: _fg)),
                   ],
                 ),
                 const SizedBox(height: 8),

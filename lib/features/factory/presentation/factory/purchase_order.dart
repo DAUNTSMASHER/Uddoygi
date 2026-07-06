@@ -1,12 +1,12 @@
-// lib/features/factory/presentation/factory/purchase_order_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
-
-const Color _darkBlue = Color(0xFF40062D);
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 
 class PurchaseOrdersScreen extends StatefulWidget {
   const PurchaseOrdersScreen({Key? key}) : super(key: key);
@@ -24,6 +24,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
   final _agentController    = TextEditingController();
 
   String? _selectedInvoice;
+  final Color _heroMaroon = const Color(0xFF40062D);
 
   @override
   void initState() {
@@ -51,7 +52,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Purchase order accepted')),
+        const SnackBar(content: Text('✅ Purchase order accepted'), behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -62,22 +63,21 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reject Purchase Order'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusL)),
+        title: Text('Reject Purchase Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
         content: TextFormField(
           autofocus: true,
           decoration: const InputDecoration(labelText: 'Reason / Recommendation'),
           onChanged: (v) => recommendation = v,
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
             onPressed: () {
               if ((recommendation ?? '').trim().isEmpty) return;
-              Navigator.of(ctx).pop();
+              Navigator.pop(ctx);
             },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
             child: const Text('Submit'),
           ),
         ],
@@ -92,7 +92,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('❌ Purchase order rejected')),
+        const SnackBar(content: Text('❌ Purchase order rejected'), behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -105,7 +105,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
         _selectedInvoice == null ||
         _agentController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields.')),
+        const SnackBar(content: Text('Please fill in all fields.'), behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -122,7 +122,7 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('📝 Purchase details saved.')),
+        const SnackBar(content: Text('📝 Purchase details saved.'), behavior: SnackBarBehavior.floating),
       );
     }
 
@@ -146,142 +146,108 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
     return doc.data()?['submittedBy'] as String?;
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: const Text('Purchase Orders', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        backgroundColor: _darkBlue,
+        title: Text('Purchase Orders', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18)),
+        backgroundColor: _heroMaroon,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.all(UddoygiDesign.space20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Section 1: Existing Purchase Orders
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: _cid.isEmpty
-                    ? const Stream.empty()
-                    : DB.colSync(_cid, C.purchaseOrders).orderBy('timestamp', descending: true).snapshots(),
-                builder: (ctx, snap) {
-                  if (_cid.isEmpty || snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final docs = snap.data?.docs ?? [];
-                  if (docs.isEmpty) {
-                    return const Center(child: Text('No purchase orders found.'));
-                  }
-                  return ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: docs.length,
-                    itemBuilder: (ctx, i) {
-                      final doc = docs[i];
-                      final data = doc.data();
-                      final poNo = data['poNo'] as String? ?? doc.id;
-                      final supplier = data['supplierName'] as String? ?? '';
-                      final submittedBy = data['submittedBy'] as String? ?? '';
-                      final ts = data['expectedDate'] as Timestamp?;
-                      final expected = ts != null
-                          ? DateFormat('yyyy-MM-dd').format(ts.toDate())
-                          : '—';
-                      final items = (data['items'] as List?) ?? [];
-                      final status = data['status'] as String? ?? 'pending';
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              children: [
+                Container(width: 4, height: 16, decoration: BoxDecoration(color: _heroMaroon, borderRadius: UddoygiDesign.borderFull)),
+                const SizedBox(width: 10),
+                Text('Active Orders', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040))),
+              ],
+            ),
+            const SizedBox(height: UddoygiDesign.space16),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _cid.isEmpty
+                  ? const Stream.empty()
+                  : DB.colSync(_cid, C.purchaseOrders).orderBy('timestamp', descending: true).snapshots(),
+              builder: (ctx, snap) {
+                if (_cid.isEmpty || snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                final docs = snap.data?.docs ?? [];
+                if (docs.isEmpty) return Center(child: Text('No orders found.', style: GoogleFonts.plusJakartaSans(color: Colors.grey[400], fontWeight: FontWeight.w600)));
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: docs.length,
+                  itemBuilder: (ctx, i) {
+                    final doc = docs[i];
+                    final data = doc.data();
+                    final status = data['status'] as String? ?? 'pending';
+                    final ts = data['expectedDate'] as Timestamp?;
+                    
+                    return UCard(
+                      margin: const EdgeInsets.only(bottom: UddoygiDesign.space12),
+                      padding: const EdgeInsets.all(UddoygiDesign.space16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('PO #: $poNo',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold, fontSize: 16)),
-                              const SizedBox(height: 4),
-                              Text('Supplier: $supplier'),
-                              Text('Submitted by: $submittedBy'),
-                              Text('Expected: $expected'),
-                              Text('Items: ${items.length}'),
-                              const SizedBox(height: 8),
-                              if (status != 'accepted' && status != 'rejected')
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      icon: const Icon(Icons.check, size: 18),
-                                      label: const Text('Accept'),
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green),
-                                      onPressed: () => _acceptPO(doc.id),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton.icon(
-                                      icon: const Icon(Icons.close, size: 18),
-                                      label: const Text('Reject'),
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red),
-                                      onPressed: () => _rejectPO(doc.id),
-                                    ),
-                                  ],
-                                )
-                              else
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    'Status: ${status == 'accepted' ? 'Accepted' : 'Rejected'}',
-                                    style: TextStyle(
-                                      fontStyle: FontStyle.italic,
-                                      color: status == 'accepted'
-                                          ? Colors.green
-                                          : Colors.red,
-                                    ),
-                                  ),
-                                ),
+                              Text('PO #: ${data['poNo'] ?? doc.id}', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15, color: _heroMaroon)),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(color: _getStatusColor(status).withOpacity(0.1), borderRadius: UddoygiDesign.borderFull),
+                                child: Text(status.toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: _getStatusColor(status))),
+                              ),
                             ],
                           ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+                          const Divider(height: 24),
+                          _OrderRow(Icons.business_rounded, 'Supplier', data['supplierName'] ?? '—'),
+                          _OrderRow(Icons.person_rounded, 'Submitted By', data['submittedBy'] ?? '—'),
+                          _OrderRow(Icons.event_rounded, 'Expected Date', ts != null ? DateFormat('dd MMM yyyy').format(ts.toDate()) : '—'),
+                          _OrderRow(Icons.shopping_bag_rounded, 'Items', '${(data['items'] as List?)?.length ?? 0} items'),
+                          if (status == 'pending') ...[
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(child: _ActionBtn(label: 'Accept', icon: Icons.check_rounded, color: Colors.green, onTap: () => _acceptPO(doc.id))),
+                                const SizedBox(width: 12),
+                                Expanded(child: _ActionBtn(label: 'Reject', icon: Icons.close_rounded, color: Colors.redAccent, outlined: true, onTap: () => _rejectPO(doc.id))),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 100.ms * i).slideX(begin: 0.1, end: 0);
+                  },
+                );
+              },
             ),
-
-            // Section 2: Product Price Entry
-            Padding(
-              padding: const EdgeInsets.all(16),
+            const SizedBox(height: UddoygiDesign.space32),
+            Row(
+              children: [
+                Container(width: 4, height: 16, decoration: BoxDecoration(color: _heroMaroon, borderRadius: UddoygiDesign.borderFull)),
+                const SizedBox(width: 10),
+                Text('Product Price Entry', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040))),
+              ],
+            ),
+            const SizedBox(height: UddoygiDesign.space16),
+            UCard(
+              padding: const EdgeInsets.all(UddoygiDesign.space20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Divider(thickness: 1),
-                  const Text(
-                    'Product Price Entry',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Invoice Dropdown
                   FutureBuilder<List<String>>(
                     future: _getInvoiceIDs(),
                     builder: (ctx, snap) {
-                      if (!snap.hasData) return const CircularProgressIndicator();
                       return DropdownButtonFormField<String>(
                         value: _selectedInvoice,
-                        decoration: const InputDecoration(
-                          labelText: 'Invoice Number',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: snap.data!
-                            .map((id) => DropdownMenuItem(value: id, child: Text(id)))
-                            .toList(),
+                        decoration: _inputDeco('Invoice Number', Icons.receipt_long_rounded),
+                        style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                        items: (snap.data ?? []).map((id) => DropdownMenuItem(value: id, child: Text(id))).toList(),
                         onChanged: (val) async {
                           final agent = await _getAgentForInvoice(val!);
                           setState(() {
@@ -293,70 +259,28 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-
-                  // Agent Name (editable)
-                  TextFormField(
-                    controller: _agentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Agent Name',
-                      border: OutlineInputBorder(),
-                    ),
+                  _EditField(controller: _agentController, label: 'Agent Name', icon: Icons.person_outline_rounded),
+                  const SizedBox(height: 12),
+                  _EditField(controller: _productController, label: 'Product Name', icon: Icons.inventory_2_outlined),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _EditField(controller: _quantityController, label: 'Quantity', icon: Icons.numbers_rounded, keyboard: TextInputType.number)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _EditField(controller: _priceController, label: 'Unit Price', icon: Icons.attach_money_rounded, keyboard: TextInputType.number)),
+                    ],
                   ),
                   const SizedBox(height: 12),
-
-                  // Product Name (editable)
-                  TextFormField(
-                    controller: _productController,
-                    decoration: const InputDecoration(
-                      labelText: 'Product Name',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Quantity
-                  TextFormField(
-                    controller: _quantityController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Quantity',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Price per unit
-                  TextFormField(
-                    controller: _priceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'প্রতি ইউনিট Price',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Supplier
-                  TextFormField(
-                    controller: _supplierController,
-                    decoration: const InputDecoration(
-                      labelText: 'Supplierর নাম',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Submit Button
+                  _EditField(controller: _supplierController, label: 'Supplier Name', icon: Icons.business_outlined),
+                  const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
+                    height: 54,
                     child: ElevatedButton.icon(
                       onPressed: _submitPurchaseDetails,
-                      icon: const Icon(Icons.save),
-                      label: const Text('Price এন্ট্রি জমা দিন'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _darkBlue,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
+                      icon: const Icon(Icons.save_rounded),
+                      label: Text('Save Price Entry', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                      style: ElevatedButton.styleFrom(backgroundColor: _heroMaroon, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusM)), elevation: 0),
                     ),
                   ),
                 ],
@@ -367,4 +291,87 @@ class _PurchaseOrdersScreenState extends State<PurchaseOrdersScreen> {
       ),
     );
   }
+
+  Color _getStatusColor(String s) {
+    if (s == 'accepted') return Colors.green;
+    if (s == 'rejected') return Colors.redAccent;
+    return Colors.orange;
+  }
+
+  InputDecoration _inputDeco(String label, IconData icon) => InputDecoration(
+    labelText: label,
+    prefixIcon: Icon(icon, size: 20, color: _heroMaroon),
+    filled: true,
+    fillColor: const Color(0xFFF8FAFC),
+    labelStyle: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w600),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  );
+}
+
+class _OrderRow extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  const _OrderRow(this.icon, this.label, this.value);
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Icon(icon, size: 14, color: Colors.grey[400]),
+        const SizedBox(width: 8),
+        Text('$label: ', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+        Expanded(child: Text(value, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w700), textAlign: TextAlign.right)),
+      ],
+    ),
+  );
+}
+
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final bool outlined;
+  const _ActionBtn({required this.label, required this.icon, required this.color, required this.onTap, this.outlined = false});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 40,
+    child: outlined
+        ? OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 16),
+            label: Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800)),
+            style: OutlinedButton.styleFrom(foregroundColor: color, side: BorderSide(color: color.withOpacity(0.5)), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusS))),
+          )
+        : ElevatedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 16),
+            label: Text(label, style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w800)),
+            style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusS))),
+          ),
+  );
+}
+
+class _EditField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final TextInputType keyboard;
+  const _EditField({required this.controller, required this.label, required this.icon, this.keyboard = TextInputType.text});
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    keyboardType: keyboard,
+    style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w600),
+      prefixIcon: Icon(icon, size: 20, color: const Color(0xFF40062D)),
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    ),
+  );
 }

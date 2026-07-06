@@ -61,14 +61,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
       _DashboardItem(keyId: 'reports',    title: 'Reports',    icon: Icons.bar_chart_outlined,      route: '/admin/reports',     queries: [DB.colSync(_cid, C.invoices), DB.colSync(_cid, C.expenses)]),
       _DashboardItem(keyId: 'welfare',    title: 'Welfare',    icon: Icons.favorite_outline,        route: '/common/welfare',    queries: [DB.colSync(_cid, C.welfare)]),
       _DashboardItem(keyId: 'complaints', title: 'Complaints', icon: Icons.report_problem_outlined, route: '/common/complaints', queries: [DB.colSync(_cid, C.complaints)]),
-      _DashboardItem(keyId: 'salary',     title: 'Salary',     icon: Icons.payments_outlined,       route: '/common/salary',     queries: [DB.colSync(_cid, C.salaries)]),
+      _DashboardItem(keyId: 'salary',     title: 'Payroll',    icon: Icons.payments_outlined,       route: '/admin/salary',     queries: [DB.colSync(_cid, C.salaries)]),
       _DashboardItem(keyId: 'messages',   title: 'Messages',   icon: Icons.chat_bubble_outline,     route: '/common/messages',   queries: [DB.colSync(_cid, C.messages)]),
       _DashboardItem(keyId: 'rnd',        title: 'R&D',        icon: Icons.science_outlined,        route: '/admin/research',    queries: [DB.colSync(_cid, C.rndUpdates)]),
+      _DashboardItem(keyId: 'incentives', title: 'Incentives', icon: Icons.stars_outlined,          route: '/admin/reports/incentives', queries: [DB.colSync(_cid, C.marketingIncentives)]),
       _DashboardItem(keyId: 'company',    title: 'My Company', icon: Icons.business_outlined,         route: '/admin/company',     queries: []),
       _DashboardItem(keyId: 'settings',   title: 'Settings',   icon: Icons.settings_outlined,         route: '/admin/settings',    queries: []),
       _DashboardItem(keyId: 'attendance', title: 'Attendance', icon: Icons.event_available_outlined,  route: '/admin/attendance',  queries: []),
     ];
   }
+
 
   @override
   void initState() {

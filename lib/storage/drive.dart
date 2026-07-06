@@ -1,33 +1,17 @@
 // lib/storage/drive.dart
+//
+// Profile photo and CV upload via Google Drive. Uses the shared DriveStorageService
+// so all app uploads (images, files, payment proofs, notices, etc.) go to the same
+// Drive folder and return the same view URL format for image showing.
+//
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-
-// ✅ Always alias the plugin so nothing can shadow it.
-import 'package:google_sign_in/google_sign_in.dart' as gsi;
-
-// Google Drive REST API
-import 'package:googleapis/drive/v3.dart' as gdrive;
-
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'package:uddoygi/services/drive_storage_service.dart';
 
 const Color _darkBlue = Color(0xFF2A0A4B);
-
-// TODO: replace with your real Drive folder ID
-const String _driveFolderId = '14Qws-stNhY1966KoPECG95nyY1c4bITw';
-
-/// Injects Google auth headers into every HTTP request.
-class GoogleAuthClient extends http.BaseClient {
-  final Map<String, String> _headers;
-  final http.Client _inner = http.Client();
-  GoogleAuthClient(this._headers);
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    request.headers.addAll(_headers);
-    return _inner.send(request);
-  }
-}
 
 class DrivePage extends StatefulWidget {
   final String uid;
@@ -52,97 +36,29 @@ class _DrivePageState extends State<DrivePage> {
   bool _loading = false;
   double _uploadProgress = 0.0;
 
-  // Request only the scopes you need.
-  final gsi.GoogleSignIn _gsi = gsi.GoogleSignIn(
-    scopes: <String>[
-      gdrive.DriveApi.driveFileScope,      // create/update files used by this app
-      gdrive.DriveApi.driveMetadataScope,  // list/search for cleanup
-    ],
-  );
-
-  gsi.GoogleSignInAccount? _currentUser;
-
-  @override
-  void initState() {
-    super.initState();
-    _gsi.onCurrentUserChanged.listen((acct) => _currentUser = acct);
-    _gsi.signInSilently().then((acct) => _currentUser = acct).catchError((_) {});
-  }
-
-  /// Build DriveApi using the account's auth headers (no googleapis_auth needed).
-  Future<gdrive.DriveApi> _getDriveApi() async {
-    _currentUser ??= await _gsi.signIn();
-    if (_currentUser == null) throw Exception('Google Sign-In cancelled');
-
-    final headers = await _currentUser!.authHeaders;
-    final client = GoogleAuthClient(headers);
-    return gdrive.DriveApi(client);
-  }
-
-  /// Delete existing files in the folder whose names contain [prefix].
-  Future<void> _deleteExisting(gdrive.DriveApi api, String prefix) async {
-    final q = "'$_driveFolderId' in parents and name contains '$prefix' and trashed = false";
-    final list = await api.files.list(
-      q: q,
-      spaces: 'drive',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    );
-    for (final f in list.files ?? const <gdrive.File>[]) {
-      final id = f.id;
-      if (id != null) {
-        await api.files.delete(id, supportsAllDrives: true);
-      }
-    }
-  }
-
   Future<String?> _uploadToDrive(File file) async {
     setState(() => _uploadProgress = 0);
 
-    final api = await _getDriveApi();
+    final prefix = widget.employeeId;
+    final cleanPrefix = widget.field == 'profilePhotoUrl' ? 'profile_picture' : 'cv';
+    await DriveStorageService.instance.deleteFilesWithNameContaining('${prefix}_$cleanPrefix');
 
     final ext = p.extension(file.path);
-    final prefix = widget.employeeId;
-    final filename = switch (widget.field) {
+    final customName = switch (widget.field) {
       'profilePhotoUrl' => '${prefix}_profile_picture$ext',
       'cvUrl'           => '${prefix}_cv$ext',
       _                 => '${prefix}_${widget.field}_${DateTime.now().millisecondsSinceEpoch}$ext',
     };
 
-    // Remove old files with same logical prefix
-    final cleanPrefix = widget.field == 'profilePhotoUrl' ? 'profile_picture' : 'cv';
-    await _deleteExisting(api, '${prefix}_$cleanPrefix');
-
-    final total = await file.length();
-    var sent = 0;
-
-    final media = gdrive.Media(
-      file.openRead().map((chunk) {
-        sent += chunk.length;
-        setState(() => _uploadProgress = sent / total);
-        return chunk;
-      }),
-      total,
+    final result = await DriveStorageService.instance.uploadFile(
+      file,
+      pathPrefix: 'profile_cv',
+      customName: customName,
+      onProgress: (p) {
+        if (mounted) setState(() => _uploadProgress = p.clamp(0.0, 1.0));
+      },
     );
-
-    final created = await api.files.create(
-      gdrive.File()
-        ..name = filename
-        ..parents = <String>[_driveFolderId],
-      uploadMedia: media,
-      supportsAllDrives: true,
-    );
-
-    // Public read (adjust if you want restricted sharing)
-    await api.permissions.create(
-      gdrive.Permission()
-        ..type = 'anyone'
-        ..role = 'reader',
-      created.id!,
-      supportsAllDrives: true,
-    );
-
-    return 'https://drive.google.com/uc?id=${created.id}';
+    return result.viewUrl;
   }
 
   Future<void> _pickAndUpload() async {

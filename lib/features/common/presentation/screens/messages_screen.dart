@@ -45,12 +45,12 @@ class _MessagesScreenState extends State<MessagesScreen> with SingleTickerProvid
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Messages', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.indigo,
+        title: const Text('Messages', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: const Color(0xFF2563EB), // Vibrant Blue
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.blueAccent,
+          indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [

@@ -35,13 +35,14 @@ import 'package:printing/printing.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const Color _brand   = Color(0xFF065F46);
-const Color _mid     = Color(0xFF059669);
-const Color _surface = Color(0xFFF0FDF4);
-const Color _cashIn  = Color(0xFF16A34A);
-const Color _cashOut = Color(0xFFDC2626);
-const Color _neutral = Color(0xFF2563EB);
-const Color _warn    = Color(0xFFEA580C);
+const Color _brand   = Color(0xFF065F46); // HR Green
+const Color _mid     = Color(0xFF059669); // Emerald
+const Color _surface = Color(0xFFF8FAFC); // Slate 50
+const Color _cashIn  = Color(0xFF16A34A); // Success
+const Color _cashOut = Color(0xFFDC2626); // Danger
+const Color _neutral = Color(0xFF0891B2); // Cyan
+const Color _warn    = Color(0xFFEA580C); // Orange
+
 
 class BalanceUpdateScreen extends StatefulWidget {
   const BalanceUpdateScreen({super.key});
@@ -138,10 +139,10 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
         bottom: TabBar(
           controller: _tabs,
           indicatorColor: Colors.white,
+          indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
-          labelStyle:
-              const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 13),
           tabs: const [
             Tab(text: 'Overview'),
             Tab(text: 'Credits'),
@@ -149,6 +150,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
             Tab(text: 'Analytics'),
           ],
         ),
+
       ),
       body: _cid.isEmpty
           ? const Center(child: CircularProgressIndicator(color: _brand))
@@ -198,7 +200,8 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
       context: context,
       showDragHandle: true,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -303,6 +306,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
             ],
           ),
         ),
+
         pw.SizedBox(height: 12),
       ]),
       build: (_) => [
@@ -428,6 +432,10 @@ class _OverviewTab extends StatelessWidget {
             double monthOut = 0;
             for (final d in cfDocs) {
               final m  = d.data() as Map<String, dynamic>;
+              
+              // Real-life accuracy: Ignore voided entries in totals
+              if ((m['status'] ?? '') == 'voided') continue;
+              
               final ts = m['createdAt'];
               if (ts is! Timestamp) continue;
               final dt = ts.toDate();
@@ -442,6 +450,7 @@ class _OverviewTab extends StatelessWidget {
                 monthOut -= amt; // reversal reduces cash_out
               }
             }
+
 
             // Last payment slip approval
             final lastSlip = cfDocs
@@ -472,10 +481,10 @@ class _OverviewTab extends StatelessWidget {
                       boxShadow: [
                         BoxShadow(
                             color: (isPos ? _brand : _cashOut)
-                                .withValues(alpha: 0.3),
+                                .withOpacity(0.3),
                             blurRadius: 16,
                             offset: const Offset(0, 6)),
-                      ],
+                        ],
       ),
       child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -675,12 +684,17 @@ class _TransactionsTabState extends State<_TransactionsTab> {
                     child: CircularProgressIndicator(color: _brand));
               }
               var docs = snap.data?.docs ?? [];
+              
+              // Real-life accuracy: exclude voided entries from history
+              docs = docs.where((d) => (d.data() as Map<String, dynamic>)['status'] != 'voided').toList();
+
               if (_filter != 'all') {
                 docs = docs
                     .where((d) =>
                         (d.data() as Map<String, dynamic>)['type'] == _filter)
                     .toList();
               }
+
               if (docs.isEmpty) {
                 return Center(
         child: Column(

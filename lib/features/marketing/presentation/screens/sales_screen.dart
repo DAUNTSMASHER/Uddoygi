@@ -13,22 +13,60 @@ import 'sales_report_screen.dart';
 import 'order_progress_screen.dart';
 import 'work_order_screen.dart';
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-const Color _bg      = Color(0xFFF7F9FC);
-const Color _primary = Color(0xFF2563EB);
+// ── Design system: premium marketing sales ─────────────────────────────────────
+const Color _bg        = Color(0xFFF0F4FF);
+const Color _primary   = Color(0xFF2563EB);
 const Color _primaryDk = Color(0xFF1E3A8A);
-const Color _card    = Color(0xFFFFFFFF);
-const Color _border  = Color(0x14000000);
-const Color _fg      = Color(0xFF0F172A);
-const Color _muted   = Color(0xFF94A3B8);
-const Color _success = Color(0xFF16A34A);
-const Color _warning = Color(0xFFF97316);
+const Color _primaryLt = Color(0xFFEFF6FF);
+const Color _card      = Color(0xFFFFFFFF);
+const Color _border    = Color(0xFFE2E8F0);
+const Color _fg        = Color(0xFF0F172A);
+const Color _muted     = Color(0xFF64748B);
+const Color _success   = Color(0xFF16A34A);
+const Color _warning   = Color(0xFFF59E0B);
+const double _radiusCard = 16.0;
+const double _radiusChip = 12.0;
+const double _spaceSm = 8.0;
+const double _spaceMd = 12.0;
+const double _spaceLg = 16.0;
+const double _spaceXl = 20.0;
 
 class _Feature {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   _Feature(this.icon, this.label, this.onTap);
+}
+
+class _SectionTitle extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  const _SectionTitle({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_spaceLg, _spaceLg, _spaceLg, _spaceSm),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: _primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(icon, size: 20, color: _primary),
+          const SizedBox(width: 8),
+          Text(title,
+              style: GoogleFonts.outfit(
+                  fontSize: 16, fontWeight: FontWeight.w700, color: _fg)),
+        ],
+      ),
+    );
+  }
 }
 
 class SalesScreen extends StatefulWidget {
@@ -282,7 +320,7 @@ class _SalesScreenState extends State<SalesScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text('Sales',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 17)),
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
       ),
 
@@ -297,49 +335,50 @@ class _SalesScreenState extends State<SalesScreen> {
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                child: _HeroCard(
-                  totalSales: totalSales,
-                  salesTarget: salesTarget,
-                  orderCount: orderCount,
-                  targetReached: targetReached,
-                  selectedMonth: selectedMonth,
-                  totalInv: totalInv,
-                  paidCount: paidCount,
-                  pendingCount: pendingCount,
-                  onPickMonth: _pickMonth,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(_spaceLg, _spaceLg, _spaceLg, 0),
+                  child: _HeroCard(
+                    totalSales: totalSales,
+                    salesTarget: salesTarget,
+                    orderCount: orderCount,
+                    targetReached: targetReached,
+                    selectedMonth: selectedMonth,
+                    totalInv: totalInv,
+                    paidCount: paidCount,
+                    pendingCount: pendingCount,
+                    onPickMonth: _pickMonth,
+                  ),
                 ),
               ),
-
+              SliverToBoxAdapter(child: _SectionTitle(icon: Icons.touch_app_rounded, title: 'Quick actions')),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding: const EdgeInsets.fromLTRB(_spaceLg, _spaceSm, _spaceLg, _spaceLg),
                 sliver: SliverToBoxAdapter(child: _QuickActions(context)),
               ),
-
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                sliver: SliverToBoxAdapter(
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(_spaceLg, 0, _spaceLg, _spaceSm),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text('Recent transactions',
-                          style: GoogleFonts.inter(
-                              fontSize: 16, fontWeight: FontWeight.w700, color: _fg)),
+                          style: GoogleFonts.outfit(
+                              fontSize: 17, fontWeight: FontWeight.w700, color: _fg)),
                       Text('Last 30 days',
-                          style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+                          style: GoogleFonts.outfit(fontSize: 12, color: _muted)),
                     ],
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(child: _TabBar(active: _activeTab, onChanged: (i) => setState(() => _activeTab = i))),
-
               SliverToBoxAdapter(
                 child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
+                  duration: const Duration(milliseconds: 200),
                   child: _activeTab == 0 ? _InvoiceList(docs: docs, onDetail: _showDetail) : _EmptyTab(),
                 ),
               ),
-
               const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           );
@@ -364,53 +403,70 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Widget _QuickActions(BuildContext context) {
     final tiles = [
-      _Feature(Icons.description_rounded,  'New Invoice',  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()))),
-      _Feature(Icons.list_alt_rounded,     'All Invoices', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()))),
-      _Feature(Icons.work_history_rounded, 'Work Orders',  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()))),
-      _Feature(Icons.bar_chart_rounded,    'Reports',      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()))),
-      _Feature(Icons.timeline_rounded,     'Progress',     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()))),
+      _Feature(Icons.add_circle_outline_rounded, 'New Invoice', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NewInvoicesScreen()))),
+      _Feature(Icons.receipt_long_rounded,       'All Invoices', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()))),
+      _Feature(Icons.work_history_rounded,      'Work Orders',  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkOrderScreen()))),
+      _Feature(Icons.bar_chart_rounded,         'Reports',      () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesReportScreen()))),
+      _Feature(Icons.timeline_rounded,          'Order Progress', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderProgressScreen()))),
     ];
 
+    final crossCount = MediaQuery.sizeOf(context).width > 600 ? 4 : 3;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: tiles.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: .9,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossCount,
+        crossAxisSpacing: _spaceMd,
+        mainAxisSpacing: _spaceMd,
+        childAspectRatio: 0.95,
       ),
       itemBuilder: (_, i) {
         final f = tiles[i];
-        return GestureDetector(
-          onTap: f.onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              color: _card,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _border),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _primary.withOpacity(.08),
-                    borderRadius: BorderRadius.circular(10),
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: f.onTap,
+            borderRadius: BorderRadius.circular(_radiusCard),
+            splashColor: _primaryDk.withValues(alpha: 0.12),
+            highlightColor: _primaryDk.withValues(alpha: 0.08),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: _spaceLg, horizontal: _spaceMd),
+              decoration: BoxDecoration(
+                color: _card,
+                borderRadius: BorderRadius.circular(_radiusCard),
+                border: Border.all(color: _border),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0x08000000),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
-                  child: Icon(f.icon, color: _primary, size: 20),
-                ),
-                const SizedBox(height: 6),
-                Text(f.label,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                        fontSize: 10, fontWeight: FontWeight.w600, color: _fg)),
-              ],
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _primaryLt,
+                      borderRadius: BorderRadius.circular(_radiusChip),
+                      border: Border.all(color: _primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Icon(f.icon, color: _primary, size: 24),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(f.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.outfit(
+                          fontSize: 13, fontWeight: FontWeight.w600, color: _fg)),
+                ],
+              ),
             ),
           ),
         );
@@ -430,36 +486,41 @@ class _SalesScreenState extends State<SalesScreen> {
       context: context,
       showDragHandle: true,
       backgroundColor: _card,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(_radiusCard + 4))),
       builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        padding: const EdgeInsets.fromLTRB(_spaceXl, 8, _spaceXl, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(customer,
-                style: GoogleFonts.inter(
-                    fontSize: 18, fontWeight: FontWeight.w700, color: _fg)),
-            const SizedBox(height: 12),
+                style: GoogleFonts.outfit(
+                    fontSize: 20, fontWeight: FontWeight.w700, color: _fg)),
+            const SizedBox(height: 20),
             _KV('Status',   status.isEmpty ? '—' : status),
             _KV('Tracking', tracking.isEmpty ? '—' : tracking),
             _KV('Date',     DateFormat('dd MMM, yyyy').format(date)),
             _KV('Amount',   '৳${amt.toStringAsFixed(0)}'),
-            const SizedBox(height: 14),
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen())),
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                label: Text('Open Invoice',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _primary,
-                  side: const BorderSide(color: _primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+              child: FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                      context, MaterialPageRoute(builder: (_) => const AllInvoicesScreen()));
+                },
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: Text('Open in All Invoices',
+                    style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w600, fontSize: 15)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_radiusChip)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
             ),
@@ -472,20 +533,22 @@ class _SalesScreenState extends State<SalesScreen> {
 
 Widget _KV(String k, String v) {
   return Padding(
-    padding: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.only(bottom: 12),
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 80,
+          width: 88,
           child: Text(k,
-              style: GoogleFonts.inter(fontSize: 12, color: _muted, fontWeight: FontWeight.w500)),
+              style: GoogleFonts.outfit(
+                  fontSize: 13, color: _muted, fontWeight: FontWeight.w500)),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Expanded(
           child: Text(v,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.outfit(
                   fontSize: 14, fontWeight: FontWeight.w600, color: _fg)),
         ),
       ],
@@ -524,50 +587,52 @@ class _HeroCard extends StatelessWidget {
         : (totalSales / salesTarget * 100).clamp(0.0, 100.0);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(_spaceXl),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [_primary, _primaryDk],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(_radiusCard + 2),
         boxShadow: [
           BoxShadow(
-              color: _primary.withOpacity(.25),
-              blurRadius: 16,
-              offset: const Offset(0, 6)),
+            color: _primary.withValues(alpha: 0.22),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month picker row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text('Sales Summary',
-                  style: GoogleFonts.inter(
-                      color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+              Text('Sales summary',
+                  style: GoogleFonts.outfit(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
               GestureDetector(
                 onTap: onPickMonth,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.2),
+                    color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.calendar_month_rounded,
-                          color: Colors.white, size: 14),
-                      const SizedBox(width: 5),
+                      const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 8),
                       Text(DateFormat.yMMMM().format(selectedMonth),
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.outfit(
                               color: Colors.white,
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600)),
                     ],
                   ),
@@ -575,22 +640,23 @@ class _HeroCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Big sales number
+          const SizedBox(height: 20),
           Text(
             '৳${totalSales.toStringAsFixed(0)}',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.outfit(
                 color: Colors.white,
-                fontSize: 36,
+                fontSize: 32,
                 fontWeight: FontWeight.w800,
-                height: 1),
+                height: 1.1,
+                letterSpacing: -0.5),
           ),
-          Text('Total paid sales',
-              style: GoogleFonts.inter(color: Colors.white60, fontSize: 13)),
-          const SizedBox(height: 14),
-
-          // Progress bar
+          const SizedBox(height: 4),
+          Text('Total paid sales this period',
+              style: GoogleFonts.outfit(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
@@ -601,24 +667,26 @@ class _HeroCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Target progress',
-                            style: GoogleFonts.inter(
-                                color: Colors.white70, fontSize: 11)),
+                            style: GoogleFonts.outfit(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500)),
                         Text('${achievement.toStringAsFixed(0)}%',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.outfit(
                                 color: Colors.white,
-                                fontSize: 11,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700)),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
                         value: achievement / 100,
-                        minHeight: 6,
-                        backgroundColor: Colors.white24,
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                            targetReached ? Colors.greenAccent.shade400 : Colors.white),
+                            targetReached ? const Color(0xFF86EFAC) : Colors.white),
                       ),
                     ),
                   ],
@@ -626,18 +694,16 @@ class _HeroCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-
-          // KPI row
+          const SizedBox(height: 20),
           Row(
             children: [
-              _KpiChip(label: 'Target',  value: salesTarget > 0 ? '৳${salesTarget.toStringAsFixed(0)}' : '—'),
-              const SizedBox(width: 8),
-              _KpiChip(label: 'Orders',  value: '$orderCount'),
-              const SizedBox(width: 8),
-              _KpiChip(label: 'Paid',    value: '$paidCount', color: Colors.greenAccent.shade400),
-              const SizedBox(width: 8),
-              _KpiChip(label: 'Pending', value: '$pendingCount', color: Colors.orange.shade300),
+              Expanded(child: _KpiChip(label: 'Target', value: salesTarget > 0 ? '৳${salesTarget.toStringAsFixed(0)}' : '—')),
+              const SizedBox(width: _spaceSm),
+              Expanded(child: _KpiChip(label: 'Orders', value: '$orderCount')),
+              const SizedBox(width: _spaceSm),
+              Expanded(child: _KpiChip(label: 'Paid', value: '$paidCount', color: const Color(0xFF86EFAC))),
+              const SizedBox(width: _spaceSm),
+              Expanded(child: _KpiChip(label: 'Pending', value: '$pendingCount', color: const Color(0xFFFDBA74))),
             ],
           ),
         ],
@@ -654,27 +720,32 @@ class _KpiChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.15),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Text(value,
-                style: GoogleFonts.inter(
-                    color: color ?? Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    height: 1)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: GoogleFonts.inter(
-                    color: Colors.white60, fontSize: 10, fontWeight: FontWeight.w500)),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(_radiusChip),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                  color: color ?? Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2)),
+          const SizedBox(height: 4),
+          Text(label,
+              style: GoogleFonts.outfit(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }
@@ -690,34 +761,47 @@ class _TabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     const tabs = ['All Invoices', 'Expenses', 'Income'];
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      padding: const EdgeInsets.all(4),
+      margin: const EdgeInsets.fromLTRB(_spaceLg, _spaceMd, _spaceLg, _spaceMd),
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
         color: _card,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(999),
         border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0x06000000),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: List.generate(tabs.length, (i) {
           final sel = i == active;
           return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: sel ? _primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Center(
-                  child: Text(tabs[i],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: sel ? Colors.white : _muted)),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => onChanged(i),
+                borderRadius: BorderRadius.circular(999),
+                splashColor: _primary.withValues(alpha: 0.1),
+                highlightColor: _primary.withValues(alpha: 0.06),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: sel ? _primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Center(
+                    child: Text(tabs[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: sel ? Colors.white : _muted)),
+                  ),
                 ),
               ),
             ),
@@ -744,28 +828,37 @@ class _InvoiceList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (docs.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(_spaceLg, 0, _spaceLg, _spaceLg),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: _spaceXl, vertical: 24),
           decoration: BoxDecoration(
             color: _card,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(_radiusCard),
             border: Border.all(color: _border),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0x06000000),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             children: [
               Container(
-                width: 40, height: 40,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: _primary.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(10),
+                  color: _primaryLt,
+                  borderRadius: BorderRadius.circular(_radiusChip),
                 ),
-                child: const Icon(Icons.inbox_rounded, color: _primary),
+                child: const Icon(Icons.inbox_rounded, color: _primary, size: 24),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
                 child: Text('No invoices in the last 30 days',
-                    style: GoogleFonts.inter(color: _muted, fontSize: 14)),
+                    style: GoogleFonts.outfit(
+                        color: _muted, fontSize: 15, fontWeight: FontWeight.w500)),
               ),
             ],
           ),
@@ -773,81 +866,102 @@ class _InvoiceList extends StatelessWidget {
       );
     }
 
-    return Column(
-      key: const ValueKey('invoices'),
-      children: docs.take(20).map((d) {
-        final m        = d.data();
-        final customer = (m['customerName'] ?? 'N/A').toString();
-        final amt      = ((m['grandTotal'] as num?) ?? 0).toDouble();
-        final tracking = (m['tracking_number'] ?? '').toString();
-        final status   = (m['status'] ?? '').toString();
-        final ts       = m['timestamp'];
-        final date     = ts is Timestamp ? ts.toDate() : DateTime.now();
-        final paid     = _isPaid(m);
-        final color    = paid ? _success : _warning;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_spaceLg, 0, _spaceLg, _spaceLg),
+      child: Column(
+        key: const ValueKey('invoices'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: docs.take(20).map((d) {
+          final m        = d.data();
+          final customer = (m['customerName'] ?? 'N/A').toString();
+          final amt      = ((m['grandTotal'] as num?) ?? 0).toDouble();
+          final tracking = (m['tracking_number'] ?? '').toString();
+          final ts       = m['timestamp'];
+          final date     = ts is Timestamp ? ts.toDate() : DateTime.now();
+          final paid     = _isPaid(m);
+          final color    = paid ? _success : _warning;
 
-        return GestureDetector(
-          onTap: () => onDetail(d.id, m),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
+          return Padding(
+            padding: const EdgeInsets.only(bottom: _spaceMd),
+            child: Material(
               color: _card,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40, height: 40,
+              borderRadius: BorderRadius.circular(_radiusCard),
+              child: InkWell(
+                onTap: () => onDetail(d.id, m),
+                borderRadius: BorderRadius.circular(_radiusCard),
+                splashColor: _primary.withValues(alpha: 0.08),
+                highlightColor: _primary.withValues(alpha: 0.05),
+                child: Container(
+                  padding: const EdgeInsets.all(_spaceLg),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                      paid ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                      color: color, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(customer,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700, fontSize: 14, color: _fg)),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          _StatusPill(
-                              label: paid ? 'Paid' : 'Pending', color: color),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              tracking.isEmpty
-                                  ? DateFormat('dd MMM, yyyy').format(date)
-                                  : tracking,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(fontSize: 12, color: _muted),
-                            ),
-                          ),
-                        ],
+                    borderRadius: BorderRadius.circular(_radiusCard),
+                    border: Border.all(color: _border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0x05000000),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(_radiusChip),
+                        ),
+                        child: Icon(
+                            paid ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                            color: color, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(customer,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: _fg)),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                _StatusPill(label: paid ? 'Paid' : 'Pending', color: color),
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: Text(
+                                    tracking.isEmpty
+                                        ? DateFormat('dd MMM, yyyy').format(date)
+                                        : tracking,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 12, color: _muted),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text('৳${amt.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w800, fontSize: 15, color: _fg)),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Text('৳${amt.toStringAsFixed(0)}',
-                    style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w800, fontSize: 14, color: _fg)),
-              ],
+              ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -860,14 +974,14 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(.1),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(.3)),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.outfit(
               fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
@@ -877,28 +991,37 @@ class _EmptyTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(_spaceLg, 0, _spaceLg, _spaceLg),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: _spaceXl, vertical: 24),
         decoration: BoxDecoration(
           color: _card,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(_radiusCard),
           border: Border.all(color: _border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x06000000),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Container(
-              width: 40, height: 40,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: _primary.withOpacity(.08),
-                borderRadius: BorderRadius.circular(10),
+                color: _primaryLt,
+                borderRadius: BorderRadius.circular(_radiusChip),
               ),
-              child: const Icon(Icons.inbox_rounded, color: _primary),
+              child: const Icon(Icons.inbox_rounded, color: _primary, size: 24),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 16),
             Expanded(
               child: Text('No records to show',
-                  style: GoogleFonts.inter(color: _muted, fontSize: 14)),
+                  style: GoogleFonts.outfit(
+                      color: _muted, fontSize: 15, fontWeight: FontWeight.w500)),
             ),
           ],
         ),
@@ -918,7 +1041,13 @@ class _BottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: _primaryDk,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 10, offset: const Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -928,15 +1057,17 @@ class _BottomNav extends StatelessWidget {
           onTap: onTap,
           backgroundColor: _primaryDk,
           selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white60,
-          selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 10),
-          unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 10),
+          unselectedItemColor: Colors.white.withValues(alpha: 0.7),
+          selectedLabelStyle: GoogleFonts.outfit(
+              fontWeight: FontWeight.w700, fontSize: 11),
+          unselectedLabelStyle: GoogleFonts.outfit(
+              fontWeight: FontWeight.w500, fontSize: 11),
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.description_rounded),  label: 'New'),
-            BottomNavigationBarItem(icon: Icon(Icons.list_alt_rounded),     label: 'Invoices'),
-            BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded), label: 'Work'),
-            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded),    label: 'Reports'),
-            BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded),     label: 'Progress'),
+            BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_rounded, size: 22), label: 'New'),
+            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded, size: 22), label: 'Invoices'),
+            BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded, size: 22), label: 'Work'),
+            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded, size: 22), label: 'Reports'),
+            BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded, size: 22), label: 'Progress'),
           ],
         ),
       ),

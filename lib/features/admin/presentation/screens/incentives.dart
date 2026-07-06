@@ -78,7 +78,7 @@ class _IncentiveTile extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 36, color: Colors.blue.shade900),
+              Icon(icon, size: 36, color: const Color(0xFF2A0A4B)),
               const SizedBox(height: 12),
               Text(
                 label,
