@@ -1,15 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const _brandGreen = Color(0xFF065F46);
@@ -26,8 +23,6 @@ class _BenefitsCompensationScreenState extends State<BenefitsCompensationScreen>
   String _cid = '';
   String _selectedType = 'All';
   String _searchEmployee = '';
-  DateTime? _filterDate;
-
   @override
   void initState() {
     super.initState();
@@ -44,7 +39,7 @@ class _BenefitsCompensationScreenState extends State<BenefitsCompensationScreen>
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
-        title: Text('Benefits Registry', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20)),
+        title: Text('Benefits Registry', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 20)),
         actions: [
           IconButton(icon: const Icon(Icons.picture_as_pdf_rounded, color: _brandGreen), onPressed: _exportPdf),
         ],
@@ -54,7 +49,7 @@ class _BenefitsCompensationScreenState extends State<BenefitsCompensationScreen>
         backgroundColor: _brandGreen,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
-        label: Text('Issue Benefit', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        label: Text('Issue Benefit', style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
       ),
       body: Column(
         children: [
@@ -128,7 +123,7 @@ class _BenefitHeader extends StatelessWidget {
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(color: active ? _brandGreen : Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: active ? _brandGreen : Colors.grey.withOpacity(0.2))),
-                    child: Text(t.toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: active ? Colors.white : Colors.grey[600])),
+                    child: Text(t.toUpperCase(), style: AppFonts.banglaHeading(fontSize: 10, fontWeight: FontWeight.w800, color: active ? Colors.white : Colors.grey[600])),
                   ),
                 );
               }).toList(),
@@ -163,16 +158,16 @@ class _BenefitCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(d['employee'] ?? 'Unknown', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-                Text(type.toString().toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: typeColor)),
+                Text(d['employee'] ?? 'Unknown', style: AppFonts.banglaHeading(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                Text(type.toString().toUpperCase(), style: AppFonts.banglaHeading(fontSize: 10, fontWeight: FontWeight.w800, color: typeColor)),
               ],
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('৳ ${_money.format(d['amount'] ?? 0)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: _brandGreen)),
-              Text(DateFormat('MMM d, yyyy').format((d['date'] as Timestamp).toDate()), style: GoogleFonts.plusJakartaSans(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w700)),
+              Text('৳ ${_money.format(d['amount'] ?? 0)}', style: AppFonts.banglaData(fontSize: 16, fontWeight: FontWeight.w900, color: _brandGreen)),
+              Text(DateFormat('MMM d, yyyy').format((d['date'] as Timestamp).toDate()), style: AppFonts.banglaHeading(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w700)),
             ],
           ),
         ],

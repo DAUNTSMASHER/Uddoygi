@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
   final DocumentSnapshot order;
@@ -50,9 +48,9 @@ class OrderDetailsScreen extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: ListTile(
-                title: Text('${item['model']} - ${item['color']}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                title: Text('${item['model']} - ${item['colour'] ?? item['color']}', style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text('Size: ${item['size']} | Qty: ${item['qty']}'),
-                trailing: Text('৳${item['total'].toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                trailing: Text('৳${(item['lineTotal'] ?? item['total']).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             )),
             const Divider(height: 32, color: Colors.deepPurple),

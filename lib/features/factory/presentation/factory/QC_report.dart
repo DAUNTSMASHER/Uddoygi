@@ -6,9 +6,10 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'qc_report_details_screen.dart';
 
-const Color _darkBlue = Color(0xFF40062D);
+const Color _darkBlue = Color(0xFF991B1B);
 
 class QCReportScreen extends StatefulWidget {
   const QCReportScreen({Key? key}) : super(key: key);
@@ -245,7 +246,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QC রিপোর্ট', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text('QC রিপোর্ট', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -272,7 +273,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
           // Date selector + recent
           Row(children: [
             Text('তারিখ: ${DateFormat.yMMMMd().format(_selectedDate)}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.bold)),
             const Spacer(),
             IconButton(icon: const Icon(Icons.calendar_today), onPressed: _pickDate),
           ]),
@@ -300,7 +301,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
                     return Card(
                       margin: const EdgeInsets.symmetric(vertical: 6),
                       child: ListTile(
-                        title: Text(d['modelName'] ?? '—', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Text(d['modelName'] ?? '—', style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
                         subtitle: Text('তারিখ: ${qcDate != null ? DateFormat.yMd().format(qcDate) : '—'}\nমন্তব্য: ${d['remarks'] ?? ''}'),
                         isThreeLine: true,
                         trailing: Wrap(spacing: 8, children: [
@@ -338,7 +339,7 @@ class _QCReportScreenState extends State<QCReportScreen> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(icon, size: 28, color: Colors.white),
               const SizedBox(height: 4),
-              Text(label, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              Text(label, style: AppFonts.banglaBody(color: Colors.white, fontSize: 14)),
             ]),
           ),
         ),

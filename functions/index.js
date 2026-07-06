@@ -136,6 +136,84 @@ async function aggregateCompanyData(companyId) {
 }
 
 /**
+ * Helper: Call Google Gemini API with chat history support
+ */
+async function callGeminiChat(prompt, history, apiKey) {
+  const key = apiKey || process.env.GEMINI_API_KEY || fallbackApiKey;
+  const contents = [];
+
+  if (history && Array.isArray(history)) {
+    for (const msg of history) {
+      contents.push({
+        role: msg.role === 'model' ? 'model' : 'user',
+        parts: (msg.parts || []).map(p => ({ text: typeof p === 'string' ? p : p.text }))
+      });
+    }
+  }
+  contents.push({ role: 'user', parts: [{ text: prompt }] });
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${key}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents,
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API Error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+}
+
+/**
+ * 0. HTTPS Callable Cloud Function: aiChat
+ * Fast AI chat with server-side data aggregation (replaces client-side Firestore reads + Gemini call).
+ */
+exports.aiChat = onCall({ cors: true, maxDurationSeconds: 60 }, async (request) => {
+  const { companyId, prompt, history } = request.data || {};
+  if (!companyId || !prompt) {
+    throw new Error("Missing required parameters: companyId, prompt");
+  }
+
+  try {
+    const aggData = await aggregateCompanyData(companyId);
+    const m = aggData.metrics;
+    const systemContext = `[REAL-TIME COMPANY DATABASE ANALYTICS SNAPSHOT]
+Company ID: ${companyId}
+- Total Invoiced Revenue: $${m.totalRevenue} ($${m.collectedRevenue} collected, ${m.pendingInvoicesCount} unpaid/pending)
+- Work Orders Performance: ${m.totalOrders} total (${m.completedOrders} completed, ${m.runningOrders} running)
+- Inventory Status: ${m.totalProducts} active SKUs (Low Stock: ${m.lowStockItems.length > 0 ? m.lowStockItems.slice(0, 5).join(', ') : 'None'})
+- Total Expenses: $${m.totalExpenses}
+- Net Cashflow: $${m.estimatedCashflow}
+[END ANALYTICS SNAPSHOT]`;
+
+    const contextualPrompt = `${systemContext}\n\nUser Prompt: ${prompt}`;
+    const response = await callGeminiChat(contextualPrompt, history);
+
+    // Log interaction to Firestore
+    try {
+      await db.collection("data").doc(companyId).collection("ai_interactions").add({
+        prompt,
+        response,
+        model: "gemini-3-flash-preview",
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+
+    return { text: response, metrics: aggData.metrics };
+  } catch (err) {
+    console.error("Error in aiChat:", err);
+    throw new Error(`AI chat failed: ${err.message}`);
+  }
+});
+
+/**
  * 1. HTTPS Callable Cloud Function: analyzeCompanyData
  * Triggered by the Flutter APK or Web Admin to generate an immediate CFO analysis report
  * and cache the results directly into Firebase Cloud Storage.

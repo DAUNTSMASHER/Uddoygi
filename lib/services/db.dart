@@ -30,18 +30,15 @@ class DB {
   // ── Root path: data/{companyId} ───────────────────────────
   // Returns the DocumentReference that is the root for all
   // company-scoped data.
-  static const String _fallbackCompanyId = 'DEMO_COMPANY';
 
   static Future<DocumentReference<Map<String, dynamic>>> _root() async {
     final cid = await LocalStorageService.getSavedCompanyId();
-    final effectiveId = (cid == null || cid.isEmpty) ? _fallbackCompanyId : cid;
-    return firestore.collection('data').doc(effectiveId);
+    return firestore.collection('data').doc(cid ?? '');
   }
 
   // ── Synchronous root (use only when companyId is guaranteed cached) ──
   static DocumentReference<Map<String, dynamic>> _rootSync(String companyId) {
-    final effectiveId = companyId.isEmpty ? _fallbackCompanyId : companyId;
-    return firestore.collection('data').doc(effectiveId);
+    return firestore.collection('data').doc(companyId);
   }
 
   // ─────────────────────────────────────────────────────────
@@ -134,8 +131,7 @@ class DB {
 
   static DocumentReference<Map<String, dynamic>> companyDoc(
           String companyId) {
-    final effId = companyId.isEmpty ? _fallbackCompanyId : companyId;
-    return firestore.collection('companies').doc(effId);
+    return firestore.collection('companies').doc(companyId);
   }
 
   // ── users subcollections (presence/FCM — also root-scoped) ──
@@ -269,4 +265,7 @@ class C {
 
   // SMTP (root-level, not company-scoped)
   static const smtpConfig         = 'smtp_config';
+
+  // Tax & Calculations (company-scoped singleton)
+  static const taxConfig          = 'tax_config';
 }

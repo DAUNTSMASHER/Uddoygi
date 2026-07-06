@@ -37,15 +37,11 @@ class CustomerOrderSummary extends StatefulWidget {
 }
 
 class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
-  String _cid = '';
   String? agentEmail;
 
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _loadUserEmail();
   }
 
@@ -298,7 +294,6 @@ class _CustomerOrderSummaryState extends State<CustomerOrderSummary> {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = GoogleFonts.ubuntu(fontWeight: FontWeight.w800);
     final perCustomer = (widget.email.trim().isNotEmpty);
 
     return Scaffold(

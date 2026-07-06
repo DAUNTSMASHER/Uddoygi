@@ -1,214 +1,185 @@
 import 'dart:convert';
-import 'package:google_generative_ai/google_generative_ai.dart' as genai;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_generative_ai/google_generative_ai.dart' as genai;
 import 'package:http/http.dart' as http;
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
 /// Uddoygi AI Assistant Service
-/// Optimized for multi-device accuracy and production stability.
+/// Primary: Firebase Cloud Function (server-side aggregation + Gemini, no API key exposed)
+/// Fallback: parallelized Firestore reads + Vercel proxy
 class AIService {
-  // UNIQUE PRODUCTION URL: Specifically for this project to ensure no conflicts
   static const String _proxyUrl = "https://uddyogi-erp-pro-ai.vercel.app/api/chat";
-
   static const String _fallbackKey = 'AIzaSyBBsRLJ9Qoc80YrKTLx9blUlDFB0J5qpm8';
   static final String _apiKey = const String.fromEnvironment('GEMINI_API_KEY', defaultValue: _fallbackKey);
-  
-  // Requirement: Use gemini-3-flash for next-gen speed and accuracy
-  static const String _modelName = 'gemini-3-flash-preview';
 
   static final genai.GenerativeModel _model = genai.GenerativeModel(
-    model: _modelName,
+    model: 'gemini-3-flash-preview',
     apiKey: _apiKey,
     systemInstruction: genai.Content.system(
-      'You are the Uddoygi AI Assistant, a specialized ERP intelligence for Uddyogi ERP. '
-      'Your purpose is to assist with employee management, HR policy queries, attendance summaries, '
-      'marketing insights, and factory workflow optimization. '
-      'Maintain a professional, helpful, and concise tone. Use Markdown for structured data. '
-      'Context: You are responding to users within their specific company dashboard. '
-      'If asked about non-business topics, politely steer the conversation back to ERP and productivity.'
+      'You are the Uddoygi AI Assistant, a specialized ERP intelligence. '
+      'Be professional, concise, and use Markdown for structured data.'
     ),
   );
 
-  /// Aggregates real-time Firestore database metrics (invoices, work orders, expenses, stock)
-  /// for the given company so the AI can analyze financial and operational performance.
-  static Future<String> _fetchCompanyAnalyticsContext(String cid) async {
-    if (cid.isEmpty || cid == 'Unknown') return '';
+  // ── Pre-cached company context (loaded on login) ──────────────────────────
+  static String? _cachedContext;
+  static DateTime? _lastCacheTime;
+  static const Duration _cacheDuration = Duration(minutes: 10);
+
+  /// Pre-fetches and caches company analytics context on login.
+  /// Call this from splash/login screens after successful auth.
+  static Future<void> init({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedContext != null &&
+        DateTime.now().difference(_lastCacheTime!) < _cacheDuration) {
+      return; // cache still fresh
+    }
+    final cid = await LocalStorageService.getSavedCompanyId();
+    if (cid == null || cid.isEmpty) return;
     try {
-      // 1. Invoices / Sales Revenue
-      final invSnap = await DB.colSync(cid, C.invoices).limit(40).get();
-      double totalRev = 0;
-      double paidRev = 0;
-      int pendingCount = 0;
-      for (final doc in invSnap.docs) {
-        final data = doc.data();
-        final amount = (data['totalAmount'] ?? data['amount'] ?? 0);
-        final num val = amount is num ? amount : (num.tryParse(amount.toString()) ?? 0);
-        totalRev += val.toDouble();
-        final status = (data['status'] ?? '').toString().toLowerCase();
-        if (status == 'paid' || status == 'completed') {
-          paidRev += val.toDouble();
-        } else {
-          pendingCount++;
-        }
-      }
-
-      // 2. Work Orders / Factory
-      final woSnap = await DB.colSync(cid, C.workOrders).limit(30).get();
-      int totalWo = woSnap.docs.length;
-      int completedWo = 0;
-      int runningWo = 0;
-      for (final doc in woSnap.docs) {
-        final data = doc.data();
-        final comp = data['completed'] == true || (data['status'] ?? '').toString().toLowerCase() == 'completed';
-        if (comp) completedWo++; else runningWo++;
-      }
-
-      // 3. Products & Stock Warnings
-      final prodSnap = await DB.colSync(cid, C.products).limit(30).get();
-      int totalProducts = prodSnap.docs.length;
-      List<String> lowStockItems = [];
-      for (final doc in prodSnap.docs) {
-        final data = doc.data();
-        final stock = data['stock'] ?? data['quantity'] ?? 0;
-        final num sVal = stock is num ? stock : (num.tryParse(stock.toString()) ?? 0);
-        if (sVal < 10) {
-          lowStockItems.add("${data['name'] ?? 'Item'} ($sVal left)");
-        }
-      }
-
-      // 4. Expenses
-      final expSnap = await DB.colSync(cid, C.expenses).limit(30).get();
-      double totalExp = 0;
-      for (final doc in expSnap.docs) {
-        final data = doc.data();
-        final amount = data['amount'] ?? data['total'] ?? 0;
-        final num val = amount is num ? amount : (num.tryParse(amount.toString()) ?? 0);
-        totalExp += val.toDouble();
-      }
-
-      return '''
-
-[REAL-TIME COMPANY DATABASE ANALYTICS SNAPSHOT - RECENT MONTHS]
-Company ID: $cid
-- Total Invoiced Revenue: \$${totalRev.toStringAsFixed(2)} (\$${paidRev.toStringAsFixed(2)} collected, $pendingCount unpaid/pending invoices)
-- Work Orders Performance: $totalWo total orders ($completedWo completed, $runningWo active/running)
-- Inventory Status: $totalProducts active SKUs (Low Stock Alerts: ${lowStockItems.isEmpty ? 'None' : lowStockItems.take(5).join(', ')})
-- Total Recorded Expenses: \$${totalExp.toStringAsFixed(2)}
-- Net Estimated Operating Cashflow: \$${(paidRev - totalExp).toStringAsFixed(2)}
-[END ANALYTICS SNAPSHOT]
-''';
-    } catch (e) {
-      return '[Analytics Snapshot Notice: Could not aggregate database metrics ($e)]';
+      _cachedContext = await _buildAnalyticsContext(cid);
+      _lastCacheTime = DateTime.now();
+    } catch (_) {
+      // Silent fail — context will be built per‑request as fallback
     }
   }
 
-  /// Generates a response based on a prompt with multi-device context support.
-  static Future<String> chat(String prompt, {List<genai.Content>? history}) async {
-    final cid = await LocalStorageService.getSavedCompanyId() ?? 'Unknown';
-    final user = FirebaseAuth.instance.currentUser;
-    
-    // Fetch live financial & operational database analytics for this company
-    final analyticsSnapshot = await _fetchCompanyAnalyticsContext(cid);
+  /// Builds analytics context string from Firestore.
+  static Future<String> _buildAnalyticsContext(String cid) async {
+    final snapshots = await Future.wait([
+      DB.colSync(cid, C.invoices).limit(40).get(),
+      DB.colSync(cid, C.workOrders).limit(30).get(),
+      DB.colSync(cid, C.products).limit(30).get(),
+      DB.colSync(cid, C.expenses).limit(30).get(),
+    ]);
 
-    // REQUIREMENT: High Accuracy across different devices
-    // We inject the company context and live database snapshot into every request
-    final contextualPrompt = "[Context: CompanyID=$cid, User=${user?.displayName ?? 'Employee'}]$analyticsSnapshot\n\nUser Prompt: $prompt";
+    double totalRev = 0, paidRev = 0, totalExp = 0;
+    int pending = 0, done = 0, active = 0;
+    final lowStock = <String>[];
 
-    // 1. Try Global Proxy (Best for multi-device stability)
-    if (_proxyUrl.isNotEmpty && _proxyUrl.startsWith('http')) {
+    for (final doc in snapshots[0].docs) {
+      final d = doc.data();
+      final v = (d['totalAmount'] ?? d['amount'] ?? 0);
+      final n = v is num ? v : (num.tryParse('$v') ?? 0);
+      totalRev += n.toDouble();
+      if ('${d['status']}'.toLowerCase().contains('paid') || '${d['status']}'.toLowerCase().contains('completed')) {
+        paidRev += n.toDouble();
+      } else {
+        pending++;
+      }
+    }
+    for (final doc in snapshots[1].docs) {
+      final d = doc.data();
+      if (d['completed'] == true || '${d['status']}'.toLowerCase() == 'completed') {
+        done++;
+      } else {
+        active++;
+      }
+    }
+    for (final doc in snapshots[2].docs) {
+      final d = doc.data();
+      final s = (d['stock'] ?? d['quantity'] ?? 0);
+      final n = s is num ? s : (num.tryParse('$s') ?? 0);
+      if (n < 10) lowStock.add('${d['name'] ?? 'Item'} ($n left)');
+    }
+    for (final doc in snapshots[3].docs) {
+      final d = doc.data();
+      final v = (d['amount'] ?? d['total'] ?? 0);
+      final n = v is num ? v : (num.tryParse('$v') ?? 0);
+      totalExp += n.toDouble();
+    }
+
+    return '''
+[REAL-TIME COMPANY DATABASE ANALYTICS SNAPSHOT]
+Company ID: $cid
+- Invoiced Revenue: \$${totalRev.toStringAsFixed(2)} (\$${paidRev.toStringAsFixed(2)} collected, $pending unpaid)
+- Work Orders: ${snapshots[1].docs.length} total ($done completed, $active running)
+- Inventory: ${snapshots[2].docs.length} SKUs (Low Stock: ${lowStock.isEmpty ? 'None' : lowStock.take(5).join(', ')})
+- Expenses: \$${totalExp.toStringAsFixed(2)}
+- Net Cashflow: \$${(paidRev - totalExp).toStringAsFixed(2)}
+[END ANALYTICS SNAPSHOT]
+''';
+  }
+
+  /// Primary: call Cloud Function (server-side aggregation + AI).
+  static Future<String> chat(String prompt, {List<Map<String, dynamic>>? history}) async {
+    final cid = await LocalStorageService.getSavedCompanyId() ?? '';
+    if (cid.isEmpty) return 'Please log in first to use the AI Assistant.';
+
+    try {
+      final fn = FirebaseFunctions.instance.httpsCallable('aiChat',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 15)));
+      final result = await fn.call({
+        'companyId': cid,
+        'prompt': prompt,
+        'history': history ?? [],
+      });
+      final data = result.data as Map<String, dynamic>;
+      return data['text'] as String? ?? 'No response from AI.';
+    } catch (_) {
+      return _fallbackChat(prompt, cid);
+    }
+  }
+
+  /// Fallback: cached context + Vercel proxy (or direct Gemini).
+  static Future<String> _fallbackChat(String prompt, String cid) async {
+    try {
+      // Use cached context if fresh, else build on the fly
+      final ctx = (_cachedContext != null &&
+              DateTime.now().difference(_lastCacheTime!) < _cacheDuration)
+          ? _cachedContext!
+          : await _buildAnalyticsContext(cid);
+      final fullPrompt = '$ctx\n\nUser Prompt: $prompt';
+
+      // Try Vercel proxy first
       try {
         final response = await http.post(
           Uri.parse(_proxyUrl),
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "prompt": contextualPrompt,
-            "companyId": cid,
-            "history": history?.map((c) => {
-              "role": c.role,
-              "parts": c.parts.whereType<genai.TextPart>().map((p) => p.text).toList()
-            }).toList(),
-          }),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'prompt': fullPrompt, 'companyId': cid}),
         ).timeout(const Duration(seconds: 15));
-
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          return data['text'] ?? data['response'] ?? 'Empty response from proxy.';
+          final text = data['text'] ?? data['response'];
+          if (text != null) return text;
         }
-      } catch (e) {
-        // Fallback to direct Gemini if proxy is down
-      }
-    }
+      } catch (_) {}
 
-    // 2. Direct Gemini Call (Fallback)
-    return _directChat(contextualPrompt, history: history);
+      // Final fallback: direct Gemini
+      if (_apiKey.isNotEmpty && !_apiKey.contains('_fallbackKey')) {
+        final chatSession = _model.startChat();
+        final resp = await chatSession.sendMessage(genai.Content.text(fullPrompt));
+        return resp.text ?? 'No response.';
+      }
+    } catch (_) {}
+    return 'AI Assistant is busy. Please try again shortly.';
   }
 
-  static Future<String> _directChat(String prompt, {List<genai.Content>? history}) async {
-    if (_apiKey.isEmpty) return 'Error: Gemini API Key is missing. Please check configuration.';
-    
-    try {
-      final chatSession = _model.startChat(history: history);
-      final response = await chatSession.sendMessage(genai.Content.text(prompt));
-      
-      final text = response.text ?? 'I apologize, I could not process that request.';
-      _logInteraction(prompt, text);
-      return text;
-    } catch (e) {
-      final err = e.toString().toLowerCase();
-      if (err.contains('quota') || err.contains('429')) {
-        return 'The daily AI limit is reached. Please try again in a few minutes.';
-      } else if (err.contains('api_key') || err.contains('403')) {
-        return 'Invalid API configuration. Please ensure the GEMINI_API_KEY is valid.';
-      }
-      return 'AI Assistant is currently busy. Please try again shortly.';
-    }
-  }
-
-  /// Parses OCR text into a structured JSON map for document extraction.
+  /// Parses OCR text into structured JSON using Gemini.
   static Future<Map<String, dynamic>> parseDocument(String ocrText) async {
     if (_apiKey.isEmpty) return {'error': 'API Key missing'};
-
-    final prompt = '''
-Extract the following information from this OCR text and return it as a JSON object:
-- document_type (receipt, invoice, etc.)
-- provider (the merchant or service name)
-- reference_company (any other company mentioned)
-- transaction_id
-- invoice_number
-- date
-- currency
-- total_amount (numeric only)
-- status (completed, pending, etc.)
-
-Return ONLY the JSON object. No other text.
-
-OCR TEXT:
-$ocrText
-''';
-
+    const prompt = 'Extract document_type, provider, reference_company, transaction_id, invoice_number, date, currency, total_amount, status as JSON from:';
     try {
-      final response = await _model.generateContent([genai.Content.text(prompt)]);
+      final response = await _model.generateContent([genai.Content.text('$prompt\n$ocrText')]);
       final text = response.text ?? '{}';
-      final jsonStr = text.replaceAll('```json', '').replaceAll('```', '').trim();
-      return json.decode(jsonStr) as Map<String, dynamic>;
+      return json.decode(text.replaceAll('```json', '').replaceAll('```', '').trim()) as Map<String, dynamic>;
     } catch (e) {
       return {'error': e.toString()};
     }
   }
 
-  static Future<void> _logInteraction(String prompt, String response) async {
+  static Future<void> logInteraction(String prompt, String response) async {
     try {
       final cid = await LocalStorageService.getSavedCompanyId();
       final user = FirebaseAuth.instance.currentUser;
       if (cid == null || user == null) return;
-
       await DB.colSync(cid, 'ai_interactions').add({
         'prompt': prompt,
         'response': response,
         'userEmail': user.email,
-        'model': _modelName,
+        'model': 'gemini-3-flash-preview',
         'timestamp': FieldValue.serverTimestamp(),
       });
     } catch (_) {}

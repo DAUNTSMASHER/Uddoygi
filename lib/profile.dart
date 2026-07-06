@@ -6,12 +6,17 @@ import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../storage/drive.dart';
-import 'package:uddoygi/widgets/u_card.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+// ── Constants ─────────────────────────────────────────────────────────────
+const _primaryGreen = Color(0xFF0A4128);
+const _backgroundColor = Color(0xFFF4F7F6);
+const _surfaceColor = Color(0xFFFFFFFF);
+const _accentGreen = Color(0xFF10B981);
+const _mutedText = Color(0xFF64748B);
 
 class ProfilePage extends StatefulWidget {
   final String userId;
-
   const ProfilePage({Key? key, required this.userId}) : super(key: key);
 
   @override
@@ -20,7 +25,6 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   String _cid = '';
-  static const Color _brandColor = Color(0xFF2A0A4B);
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> get _profileStream {
     if (_cid.isEmpty) return const Stream.empty();
@@ -57,7 +61,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FE),
+      backgroundColor: _backgroundColor,
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _profileStream,
         builder: (ctx, snap) {
@@ -76,186 +80,214 @@ class _ProfilePageState extends State<ProfilePage> {
 
           return CustomScrollView(
             slivers: [
+              _buildSliverHeader(name, designation, profileUrl, ref, empId),
               SliverToBoxAdapter(
-                child: Container(
-                  height: 340,
-                  child: Stack(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        height: 300,
-                        decoration: const BoxDecoration(
-                          color: _brandColor,
-                          borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
-                        ),
-                      ),
-                      SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                              const Spacer(),
-                              Text('My Profile', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-                              const Spacer(),
-                              const SizedBox(width: 48),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 80,
-                        left: 0, right: 0,
-                        child: Column(
-                          children: [
-                            GestureDetector(
-                              onTap: () => _pickAndUpload('profilePhotoUrl', ref, empId),
-                              child: Stack(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                    child: CircleAvatar(
-                                      radius: 54,
-                                      backgroundColor: Colors.grey[200],
-                                      backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
-                                      child: profileUrl.isEmpty
-                                          ? Text(name.isNotEmpty ? name[0] : '?',
-                                              style: GoogleFonts.outfit(fontSize: 40, color: _brandColor, fontWeight: FontWeight.w900))
-                                          : null,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 0, right: 0,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(6),
-                                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                                      child: const Icon(Icons.camera_alt_rounded, size: 16, color: _brandColor),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(name, style: GoogleFonts.outfit(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 4),
-                            Text(designation, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
-                            const SizedBox(height: 24),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _StatBit(label: 'Experience', value: '4.5 Years'),
-                                const SizedBox(width: 48),
-                                _StatBit(label: 'Performance', value: 'Exceeds'),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
+                      _buildManagementGrid(),
+                      const SizedBox(height: 32),
+                      _buildOfficeDetailsCard(empId, d),
+                      const SizedBox(height: 100),
                     ],
                   ),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  child: UCard(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      children: [
-                        _ActionRow(icon: Icons.person_outline_rounded, title: 'Personal Information'),
-                        _Divider(),
-                        _ActionRow(icon: Icons.business_center_outlined, title: 'Work Experience'),
-                        _Divider(),
-                        _ActionRow(icon: Icons.account_balance_wallet_outlined, title: 'Payment Details'),
-                        _Divider(),
-                        _ActionRow(icon: Icons.lock_outline_rounded, title: 'Security Settings'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: UCard(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Account Overview', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: _brandColor)),
-                        const SizedBox(height: 16),
-                        _InfoItem(label: 'Employee ID', value: empId),
-                        _InfoItem(label: 'Office Email', value: d['officeEmail'] ?? d['email'] ?? ''),
-                        _InfoItem(label: 'Joining Date', value: '12 Jan 2021'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
           ).animate().fadeIn(duration: 400.ms);
         },
       ),
     );
   }
-}
 
-class _StatBit extends StatelessWidget {
-  final String label, value;
-  const _StatBit({required this.label, required this.value});
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildSliverHeader(String name, String designation, String profileUrl, DocumentReference ref, String empId) {
+    return SliverToBoxAdapter(
+      child: Container(
+        height: 380,
+        child: Stack(
+          children: [
+            Container(
+              height: 320,
+              decoration: const BoxDecoration(
+                color: _primaryGreen,
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(48)),
+              ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Spacer(),
+                    Text('Employee Profile', style: GoogleFonts.dmSans(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 100,
+              left: 0, right: 0,
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: () => _pickAndUpload('profilePhotoUrl', ref as DocumentReference<Map<String, dynamic>>, empId),
+                    child: Stack(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                            child: CircleAvatar(
+                              radius: 64,
+                              backgroundColor: Colors.grey[100],
+                              backgroundImage: profileUrl.isNotEmpty ? NetworkImage(profileUrl) : null,
+                              child: profileUrl.isEmpty
+                                  ? Text(name.isNotEmpty ? name[0] : '?',
+                                      style: GoogleFonts.dmSans(fontSize: 48, color: _primaryGreen, fontWeight: FontWeight.bold))
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 4, right: 4,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(color: _accentGreen, shape: BoxShape.circle),
+                            child: const Icon(Icons.camera_alt_rounded, size: 18, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(name, style: GoogleFonts.dmSans(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
+                    child: Text(designation, style: GoogleFonts.dmSans(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManagementGrid() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w400)),
-        const SizedBox(height: 4),
-        Text(value, style: GoogleFonts.outfit(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+        Text('Management', style: GoogleFonts.dmSans(fontSize: 18, fontWeight: FontWeight.bold, color: _primaryGreen)),
+        const SizedBox(height: 16),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 1.5,
+          children: [
+            _buildGridItem('Documents', Icons.folder_open_rounded, const Color(0xFFEEF2FF), Colors.indigo),
+            _buildGridItem('Attendance', Icons.calendar_today_rounded, const Color(0xFFFFF7ED), Colors.orange),
+            _buildGridItem('Payslips', Icons.payments_outlined, const Color(0xFFF0FDF4), _accentGreen),
+            _buildGridItem('Leave Request', Icons.time_to_leave_rounded, const Color(0xFFFEF2F2), Colors.red),
+          ],
+        ),
       ],
     );
   }
-}
 
-class _ActionRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  const _ActionRow({required this.icon, required this.title});
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey[700], size: 22),
-      title: Text(title, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600)),
-      trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey[400], size: 20),
-      onTap: () {},
+  Widget _buildGridItem(String title, IconData icon, Color bg, Color iconColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {},
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+                  child: Icon(icon, color: iconColor, size: 20),
+                ),
+                const SizedBox(height: 12),
+                Text(title, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryGreen)),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
-}
 
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Divider(height: 1, color: Colors.grey[100], indent: 56, endIndent: 20);
-  }
-}
-
-class _InfoItem extends StatelessWidget {
-  final String label, value;
-  const _InfoItem({required this.label, required this.value});
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+  Widget _buildOfficeDetailsCard(String empId, Map<String, dynamic> d) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w500)),
-          const SizedBox(height: 2),
-          Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+          Row(
+            children: [
+              const Icon(Icons.business_center_rounded, color: _primaryGreen, size: 20),
+              const SizedBox(width: 12),
+              Text('Office Details', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.bold, color: _primaryGreen)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildInfoRow('Employee ID', empId),
+          _buildDivider(),
+          _buildInfoRow('Department', (d['department'] ?? 'N/A').toString().toUpperCase()),
+          _buildDivider(),
+          _buildInfoRow('Official Email', d['officeEmail'] ?? d['email'] ?? 'N/A'),
+          _buildDivider(),
+          _buildInfoRow('Joined Date', '12 Jan 2021'),
         ],
       ),
     );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.dmSans(fontSize: 14, color: _mutedText, fontWeight: FontWeight.w500)),
+          Text(value, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.bold, color: _primaryGreen)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(height: 1, color: Colors.grey[100]);
   }
 }

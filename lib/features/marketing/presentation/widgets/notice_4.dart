@@ -35,7 +35,6 @@ class CommentSettingsSheet extends StatefulWidget {
 }
 
 class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
-  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   CommentPermission _perm = CommentPermission.anyone;
@@ -45,9 +44,6 @@ class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _perm = widget.initial;
     _resolvedEmail =
         widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '';
@@ -224,7 +220,6 @@ class _CommentSettingsSheetState extends State<CommentSettingsSheet> {
     required String subtitle,
     required IconData icon,
   }) {
-    final selected = _perm == value;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => setState(() => _perm = value),

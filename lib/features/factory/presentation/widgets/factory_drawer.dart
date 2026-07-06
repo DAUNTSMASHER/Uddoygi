@@ -4,8 +4,10 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/profile.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
-const Color _darkBlue = Color(0xFFD51616);
+const Color _primary = Color(0xFF8B0000);
+const LinearGradient _primaryGradient = LinearGradient(colors: [_primary, Color(0xFF5A0000)], begin: Alignment.topLeft, end: Alignment.bottomRight);
 
 class FactoryDrawer extends StatefulWidget {
   const FactoryDrawer({Key? key}) : super(key: key);
@@ -70,65 +72,49 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
         children: [
           // Custom header
           Container(
-            height: 180,
-            color: _darkBlue,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            height: 120,
+            decoration: const BoxDecoration(gradient: _primaryGradient),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             child: Row(
               children: [
                 CircleAvatar(
-                  radius: 36,
+                  radius: 24,
                   backgroundColor: Colors.white,
                   backgroundImage:
                   _photoUrl.isNotEmpty ? NetworkImage(_photoUrl) : null,
                   child: _photoUrl.isEmpty
                       ? Text(_name.isNotEmpty ? _name[0] : '?',
-                      style: const TextStyle(fontSize: 36, color: _darkBlue))
+                      style: AppFonts.englishSystem(fontSize: 18, color: _primary, fontWeight: FontWeight.bold))
                       : null,
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_name,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
+                      Text(_name, style: AppFonts.banglaHeading(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
                       TextButton(
                         style: TextButton.styleFrom(
                           padding: EdgeInsets.zero,
-                          minimumSize: const Size(50, 20),
+                          minimumSize: const Size(40, 16),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         onPressed: () {
                           Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ProfilePage(userId: _uid!),
-                            ),
-                          );
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage(userId: _uid!)));
                         },
-                        child: const Text('প্রোফাইল দেখুন',
-                            style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        child: Text('প্রোফাইল দেখুন', style: AppFonts.banglaBody(color: Colors.white70, fontSize: 11)),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  icon:
-                  const Icon(Icons.chevron_right, size: 28, color: Colors.white),
+                  icon: const Icon(Icons.chevron_right, size: 18, color: Colors.white),
                   onPressed: () {
                     Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProfilePage(userId: _uid!),
-                      ),
-                    );
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage(userId: _uid!)));
                   },
                 ),
               ],
@@ -136,29 +122,35 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
           ),
 
           // Menu items
-          _tile(context, Icons.dashboard, 'ড্যাশবোর্ড', '/factory/dashboard'),
-          _tile(context, Icons.notifications_active, 'নোটিশ', '/factory/notices'),
-          _tile(context, Icons.volunteer_activism, 'কল্যাণ', '/common/welfare'),
-          _tile(context, Icons.message, 'বার্তা', '/common/messages'),
-          _tile(context, Icons.work, 'ওয়ার্ক অর্ডার', '/factory/work_orders'),
-          _tile(context, Icons.request_page, 'রিসোর্স অনুরোধ',
-              '/factory/resource_requests'),
-          _tile(context, Icons.update, 'অগ্রগতি আপডেট',
-              '/factory/progress_update'),
-          _tile(
-              context, Icons.event_available, 'উপস্থিতি', '/factory/attendance'),
-          _tile(context, Icons.request_page, 'ঋণের আবেদন',
-              '/factory/loan_requests'),
-          _tile(context, Icons.money_off, 'বেতন ও ওভারটাইম',
-              '/factory/salary_overtime'),
-
-          const Spacer(),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _sectionHeader('সাধারণ (General)'),
+                _tile(context, Icons.dashboard_rounded, 'ড্যাশবোর্ড (Dashboard)', '/factory/dashboard'),
+                _tile(context, Icons.notifications_active_rounded, 'নোটিশ (Notices)', '/factory/notices'),
+                _tile(context, Icons.message_rounded, 'বার্তা (Messages)', '/common/messages'),
+                
+                _sectionHeader('উৎপাদন (Production)'),
+                _tile(context, Icons.assignment_rounded, 'ওয়ার্ক অর্ডার (Work Orders)', '/factory/work_orders'),
+                _tile(context, Icons.update_rounded, 'কাজের অগ্রগতি (Progress)', '/factory/progress_update'),
+                _tile(context, Icons.request_page_rounded, 'মালামাল অনুরোধ (Resources)', '/factory/resource_requests'),
+                
+                _sectionHeader('এইচআর ও অর্থ (HR & Finance)'),
+                _tile(context, Icons.event_available_rounded, 'উপস্থিতি (Attendance)', '/factory/attendance'),
+                _tile(context, Icons.payments_rounded, 'বেতন ও ওভারটাইম (Salary)', '/factory/salary_overtime'),
+                _tile(context, Icons.account_balance_wallet_rounded, 'ঋণ আবেদন (Loans)', '/factory/loan_requests'),
+                _tile(context, Icons.volunteer_activism_rounded, 'কল্যাণ তহবিল (Welfare)', '/common/welfare'),
+              ],
+            ),
+          ),
 
           // Logout
           ListTile(
-            leading: const Icon(Icons.logout, color: _darkBlue),
-            title:
-            const Text('লগআউট', style: TextStyle(color: _darkBlue)),
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            leading: const Icon(Icons.logout_rounded, color: _primary, size: 16),
+            title: Text('লগআউট (Logout)', style: AppFonts.banglaBody(color: _primary, fontSize: 13, fontWeight: FontWeight.bold)),
             onTap: _logout,
           ),
           const SizedBox(height: 12),
@@ -167,10 +159,28 @@ class _FactoryDrawerState extends State<FactoryDrawer> {
     );
   }
 
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 24, top: 16, bottom: 4),
+      child: Text(
+        title,
+        style: AppFonts.banglaHeading(
+          color: Colors.grey,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.1,
+        ),
+      ),
+    );
+  }
+
   Widget _tile(BuildContext context, IconData icon, String label, String route) {
     return ListTile(
-      leading: Icon(icon, color: _darkBlue),
-      title: Text(label, style: const TextStyle(color: _darkBlue)),
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+      leading: Icon(icon, color: _primary, size: 16),
+      title: Text(label, style: AppFonts.banglaBody(color: _primary, fontSize: 13, fontWeight: FontWeight.w600)),
       onTap: () {
         Navigator.pop(context);
         Navigator.pushReplacementNamed(context, route);

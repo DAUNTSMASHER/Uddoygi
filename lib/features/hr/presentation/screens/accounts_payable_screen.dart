@@ -9,12 +9,12 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 class AccountsPayableScreen extends StatefulWidget {
   const AccountsPayableScreen({super.key});
@@ -61,7 +61,7 @@ class _AccountsPayableScreenState extends State<AccountsPayableScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text('Accounts Payable',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+            style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _cid.isEmpty
@@ -173,9 +173,9 @@ class _SummaryCard extends StatelessWidget {
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 12),
-          Text(title, style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey[500])),
+          Text(title, style: AppFonts.banglaHeading(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey[500])),
           const SizedBox(height: 4),
-          Text(amount, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: color)),
+          Text(amount, style: AppFonts.banglaData(fontSize: 18, fontWeight: FontWeight.w900, color: color)),
         ],
       ),
     );
@@ -213,14 +213,14 @@ class _PayableTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(vendor, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040))),
+                Text(vendor, style: AppFonts.banglaHeading(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E0040))),
                 const SizedBox(height: 2),
                 Text('$category • Due ${dateFmt.format(due)}', 
-                     style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600, color: isOverdue ? const Color(0xFFDC2626) : Colors.grey[500])),
+                     style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w600, color: isOverdue ? Color(0xFFDC2626) : Colors.grey[500])),
               ],
             ),
           ),
-          Text('৳${money.format(amt)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: UddoygiDesign.hrBrandGreen)),
+          Text('৳${money.format(amt)}', style: AppFonts.banglaData(fontSize: 16, fontWeight: FontWeight.w900, color: UddoygiDesign.hrBrandGreen)),
         ],
       ),
     );
@@ -236,8 +236,8 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(Icons.check_circle_outline_rounded, size: 64, color: Colors.grey[200]),
           const SizedBox(height: 16),
-          Text('All caught up!', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.grey[400])),
-          Text('No pending payables found.', style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[400])),
+          Text('All caught up!', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.grey[400])),
+          Text('No pending payables found.', style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[400])),
         ],
       ),
     );

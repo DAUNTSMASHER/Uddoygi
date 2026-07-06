@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
@@ -34,7 +36,7 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: Text('Quality Control Insights', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
+        title: Text('Quality Control Insights', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
         elevation: 0,
@@ -59,11 +61,11 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
                   children: [
                     _buildSummaryCards(stats),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('Rejection Categories', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('Rejection Categories', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildRejectionSummary(qcDocs),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('Return Logs (Credit Notes)', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('Return Logs (Credit Notes)', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildReturnLogs(invDocs),
                     const SizedBox(height: UddoygiDesign.space32),
@@ -113,12 +115,12 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
             children: [
               Text(
                 value,
-                style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040), letterSpacing: -0.5),
+                style: AppFonts.banglaBody(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E0040), letterSpacing: -0.5),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w700),
+                style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -132,7 +134,7 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
       return UCard(
         padding: const EdgeInsets.all(UddoygiDesign.space24),
         child: Center(
-          child: Text('No rejections recorded', style: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontWeight: FontWeight.w600)),
+          child: Text('No rejections recorded', style: AppFonts.banglaBody(color: Colors.grey[500], fontWeight: FontWeight.w600)),
         ),
       );
     }
@@ -157,15 +159,15 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(d['remarks'] ?? 'Minor defect', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700)),
-                      Text('Qty: ${d['quantity'] ?? 0}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+                      Text(d['remarks'] ?? 'Minor defect', style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text('Qty: ${d['quantity'] ?? 0}', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.08), borderRadius: UddoygiDesign.borderFull),
-                  child: Text('REJECTED', style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5)),
+                  child: Text('REJECTED', style: AppFonts.banglaBody(color: Colors.redAccent, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5)),
                 ),
               ],
             ),
@@ -185,7 +187,7 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
       return UCard(
         padding: const EdgeInsets.all(UddoygiDesign.space24),
         child: Center(
-          child: Text('No returns recorded', style: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontWeight: FontWeight.w600)),
+          child: Text('No returns recorded', style: AppFonts.banglaBody(color: Colors.grey[500], fontWeight: FontWeight.w600)),
         ),
       );
     }
@@ -208,14 +210,14 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(d['customerName'] ?? 'Customer', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15)),
-                    Text(d['invoiceNo'] ?? 'INV-000', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+                    Text(d['customerName'] ?? 'Customer', style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
+                    Text(d['invoiceNo'] ?? 'INV-000', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
               Text(
                 '৳${NumberFormat('#,###').format(d['grandTotal'] ?? 0)}',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.redAccent, fontSize: 16),
+                style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, color: Colors.redAccent, fontSize: 16),
               ),
             ],
           ),
@@ -252,14 +254,14 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
               const SizedBox(width: 10),
               Text(
                 'Supplier Impact Analysis',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Text(
             'Linking QC failures to raw material suppliers.',
-            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.white.withOpacity(0.6), fontWeight: FontWeight.w500),
+            style: AppFonts.banglaBody(fontSize: 12, color: Colors.white.withOpacity(0.6), fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: UddoygiDesign.space24),
           _supplierImpactRow('Material Purity', '98%', Colors.greenAccent),
@@ -278,54 +280,19 @@ class _AdminQCReportScreenState extends State<AdminQCReportScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w600),
+          style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w600),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: UddoygiDesign.borderFull),
           child: Text(
             value,
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: color, fontSize: 12),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w800, color: color, fontSize: 12),
           ),
         ),
       ],
     );
   }
-
-  _QCDashboardStats _calculateQCStats(List<QueryDocumentSnapshot> qc, List<QueryDocumentSnapshot> inv) {
-    int totalFailures = 0;
-    for (var doc in qc) {
-      totalFailures += ((doc.data() as Map)['quantity'] as num?)?.toInt() ?? 0;
-    }
-
-    int returnCount = 0;
-    double returnValue = 0;
-    for (var doc in inv) {
-      final d = doc.data() as Map<String, dynamic>;
-      final s = d['status'] ?? '';
-      if (s == 'Returned' || s == 'Rejected') {
-        returnCount++;
-        returnValue += (d['grandTotal'] as num?)?.toDouble() ?? 0;
-      }
-    }
-
-    return _QCDashboardStats(
-      totalFailures: totalFailures,
-      rejectionRate: inv.isEmpty ? 0 : (totalFailures / inv.length) * 10, // Simulated rate
-      totalReturns: returnCount,
-      returnValue: returnValue,
-    );
-  }
-}
-
-class _QCDashboardStats {
-  final int totalFailures;
-  final double rejectionRate;
-  final int totalReturns;
-  final double returnValue;
-  _QCDashboardStats({required this.totalFailures, required this.rejectionRate, required this.totalReturns, required this.returnValue});
-}
-
 
   _QCDashboardStats _calculateQCStats(List<QueryDocumentSnapshot> qc, List<QueryDocumentSnapshot> inv) {
     int totalFailures = 0;

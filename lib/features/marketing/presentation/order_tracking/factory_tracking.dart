@@ -734,11 +734,6 @@ class _TrackingDetailsSheetState extends State<_TrackingDetailsSheet> {
     });
   }
 
-  bool _isDoneStatus(dynamic v) {
-    final s = (v ?? '').toString().trim().toLowerCase();
-    return s == 'done' || s.startsWith('done');
-  }
-
   Future<void> _markAddressValidation(BuildContext context) async {
     final db = DB.firestore;
     final now = FieldValue.serverTimestamp();

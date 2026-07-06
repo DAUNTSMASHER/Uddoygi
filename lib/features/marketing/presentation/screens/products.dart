@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/new_invoices_screen.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 const Color _ink = Color(0xFF1D5DF1);
@@ -76,7 +78,7 @@ class _ProductsPageState extends State<ProductsPage> {
   final _cost = TextEditingController();
 
   // ------- ui state -------
-  int _currentTab = 0; // 0 = Add Product, 1 = All Products
+  int _currentTab = 1; // 0 = Add Product, 1 = All Products
   String _search = '';
   String _genderFilter = 'All'; // All / Male / Female
   _Sort _sort = _Sort.newest;
@@ -194,23 +196,6 @@ class _ProductsPageState extends State<ProductsPage> {
           SnackBar(content: Text('Failed to add product: $e')));
       }
     }
-  }
-
-  void _prefillForm(Map<String, dynamic> p) {
-    setState(() {
-      _currentTab = 0;
-      _gender = p['gender'] as String?;
-      _model.text = p['model_name'] ?? '';
-      _size.text = p['size'] ?? '';
-      _density.text = p['density'] ?? '';
-      _curl.text = p['curl'] ?? '';
-      _colour.text = p['colour'] ?? '';
-      _price.text = ((p['unit_price'] ?? 0).toString());
-      _notes.text = p['notes'] ?? '';
-      _time.text = p['production_time'] ?? '';
-      _cost.text = ((p['production_cost'] ?? 0).toString());
-      _pickedImage = null;
-    });
   }
 
   // ——— edit dialog ———
@@ -549,12 +534,35 @@ class _ProductsPageState extends State<ProductsPage> {
     final width = MediaQuery.sizeOf(context).width;
     final isMobile = width < 480;
 
+    if (_currentTab == 0) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF1E3A8A),
+          foregroundColor: Colors.white,
+          title: Text('Add Product', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => setState(() => _currentTab = 1)),
+        ),
+        backgroundColor: const Color(0xFFF7F9FC),
+        body: isMobile ? _addFormMobile() : _addFormDesktop(),
+      );
+    }
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F9FC),
       appBar: AppBar(
-        backgroundColor: _darkBlue,
-        foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Products', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        backgroundColor: const Color(0xFF1E3A8A),
+        foregroundColor: Colors.white,
+        title: Text('Product Catalog', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 18)),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF2563EB), Color(0xFF1E3A8A)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Stock In',
@@ -566,43 +574,80 @@ class _ProductsPageState extends State<ProductsPage> {
             onPressed: () => _openMovement(context, isIn: false),
             icon: const Icon(Icons.call_made_rounded),
           ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentTab,
-        onTap: (i) => setState(() => _currentTab = i),
-        selectedItemColor: _darkBlue,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_box_outlined),
-            activeIcon: Icon(Icons.add_box),
-            label: 'Add Product',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_outlined),
-            activeIcon: Icon(Icons.grid_view_rounded),
-            label: 'All Products',
+          IconButton(
+            tooltip: 'Add Product',
+            onPressed: () => setState(() => _currentTab = 0),
+            icon: const Icon(Icons.add_box_outlined),
           ),
         ],
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-            child: _HeaderStats(hideArchived: _hideArchived),
-          ),
-          if (_currentTab == 1)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-              child: _toolbar(), // search + filters visible only on All
+          _buildSearchBar(),
+          Expanded(child: _productsGrid()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: (val) => setState(() => _search = val),
+            decoration: InputDecoration(
+              hintText: 'Search by model name or category...',
+              hintStyle: GoogleFonts.inter(color: const Color(0xFF64748B)),
+              prefixIcon: const Icon(Icons.search, color: const Color(0xFF64748B)),
+              filled: true,
+              fillColor: const Color(0xFFF7F9FC),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: _currentTab == 0
-                  ? (isMobile ? _addFormMobile() : _addFormDesktop())
-                  : _productsGrid(),
+          ),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('All'),
+                  selected: _genderFilter == 'All',
+                  onSelected: (_) => setState(() => _genderFilter = 'All'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Male'),
+                  selected: _genderFilter == 'Male',
+                  onSelected: (_) => setState(() => _genderFilter = 'Male'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('Female'),
+                  selected: _genderFilter == 'Female',
+                  onSelected: (_) => setState(() => _genderFilter = 'Female'),
+                ),
+                const SizedBox(width: 12),
+                DropdownButton<_Sort>(
+                  value: _sort,
+                  underline: const SizedBox.shrink(),
+                  onChanged: (v) => setState(() => _sort = v ?? _Sort.newest),
+                  items: const [
+                    DropdownMenuItem(value: _Sort.newest, child: Text('Newest')),
+                    DropdownMenuItem(value: _Sort.priceLowHigh, child: Text('Price ↑')),
+                    DropdownMenuItem(value: _Sort.priceHighLow, child: Text('Price ↓')),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -888,116 +933,30 @@ class _ProductsPageState extends State<ProductsPage> {
     );
   }
 
-  // ——— Toolbar / Filters ———
-  Widget _toolbar() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                onChanged: (v) => setState(() => _search = v),
-                decoration: InputDecoration(
-                  hintText: 'Search model / colour…',
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide.none,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              ChoiceChip(
-                label: const Text('All'),
-                selected: _genderFilter == 'All',
-                onSelected: (_) => setState(() => _genderFilter = 'All'),
-              ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('Male'),
-                selected: _genderFilter == 'Male',
-                onSelected: (_) => setState(() => _genderFilter = 'Male'),
-              ),
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: const Text('Female'),
-                selected: _genderFilter == 'Female',
-                onSelected: (_) => setState(() => _genderFilter = 'Female'),
-              ),
-              const SizedBox(width: 12),
-              DropdownButton<_Sort>(
-                value: _sort,
-                underline: const SizedBox.shrink(),
-                onChanged: (v) => setState(() => _sort = v ?? _Sort.newest),
-                items: const [
-                  DropdownMenuItem(value: _Sort.newest, child: Text('Newest')),
-                  DropdownMenuItem(
-                      value: _Sort.priceLowHigh, child: Text('Price ↑')),
-                  DropdownMenuItem(
-                      value: _Sort.priceHighLow, child: Text('Price ↓')),
-                ],
-              ),
-              const SizedBox(width: 12),
-              FilterChip(
-                label: const Text('Hide archived'),
-                selected: _hideArchived,
-                onSelected: (v) => setState(() => _hideArchived = v),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ——— Query builder ———
-  Query<Map<String, dynamic>> _query() {
-    Query<Map<String, dynamic>> q =
-    DB.colSync(_cid, C.products);
-
-    if (_hideArchived) q = q.where('archived', isEqualTo: false);
-    if (_genderFilter != 'All') {
-      q = q.where('gender', isEqualTo: _genderFilter);
-    }
-
-    switch (_sort) {
-      case _Sort.newest:
-        q = q.orderBy('createdAt', descending: true);
-        break;
-      case _Sort.priceLowHigh:
-        q = q.orderBy('unit_price').orderBy('createdAt', descending: true);
-        break;
-      case _Sort.priceHighLow:
-        q = q
-            .orderBy('unit_price', descending: true)
-            .orderBy('createdAt', descending: true);
-        break;
-    }
-    return q;
-  }
-
   // ——— All Products: GRID ONLY (adaptive; 1-per-row when needed; no overflow) ———
   Widget _productsGrid() {
+    if (_cid.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       key: const ValueKey('grid'),
-      stream: _query().snapshots(),
+      stream: DB.colSync(_cid, C.products).snapshots(),
       builder: (ctx, snap) {
+        if (snap.hasError) {
+          return Center(child: Text('Error loading products: ${snap.error}'));
+        }
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         var docs = snap.data!.docs;
 
-        // client-side search
+        // Apply filters in-memory
+        if (_hideArchived) {
+          docs = docs.where((d) => (d.data()['archived'] ?? false) == false).toList();
+        }
+        if (_genderFilter != 'All') {
+          docs = docs.where((d) => (d.data()['gender'] ?? '') == _genderFilter).toList();
+        }
         if (_search.trim().isNotEmpty) {
           final s = _search.toLowerCase();
           docs = docs.where((d) {
@@ -1008,67 +967,71 @@ class _ProductsPageState extends State<ProductsPage> {
           }).toList();
         }
 
+        // Apply sorting in-memory
+        docs.sort((a, b) {
+          final ma = a.data();
+          final mb = b.data();
+          
+          if (_sort == _Sort.priceLowHigh || _sort == _Sort.priceHighLow) {
+            final pa = (ma['unit_price'] as num?)?.toDouble() ?? 0.0;
+            final pb = (mb['unit_price'] as num?)?.toDouble() ?? 0.0;
+            final comp = pa.compareTo(pb);
+            return _sort == _Sort.priceLowHigh ? comp : -comp;
+          } else {
+            // Sort by newest (createdAt)
+            final ta = ma['createdAt'] as Timestamp?;
+            final tb = mb['createdAt'] as Timestamp?;
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta); // descending
+          }
+        });
+
         if (docs.isEmpty) {
           return const Center(child: Text('No products found'));
         }
 
         final w = MediaQuery.of(ctx).size.width;
-        // 1 col for very small screens, then 2/3/4 as width grows
         final crossAxisCount = w < 420 ? 1 : w < 720 ? 2 : w < 1024 ? 3 : 4;
 
         return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.82,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.65,
           ),
           itemCount: docs.length,
-          itemBuilder: (_, i) => _ProductCard(
+          itemBuilder: (_, i) => _ModernProductCard(
             doc: docs[i],
-            onEdit: _showEditDialog,
-            onDuplicate: (p) => _prefillForm(p),
-            onArchiveToggle: _toggleArchive,
-            onDelete: _confirmDelete,
+            cid: _cid,
+            onEdit: () => _showEditDialog(docs[i]),
+            onDetails: () => _showProductDetails(context, docs[i].data()),
           ),
         );
       },
     );
   }
 
-  Future<void> _toggleArchive(
-      DocumentSnapshot<Map<String, dynamic>> d) async {
-    final v = (d.data()?['archived'] as bool?) ?? false;
-    await d.reference.update({'archived': !v});
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(v ? 'Restored' : 'Archived')),
-    );
-  }
-
-  Future<void> _confirmDelete(
-      DocumentSnapshot<Map<String, dynamic>> d) async {
+  Future<bool> _confirmDelete(BuildContext context, DocumentSnapshot<Map<String, dynamic>> d) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete Product'),
-        content:
-        const Text('Are you sure you want to delete this product?'),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete product?'),
+        content: const Text('This cannot be undone.'),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete')),
         ],
       ),
-    ) ??
-        false;
+    ) ?? false;
     if (ok) {
       await d.reference.delete();
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('🗑️ Product deleted'),
@@ -1081,6 +1044,7 @@ class _ProductsPageState extends State<ProductsPage> {
         ),
       );
     }
+    return ok;
   }
 }
 
@@ -1107,6 +1071,9 @@ class _HeaderStatsState extends State<_HeaderStats> {
 
   @override
   Widget build(BuildContext context) {
+    if (_cid.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
     Query<Map<String, dynamic>> q =
     DB.colSync(_cid, C.products);
     if (widget.hideArchived) q = q.where('archived', isEqualTo: false);
@@ -1559,96 +1526,7 @@ Widget _kv(String k, String v) => Padding(
   ),
 );
 
-class _ProductRow extends StatelessWidget {
-  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>) onEdit;
-  final void Function(Map<String, dynamic>) onDuplicate;
-  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>)
-  onArchiveToggle;
-  final Future<void> Function(DocumentSnapshot<Map<String, dynamic>>) onDelete;
 
-  const _ProductRow({
-    required this.doc,
-    required this.onEdit,
-    required this.onDuplicate,
-    required this.onArchiveToggle,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Kept for completeness; not used since dashboard is grid-only
-    final p = doc.data();
-    final price = (p['unit_price'] as num?)?.toDouble() ?? 0;
-    final archived = (p['archived'] as bool?) ?? false;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: ListTile(
-        onTap: () => _showProductDetails(context, p),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: p['imageUrl'] == null
-              ? Container(
-            width: 56,
-            height: 56,
-            color: Colors.grey.shade100,
-            child: const Icon(Icons.image, color: _darkBlue),
-          )
-              : Image.network(p['imageUrl'],
-              width: 56, height: 56, fit: BoxFit.cover),
-        ),
-        title: Text(p['model_name'] ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                fontWeight: FontWeight.w800, color: _darkBlue)),
-        subtitle: Wrap(
-          spacing: 6,
-          runSpacing: -4,
-          children: [
-            _miniChip(p['gender'] ?? '—'),
-            _miniChip('Color: ${p['colour'] ?? '—'}'),
-            Text(
-              DateFormat('dd MMM').format(
-                (p['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-              ),
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_money(price),
-                style: const TextStyle(
-                    fontWeight: FontWeight.w900, color: _darkBlue)),
-            const SizedBox(width: 6),
-            _MenuButton(
-              archived: archived,
-              onEdit: () => onEdit(doc),
-              onDuplicate: () => onDuplicate(p),
-              onArchiveToggle: () => onArchiveToggle(doc),
-              onDelete: () => onDelete(doc),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _miniChip(String t) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-          color: _darkBlue.withOpacity(.06),
-          borderRadius: BorderRadius.circular(999)),
-      child: Text(t,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-              fontSize: 10, fontWeight: FontWeight.w700, color: _darkBlue)));
-}
 
 /* ========================= Menus ========================= */
 
@@ -2054,5 +1932,180 @@ class _StockMovementSheetState extends State<_StockMovementSheet> {
     );
 
     return createdId;
+  }
+}
+
+
+class _ModernProductCard extends StatelessWidget {
+  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
+  final String cid;
+  final VoidCallback onEdit;
+  final VoidCallback onDetails;
+
+  const _ModernProductCard({
+    required this.doc,
+    required this.cid,
+    required this.onEdit,
+    required this.onDetails,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = doc.data();
+    final name = (p['model_name'] ?? 'Unnamed').toString();
+    final gender = (p['gender'] ?? '—').toString();
+    final colour = (p['colour'] ?? '—').toString();
+    final size = (p['size'] ?? '').toString();
+    final price = (p['unit_price'] as num?)?.toDouble() ?? 0.0;
+    final imgUrl = p['imageUrl'] as String?;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Image
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: imgUrl != null
+                  ? Image.network(imgUrl, fit: BoxFit.cover)
+                  : Container(
+                      color: const Color(0xFFE2E8F0),
+                      child: const Center(child: Icon(Icons.image, size: 40, color: Color(0xFF94A3B8))),
+                    ),
+            ),
+          ),
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF0F172A))),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _chip(gender),
+                    const SizedBox(width: 4),
+                    Expanded(child: _chip(colour)),
+                    if (size.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      _chip(size),
+                    ]
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('৳${price.toStringAsFixed(0)}', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 15, color: const Color(0xFF2563EB))),
+                    _StockBadge(cid: cid, skuOrName: name),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.remove_red_eye_outlined, size: 20, color: Color(0xFF64748B)),
+                          onPressed: onDetails,
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.edit_outlined, size: 20, color: Color(0xFF64748B)),
+                          onPressed: onEdit,
+                        ),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        minimumSize: const Size(0, 32),
+                      ),
+                      icon: const Icon(Icons.receipt_long, size: 14),
+                      label: Text('Invoice', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12)),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => NewInvoicesScreen(
+                              initialProductModel: name,
+                              initialProductColour: colour,
+                              initialProductSize: size,
+                              initialProductPrice: price,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(String t) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w600, color: const Color(0xFF475569))),
+    );
+  }
+}
+
+class _StockBadge extends StatelessWidget {
+  final String cid;
+  final String skuOrName;
+
+  const _StockBadge({required this.cid, required this.skuOrName});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: DB.colSync(cid, 'stocks').where('name', isEqualTo: skuOrName).limit(1).snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return _badge('Out of Stock', const Color(0xFFE11D48));
+        }
+        final qty = (snap.data!.docs.first.data() as Map<String, dynamic>)['qty'] as int? ?? 0;
+        if (qty <= 0) return _badge('Out of Stock', const Color(0xFFE11D48));
+        if (qty < 10) return _badge('Low Stock: $qty', Colors.orange.shade700);
+        return _badge('In Stock: $qty', const Color(0xFF10B981));
+      },
+    );
+  }
+
+  Widget _badge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(text, style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+    );
   }
 }

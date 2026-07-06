@@ -5,6 +5,7 @@ import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 const Color _darkBlue = Color(0xFF2A0A4B);
 const double _fontMed = 14.0;
@@ -99,7 +100,7 @@ class _SalaryScreenState extends State<SalaryScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(month,
-                        style: const TextStyle(
+                        style: AppFonts.banglaBody(
                           fontSize: _fontMed,
                           fontWeight: FontWeight.bold,
                           color: _darkBlue,
@@ -110,7 +111,7 @@ class _SalaryScreenState extends State<SalaryScreen>
                     Text('Deductions:    \$${deductions.toStringAsFixed(2)}'),
                     const Divider(height: 20),
                     Text('Net Salary:    \$${netSalary.toStringAsFixed(2)}',
-                        style: const TextStyle(
+                        style: AppFonts.banglaBody(
                           fontSize: _fontMed,
                           fontWeight: FontWeight.w600,
                           color: _darkBlue,
@@ -135,9 +136,9 @@ class _SalaryScreenState extends State<SalaryScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Salary',
-          style: TextStyle(color: Colors.white),
+          style: AppFonts.banglaBody(color: Colors.white),
         ),
         backgroundColor: _darkBlue,
         bottom: TabBar(
@@ -158,10 +159,10 @@ class _SalaryScreenState extends State<SalaryScreen>
           if (_canViewAll)
             _buildSalaryList(_allSalaryStream())
           else
-            const Center(
+            Center(
               child: Text(
                 'Access denied',
-                style: TextStyle(color: Colors.grey),
+                style: AppFonts.banglaBody(color: Colors.grey),
               ),
             ),
         ],

@@ -1,940 +1,422 @@
-// lib/features/factory/presentation/screens/progress_update_screen.dart
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
-const Color _darkBlue = Color(0xFF40062D);
-const Color _ink = Color(0xFF500B49);
-const Color _surface = Color(0xFFF6F8FB);
-const Color _doneGreen = Color(0xFF1B5E20); // dark green for completed cards
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:uddoygi/core/design_system.dart';
+
+const Color _brandRed = UddoygiDesign.factoryBrandRed;
+const Color _bg = UddoygiDesign.surface;
+const Color _border = Color(0xFFE2E8F0);
+const Color _text = Color(0xFF0F172A);
+const Color _muted = Color(0xFF64748B);
 
 class ProgressUpdateScreen extends StatefulWidget {
-  const ProgressUpdateScreen({Key? key}) : super(key: key);
+  final String workOrderId;
+
+  const ProgressUpdateScreen({Key? key, required this.workOrderId}) : super(key: key);
 
   @override
   State<ProgressUpdateScreen> createState() => _ProgressUpdateScreenState();
 }
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    Key? key,
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.accent,
-    this.subtitle,
-  }) : super(key: key);
-
-  final String title;
-  final String value;
-  final String? subtitle;
-  final IconData icon;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2))],
-      ),
-      child: Stack(
-        children: [
-          // Corner watermark icon (subtle, doesnâ€™t fight the number)
-          Positioned(
-            right: 10,
-            top: 10,
-            child: Icon(icon, size: 22, color: accent.withOpacity(0.22)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Label â€” keep tiny per your 6â€“8sp guidance
-                const SizedBox(height: 2),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
-                    letterSpacing: .2,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                // Value â€” slightly larger for contrast
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: accent,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 7,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _ProgressUpdateScreenState extends State<ProgressUpdateScreen> {
   String _cid = '';
-  String? _selectedOrderNo;
-  String? _selectedOrderDocId;
-  Future<DocumentSnapshot<Map<String, dynamic>>>? _orderDocFuture;
+  final _dailyNoteCtrl = TextEditingController();
+  final _qcNoteCtrl = TextEditingController();
 
-  // Form controllers & state
-  final _notesCtl = TextEditingController();
-  final _assignedCtl = TextEditingController();
-  DateTime _timeLimit = DateTime.now().add(const Duration(days: 1));
-  String? _selectedNextStage;
-
-  /// Factory pipeline stages (forward-only, terminal = Submit to the Head office)
-  static const List<String> _stages = <String>[
-    'Submitted to factory',
-    'Factory update 1 (base is done)',
-    'Hair is ready',
-    'Knotting is going on',
-    'Putting',
-    'Molding',
-    'Submit to the Head office', // terminal
+  final List<String> _stages = [
+    'Accepted',
+    'Base is Done',
+    'Hair is Ready',
+    'Knotting Started',
+    'Knotting Completed',
+    'Styling / Finishing',
+    'QC Check',
+    'Submit to Head Office'
   ];
 
-  /// Bangla display labels for each stage
-  static const Map<String, String> _stageBn = {
-    'Submitted to factory': 'à¦•à¦¾à¦°à¦–à¦¾à¦¨à¦¾à¦¯à¦¼ à¦œà¦®à¦¾ à¦¦à§‡à¦“à¦¯à¦¼à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡',
-    'Factory update 1 (base is done)': 'à¦†à¦ªà¦¡à§‡à¦Ÿ à§§ (à¦¬à§‡à¦¸ à¦¸à¦®à§à¦ªà¦¨à§à¦¨)',
-    'Hair is ready': 'à¦šà§à¦² à¦ªà§à¦°à¦¸à§à¦¤à§à¦¤',
-    'Knotting is going on': 'à¦¨à¦Ÿà¦¿à¦‚ à¦šà¦²à¦›à§‡',
-    'Putting': 'à¦ªà§à¦Ÿà¦¿à¦‚',
-    'Molding': 'à¦®à§‹à¦²à§à¦¡à¦¿à¦‚',
-    'Submit to the Head office': 'à¦ªà§à¦°à¦§à¦¾à¦¨ à¦•à¦¾à¦°à§à¦¯à¦¾à¦²à¦¯à¦¼à§‡ à¦œà¦®à¦¾',
-  };
-
-  String _stageName(String s) => _stageBn[s] ?? s;
-
-  int _stageIndex(String? name) {
-    if (name == null) return -1;
-    final i = _stages.indexOf(name);
-    return i < 0 ? -1 : i;
-  }
-
-  bool _isTerminal(String? stage) => stage == _stages.last;
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _acceptedOrdersStream =>
-      DB.colSync(_cid, C.workOrders)
-          .where('status', isEqualTo: 'Accepted')
-          .orderBy('lastUpdated', descending: true)
-          .snapshots();
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _trackingStream {
-    if (_selectedOrderNo == null) return const Stream.empty();
-    return DB.colSync(_cid, C.workOrderTracking)
-        .where('workOrderNo', isEqualTo: _selectedOrderNo)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
-  }
-
-  Future<void> _addUpdate() async {
-    if (_selectedNextStage == null || _selectedOrderNo == null || _selectedOrderDocId == null) return;
-
-    // Validate forward-only move
-    final orderRef = DB.colSync(_cid, C.workOrders).doc(_selectedOrderDocId);
-    final orderSnap = await orderRef.get();
-    final orderData = orderSnap.data() ?? {};
-    final currentStage = (orderData['currentStage'] as String?) ?? _stages.first;
-    final currIdx = _stageIndex(currentStage);
-    final nextIdx = _stageIndex(_selectedNextStage);
-
-    if (nextIdx <= currIdx) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('à¦†à¦ªà¦¨à¦¿ à¦ªà§‡à¦›à¦¨à§‡ à¦¯à§‡à¦¤à§‡ à¦¬à¦¾ à¦à¦•à¦‡ à¦§à¦¾à¦ª à¦ªà§à¦¨à¦°à¦¾à¦¯à¦¼ à¦¨à¦¿à¦°à§à¦¬à¦¾à¦šà¦¨ à¦•à¦°à¦¤à§‡ à¦ªà¦¾à¦°à¦¬à§‡à¦¨ à¦¨à¦¾à¥¤'),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
-      return;
-    }
-
-    final now = Timestamp.now();
-    final batch = DB.firestore.batch();
-
-    // Log to tracking collection
-    final trackingRef = DB.colSync(_cid, C.workOrderTracking).doc();
-    batch.set(trackingRef, {
-      'workOrderNo': _selectedOrderNo,
-      'stage': _selectedNextStage,
-      'stageIndex': nextIdx,
-      'notes': _notesCtl.text.trim(),
-      'assignedTo': _assignedCtl.text.trim(),
-      'timeLimit': Timestamp.fromDate(_timeLimit),
-      'createdAt': now,
-      'lastUpdated': now,
+  @override
+  void initState() {
+    super.initState();
+    LocalStorageService.getSavedCompanyId().then((id) {
+      if (mounted) setState(() => _cid = id ?? '');
     });
-
-    final isTerminalMove = _selectedNextStage == _stages.last;
-
-    // Update the work_order doc
-    batch.update(orderRef, {
-      'currentStage': _selectedNextStage,
-      'currentStageIndex': nextIdx,
-      'lastUpdated': now,
-      if (isTerminalMove) ...{
-        // Mark final completion
-        'completed': true,
-        'completedAt': now,
-        // Handoff/global next stage (as requested earlier)
-        'nextStage': 'Address Validation of the Customer',
-      }
-    });
-
-    // ── INVENTORY SYNC: Stock In (Factory Output) ───────────────────────────
-    if (isTerminalMove) {
-      final items = (orderData['items'] as List?) ?? [];
-      for (final itm in items) {
-        final m = Map<String, dynamic>.from(itm);
-        final model = m['model'];
-        final color = m['colour'];
-        final size  = m['size'];
-        final qty   = (m['qty'] as int?) ?? 0;
-
-        if (model != null && qty > 0) {
-          final prodSnap = await (await DB.col(C.products))
-              .where('model_name', isEqualTo: model)
-              .where('colour', isEqualTo: color)
-              .where('size', isEqualTo: size)
-              .limit(1)
-              .get();
-
-          if (prodSnap.docs.isNotEmpty) {
-            final pRef = prodSnap.docs.first.reference;
-            batch.update(pRef, {'stock': FieldValue.increment(qty)});
-          }
-        }
-      }
-    }
-
-
-    // Gap A4: Notify Marketing of completion
-    if (isTerminalMove) {
-      final notifRef = DB.colSync(_cid, C.notifications).doc();
-      batch.set(notifRef, {
-        'title': 'Production Completed: #$_selectedOrderNo',
-        'body': 'Order is ready for address validation and shipping.',
-        'target': 'marketing',
-        'timestamp': now,
-        'type': 'production_complete',
-        'refId': _selectedOrderDocId,
-      });
-    }
-
-    await batch.commit();
-
-    if (!mounted) return;
-    setState(() {
-      _selectedNextStage = null;
-      _notesCtl.clear();
-      _assignedCtl.clear();
-      _timeLimit = DateTime.now().add(const Duration(days: 1));
-      _orderDocFuture =
-          DB.colSync(_cid, C.workOrders).doc(_selectedOrderDocId!).get();
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isTerminalMove
-              ? 'ðŸŽ‰ à¦“à¦¯à¦¼à¦¾à¦°à§à¦• à¦…à¦°à§à¦¡à¦¾à¦° à¦ªà§à¦°à¦§à¦¾à¦¨ à¦•à¦¾à¦°à§à¦¯à¦¾à¦²à¦¯à¦¼à§‡ à¦œà¦®à¦¾ à¦¦à§‡à¦“à¦¯à¦¼à¦¾ à¦¹à¦¯à¦¼à§‡à¦›à§‡à¥¤ à¦…à¦—à§à¦°à¦—à¦¤à¦¿ à§§à§¦à§¦%à¥¤ à¦ªà¦°à¦¬à¦°à§à¦¤à§€ à¦§à¦¾à¦ª: à¦•à§à¦°à§‡à¦¤à¦¾à¦° à¦ à¦¿à¦•à¦¾à¦¨à¦¾ à¦¯à¦¾à¦šà¦¾à¦‡à¥¤'
-              : 'à¦§à¦¾à¦ª à¦†à¦ªà¦¡à§‡à¦Ÿ à¦¹à¦¯à¦¼à§‡à¦›à§‡: "${_stageName(_stages[nextIdx])}"à¥¤',
-        ),
-        backgroundColor: isTerminalMove ? Colors.green.shade700 : null,
-      ),
-    );
-  }
-
-  Future<void> _pickTimeLimit() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _timeLimit,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      helpText: 'à¦¸à¦®à¦¯à¦¼à¦¸à§€à¦®à¦¾ à¦¨à¦¿à¦°à§à¦¬à¦¾à¦šà¦¨ à¦•à¦°à§à¦¨',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: _darkBlue),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) setState(() => _timeLimit = picked);
   }
 
   @override
   void dispose() {
-    _notesCtl.dispose();
-    _assignedCtl.dispose();
+    _dailyNoteCtrl.dispose();
+    _qcNoteCtrl.dispose();
     super.dispose();
   }
 
-  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” UI helpers â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
-
-  PreferredSizeWidget _appBar() {
-    return AppBar(
-      title: Text(_selectedOrderNo == null ? 'à¦•à¦¾à¦°à¦–à¦¾à¦¨à¦¾à¦° à¦…à¦—à§à¦°à¦—à¦¤à¦¿' : 'à¦…à¦°à§à¦¡à¦¾à¦° $_selectedOrderNo'),
-      centerTitle: true,
-      foregroundColor: Colors.white,
-      backgroundColor: Colors.red,
-      leading: _selectedOrderNo != null
-          ? IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => setState(() {
-          _selectedOrderNo = null;
-          _selectedOrderDocId = null;
-          _orderDocFuture = null;
-        }),
-      )
-          : null,
-      elevation: 0,
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [_darkBlue, _ink],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-      ),
-    );
+  String _niceDate(dynamic d) {
+    if (d == null) return 'N/A';
+    if (d is Timestamp) return DateFormat('MMM dd, yyyy - hh:mm a').format(d.toDate());
+    if (d is DateTime) return DateFormat('MMM dd, yyyy - hh:mm a').format(d);
+    return 'N/A';
   }
 
-  Widget _emptyState(String text, {IconData icon = Icons.inbox}) {
-    return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 52, color: Colors.grey.shade500),
-              const SizedBox(height: 10),
-              Text(
-                text,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 15, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<void> _addDailyNote() async {
+    final note = _dailyNoteCtrl.text.trim();
+    if (note.isEmpty) return;
+    
+    final user = FirebaseAuth.instance.currentUser;
+    await DB.colSync(_cid, C.workOrders).doc(widget.workOrderId).collection('daily_logs').add({
+      'note': note,
+      'loggedBy': user?.displayName ?? user?.email ?? 'Unknown',
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    _dailyNoteCtrl.clear();
+    FocusScope.of(context).unfocus();
   }
 
-  Widget _stageChipsScrollable(String currentStage, {bool completed = false}) {
-    final currIdx = _stageIndex(currentStage);
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(_stages.length, (i) {
-          final s = _stages[i];
-          final isDone = i < currIdx || (completed && i <= currIdx);
-          final isCurr = i == currIdx;
-          final Color bg = completed
-              ? _doneGreen
-              : (isCurr
-              ? _darkBlue
-              : (isDone
-              ? Colors.green.shade600
-              : Colors.grey.shade300));
-          final Color fg = (completed || isCurr || isDone) ? Colors.white : Colors.black87;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Chip(
-              label: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: Text(
-                  _stageName(s),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: fg, fontSize: 12),
-                ),
-              ),
-              avatar: Icon(isDone ? Icons.check_circle : (isCurr ? Icons.timelapse : Icons.circle_outlined),
-                  color: fg, size: 16),
-              backgroundColor: bg,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          );
-        }),
-      ),
-    );
-  }
+  Future<void> _advanceStage(String currentStage) async {
+    int idx = _stages.indexOf(currentStage);
+    if (idx == -1) idx = 0; // fallback if unknown stage
 
-  Widget _progressBar(String currentStage, {required bool completed}) {
-    final idx = _stageIndex(currentStage);
-    final progress = completed
-        ? 1.0
-        : (idx < 0 ? 0.0 : ((idx + 1) / _stages.length).clamp(0.0, 1.0));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 8,
-            backgroundColor: Colors.grey.shade300,
-            color: completed ? _doneGreen : _darkBlue,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'à¦…à¦—à§à¦°à¦—à¦¤à¦¿: ${(progress * 100).toStringAsFixed(0)}%',
-          style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
+    String nextStage;
+    if (idx < _stages.length - 1) {
+      nextStage = _stages[idx + 1];
+    } else {
+      return; // already at terminal
+    }
 
-  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” Dashboard â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
-
-  String _formatAvg(Duration? d) {
-    if (d == null || d.inSeconds <= 0) return 'â€”';
-    if (d.inDays >= 1) return '${d.inDays}d';
-    if (d.inHours >= 1) return '${d.inHours}h';
-    return '${d.inMinutes}m';
-  }
-
-  Duration? _averageCompletionDuration(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    final completed = docs.where((d) => (d.data()['completed'] == true) || _isTerminal(d.data()['currentStage'] as String?)).toList();
-    if (completed.isEmpty) return null;
-
-    int count = 0;
-    int totalMs = 0;
-    for (final d in completed) {
-      final data = d.data();
-      final completedAt = data['completedAt'] is Timestamp ? (data['completedAt'] as Timestamp).toDate() : null;
-      if (completedAt == null) continue;
-
-      // Try to find a start timestamp
-      final DateTime? startedAt =
-      (data['createdAt'] is Timestamp) ? (data['createdAt'] as Timestamp).toDate()
-          : (data['timestamp']  is Timestamp) ? (data['timestamp']  as Timestamp).toDate()
-          : (data['orderDate']  is Timestamp) ? (data['orderDate']  as Timestamp).toDate()
-          : null;
-
-      if (startedAt == null) continue;
-      final ms = completedAt.millisecondsSinceEpoch - startedAt.millisecondsSinceEpoch;
-      if (ms > 0) {
-        totalMs += ms;
-        count++;
+    // If moving to 'Submit to Head Office', we need the QC Note if coming from QC Check
+    if (nextStage == 'Submit to Head Office') {
+      if (_qcNoteCtrl.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add a QC Note before submitting.')));
+        return;
       }
     }
-    if (count == 0) return null;
-    return Duration(milliseconds: (totalMs / count).round());
+
+    final user = FirebaseAuth.instance.currentUser;
+    final batch = FirebaseFirestore.instance.batch();
+    final woRef = DB.colSync(_cid, C.workOrders).doc(widget.workOrderId);
+    
+    // 1. Update WO
+    batch.update(woRef, {
+      'currentStage': nextStage,
+      'status': nextStage == 'Submit to Head Office' ? 'Completed' : 'In Production',
+      'lastUpdatedAt': FieldValue.serverTimestamp(),
+      if (nextStage == 'Submit to Head Office') 'qcNote': _qcNoteCtrl.text.trim(),
+    });
+
+    // 2. Log timeline event
+    final tlRef = woRef.collection('timeline').doc();
+    batch.set(tlRef, {
+      'stage': nextStage,
+      'updatedBy': user?.displayName ?? user?.email ?? 'Unknown',
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    // 3. If terminal, send notification to Marketing
+    if (nextStage == 'Submit to Head Office') {
+      final notifRef = DB.colSync(_cid, C.notifications).doc();
+      batch.set(notifRef, {
+        'title': 'Production Completed',
+        'body': 'Work Order for ${widget.workOrderId} is ready for logistics.',
+        'target': 'marketing', // or specific marketing uid if tracked
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
   }
 
-  Widget _dashboard(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
-    final total = docs.length;
-    final completed = docs.where((d) =>
-    (d.data()['completed'] == true) ||
-        _isTerminal(d.data()['currentStage'] as String?)).length;
-    final running = total - completed;
-    final avg = _averageCompletionDuration(docs);
+  @override
+  Widget build(BuildContext context) {
+    if (_cid.isEmpty) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      child: GridView(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          // â†“ More compact cards; tweak 1.6â€“2.2 to taste per device width
-          childAspectRatio: 1.9,
-        ),
-        children: [
-          _MetricCard(
-            title: 'à¦®à§‹à¦Ÿ à¦…à¦°à§à¦¡à¦¾à¦°',
-            value: '$total',
-            icon: Icons.all_inbox,
-            accent: _darkBlue,
-          ),
-          _MetricCard(
-            title: 'à¦¸à¦®à§à¦ªà¦¨à§à¦¨',
-            value: '$completed',
-            icon: Icons.verified,
-            accent: Colors.green.shade700,
-          ),
-          _MetricCard(
-            title: 'à¦šà¦²à¦®à¦¾à¦¨',
-            value: '$running',
-            icon: Icons.play_circle_fill,
-            accent: Colors.orange.shade700,
-          ),
-          _MetricCard(
-            title: 'à¦—à¦¡à¦¼ à¦¸à¦®à§à¦ªà¦¨à§à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼',
-            value: _formatAvg(avg),
-            icon: Icons.timer,
-            accent: Colors.purple.shade700,
-          ),
-        ],
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        title: Text('Production Progress', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800)),
+        backgroundColor: _brandRed,
+        foregroundColor: Colors.white,
       ),
-    );
-  }
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: DB.colSync(_cid, C.workOrders).doc(widget.workOrderId).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: Text('Work Order Not Found'));
 
-  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” Accepted Orders â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          final currentStage = data['currentStage'] ?? 'Accepted';
+          final isCompleted = data['status'] == 'Completed';
 
-  Widget _ordersList() {
-    return Container(
-      color: _surface,
-      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _acceptedOrdersStream,
-        builder: (ctx, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final docs = snap.data?.docs ?? [];
-          if (docs.isEmpty) return _emptyState('à¦à¦–à¦¨à¦“ à¦•à§‹à¦¨à§‹ à¦—à§ƒà¦¹à§€à¦¤ à¦“à¦¯à¦¼à¦¾à¦°à§à¦• à¦…à¦°à§à¦¡à¦¾à¦° à¦¨à§‡à¦‡à¥¤');
-
-          return ListView.separated(
-            padding: const EdgeInsets.only(bottom: 16),
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemCount: docs.length + 1, // +1 for the dashboard on top
-            itemBuilder: (ctx, i) {
-              if (i == 0) {
-                // Dashboard at top
-                return _dashboard(docs);
-              }
-
-              final doc = docs[i - 1];
-              final data = doc.data();
-
-              final no = data['workOrderNo'] as String? ?? 'â€”';
-              final stage = (data['currentStage'] as String?) ?? _stages.first;
-              final when = (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now();
-              final tracking = (data['tracking_number'] as String?) ?? 'â€”';
-              final agent = (data['agentName'] as String?)
-                  ?? (data['agentEmail'] as String?)
-                  ?? 'â€”';
-              final buyer = (data['buyerName'] as String?)
-                  ?? (data['customerName'] as String?)
-                  ?? 'â€”';
-
-              final bool isCompleted = (data['completed'] == true) || _isTerminal(stage);
-
-              // Small label text (6â€“8sp)
-              final tsLabelStyle = TextStyle(fontSize: 7, color: isCompleted ? Colors.white70 : Colors.grey.shade700, fontWeight: FontWeight.w600);
-              final titleStyle   = TextStyle(fontSize: 8, color: isCompleted ? Colors.white : _darkBlue, fontWeight: FontWeight.w800);
-              final infoStyle    = TextStyle(fontSize: 7, color: isCompleted ? Colors.white : Colors.black87, fontWeight: FontWeight.w700);
-
-              return Material(
-                color: isCompleted ? _doneGreen : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => setState(() {
-                    _selectedOrderNo = no;
-                    _selectedOrderDocId = doc.id;
-                    _orderDocFuture = DB.colSync(_cid, C.workOrders).doc(doc.id).get();
-                  }),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: isCompleted ? _doneGreen : Colors.grey.shade200, width: 1),
-                    ),
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: (isCompleted ? Colors.white : _darkBlue).withOpacity(.12),
-                          child: Icon(Icons.assignment, color: isCompleted ? Colors.white : _darkBlue, size: 16),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Top line: Order & Tracking (8sp)
-                              AutoSizeText('à¦…à¦°à§à¦¡à¦¾à¦° $no  â€¢  TRK $tracking',
-                                  maxLines: 1, minFontSize: 7, overflow: TextOverflow.ellipsis, style: titleStyle),
-                              const SizedBox(height: 4),
-                              AutoSizeText(
-                                '${DateFormat.yMMMd().add_jm().format(when)}  â€¢  ${_stageName(stage)}',
-                                maxLines: 1,
-                                minFontSize: 6,
-                                overflow: TextOverflow.ellipsis,
-                                style: tsLabelStyle,
-                              ),
-                              const SizedBox(height: 4),
-                              AutoSizeText('à¦à¦œà§‡à¦¨à§à¦Ÿ: $agent  â€¢  à¦•à§à¦°à§‡à¦¤à¦¾: $buyer',
-                                  maxLines: 1, minFontSize: 6, overflow: TextOverflow.ellipsis, style: infoStyle),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right, color: isCompleted ? Colors.white : _darkBlue, size: 16),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(UddoygiDesign.space16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSummaryCard(data).animate().fadeIn().slideY(begin: 0.1),
+                const SizedBox(height: UddoygiDesign.space24),
+                
+                Text('Production Timeline', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, color: _text)),
+                const SizedBox(height: UddoygiDesign.space12),
+                _buildTimeline(currentStage, isCompleted).animate(delay: 100.ms).fadeIn().slideY(begin: 0.1),
+                
+                const SizedBox(height: UddoygiDesign.space24),
+                if (!isCompleted) ...[
+                  _buildActionArea(currentStage).animate(delay: 200.ms).fadeIn().slideY(begin: 0.1),
+                  const SizedBox(height: UddoygiDesign.space32),
+                  _buildDailyNotesSection().animate(delay: 300.ms).fadeIn().slideY(begin: 0.1),
+                ]
+              ],
+            ),
           );
         },
       ),
     );
   }
 
-  // â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€” Order Detail (scrollable, overflow-safe) â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
-
-  Widget _orderDetail() {
-    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      future: _orderDocFuture,
-      builder: (ctx, orderSnap) {
-        if (orderSnap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final orderData = orderSnap.data?.data() ?? {};
-        final currentStage = orderData['currentStage'] as String? ?? _stages.first;
-        final currIdx = _stageIndex(currentStage);
-
-        final bool isCompleted = (orderData['completed'] == true) || _isTerminal(currentStage);
-        final DateTime? completedAt =
-        (orderData['completedAt'] is Timestamp) ? (orderData['completedAt'] as Timestamp).toDate() : null;
-
-        // Forward-only options
-        final List<String> forwardStages =
-        (currIdx >= 0 && currIdx < _stages.length - 1) ? _stages.sublist(currIdx + 1) : const <String>[];
-
-        return Container(
-          color: _surface,
-          child: SafeArea(
-            bottom: false,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Whole page scrolls together to avoid nested scroll overflows
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Header (progress + chips)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [BoxShadow(color: Color(0x11000000), blurRadius: 8, offset: Offset(0, 2))],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _progressBar(currentStage, completed: isCompleted), // 100% if terminal/completed
-                            const SizedBox(height: 10),
-                            _stageChipsScrollable(currentStage, completed: isCompleted),
-                          ],
-                        ),
-                      ),
-
-                      // If completed â€” show green completion card
-                      if (isCompleted)
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Card(
-                            color: _doneGreen,
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: Colors.green.shade100, width: 1),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(Icons.emoji_events, color: Colors.white),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'à¦“à¦¯à¦¼à¦¾à¦°à§à¦• à¦…à¦°à§à¦¡à¦¾à¦° à¦ªà§à¦°à¦§à¦¾à¦¨ à¦•à¦¾à¦°à§à¦¯à¦¾à¦²à¦¯à¦¼à§‡ à¦œà¦®à¦¾!',
-                                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          completedAt == null
-                                              ? 'à¦¸à¦®à§à¦ªà¦¨à§à¦¨à§‡à¦° à¦¸à¦®à¦¯à¦¼ à¦°à§‡à¦•à¦°à§à¦¡ à¦•à¦°à¦¾ à¦¹à¦¯à¦¼à¦¨à¦¿à¥¤'
-                                              : 'à¦¸à¦®à§à¦ªà¦¨à§à¦¨: ${DateFormat.yMMMd().add_jm().format(completedAt)}',
-                                          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        const Text(
-                                          'ðŸŽ‰ Great job! Next system stage: â€œAddress Validation of the Customerâ€.',
-                                          style: TextStyle(fontSize: 12, color: Colors.white),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                      // Form card (only when NOT completed)
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Card(
-                            color: Colors.white,
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: Colors.grey.shade200, width: 1),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('ধাপ আপডেট করুন',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.grey.shade900)),
-                                  const SizedBox(height: 10),
-
-                                  TextFormField(
-                                    initialValue: _stageName(currentStage),
-                                    decoration: const InputDecoration(
-                                      labelText: 'বর্তমান ধাপ',
-                                      prefixIcon: Icon(Icons.flag),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    readOnly: true,
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  DropdownButtonFormField<String>(
-                                    value: _selectedNextStage,
-                                    isExpanded: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'পরবর্তী ধাপ (শুধু সামনে)',
-                                      prefixIcon: Icon(Icons.trending_up),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    items: forwardStages
-                                        .map((s) => DropdownMenuItem(
-                                      value: s,
-                                      child: Text(_stageName(s), overflow: TextOverflow.ellipsis),
-                                    ))
-                                        .toList(),
-                                    onChanged: (v) => setState(() => _selectedNextStage = v),
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  TextField(
-                                    controller: _assignedCtl,
-                                    decoration: const InputDecoration(
-                                      labelText: 'দায়িত্বপ্রাপ্ত (ইমেইল/আইডি)',
-                                      prefixIcon: Icon(Icons.person_add_alt_1),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  TextField(
-                                    controller: _notesCtl,
-                                    decoration: const InputDecoration(
-                                      labelText: 'মন্তব্য',
-                                      prefixIcon: Icon(Icons.notes),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    maxLines: 2,
-                                  ),
-                                  const SizedBox(height: 12),
-
-                                  Row(
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.event, color: _darkBlue, size: 18),
-                                          const SizedBox(width: 6),
-                                          const Text('সময়সীমা:', style: TextStyle(fontWeight: FontWeight.w700)),
-                                          const SizedBox(width: 4),
-                                          Text(DateFormat.yMMMd().format(_timeLimit),
-                                              style: const TextStyle(fontWeight: FontWeight.w600)),
-                                        ],
-                                      ),
-                                      const Spacer(),
-                                      TextButton.icon(
-                                        onPressed: _pickTimeLimit,
-                                        icon: const Icon(Icons.edit_calendar),
-                                        label: const Text('পরিবর্তন'),
-                                        style: TextButton.styleFrom(foregroundColor: _darkBlue),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: _darkBlue,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 14),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      ),
-                                      onPressed: (_selectedNextStage == null) ? null : _addUpdate,
-                                      icon: const Icon(Icons.save),
-                                      label: const Text('আপডেট সংরক্ষণ'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // History (renders into the same scroll)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Card(
-                          elevation: 1,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.grey.shade200, width: 1),
-                          ),
-                          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                            stream: _trackingStream,
-                            builder: (ctx, histSnap) {
-                              if (histSnap.connectionState == ConnectionState.waiting) {
-                                return const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Center(child: CircularProgressIndicator()),
-                                );
-                              }
-                              final docs = histSnap.data?.docs ?? [];
-                              if (docs.isEmpty) {
-                                return Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: _emptyState('এখনও কোনো আপডেট নেই।', icon: Icons.history),
-                                );
-                              }
-
-                              return ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: const EdgeInsets.all(12),
-                                itemCount: docs.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 6),
-                                itemBuilder: (ctx, i) {
-                                  final d = docs[i].data();
-                                  final stage = d['stage'] as String? ?? '-';
-                                  final notes = d['notes'] as String? ?? '';
-                                  final assigned = d['assignedTo'] as String? ?? '';
-                                  final tlTs = d['timeLimit'] as Timestamp?;
-                                  final tl = tlTs != null ? DateFormat.yMMMd().format(tlTs.toDate()) : '-';
-                                  final updTs = d['lastUpdated'] as Timestamp?;
-                                  final updatedAt =
-                                  updTs != null ? DateFormat.yMMMd().add_jm().format(updTs.toDate()) : '-';
-
-                                  final idx = _stageIndex(stage);
-                                  final Color leftBar = idx <= _stageIndex(currentStage) ? _darkBlue : Colors.grey.shade400;
-
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border(left: BorderSide(color: leftBar, width: 4)),
-                                      color: Colors.white,
-                                    ),
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      title: const SizedBox(),
-                                      subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // Keep these compact but readable
-                                          Text(_stageName(stage),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w800, color: _darkBlue, fontSize: 12)),
-                                          const SizedBox(height: 4),
-                                          if (assigned.isNotEmpty)
-                                            Text('দায়িত্বপ্রাপ্ত: $assigned',
-                                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                                          if (notes.isNotEmpty)
-                                            Text('মন্তব্য: $notes',
-                                                maxLines: 3, overflow: TextOverflow.ellipsis),
-                                          Text('সময়সীমা: $tl'),
-                                          Text('আপডেট: $updatedAt',
-                                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                        ],
-                                      ),
-                                      trailing: Icon(
-                                        idx <= _stageIndex(currentStage) ? Icons.verified : Icons.schedule,
-                                        color: idx <= _stageIndex(currentStage) ? Colors.green : Colors.grey,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                );
-              },
-            ),
+  Widget _buildSummaryCard(Map<String, dynamic> data) {
+    return Container(
+      padding: const EdgeInsets.all(UddoygiDesign.space16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: UddoygiDesign.borderM,
+        border: Border.all(color: _border),
+        boxShadow: UddoygiDesign.shadowSoft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('WO #${data['workOrderNo']}', style: AppFonts.banglaHeading(fontSize: 20, fontWeight: FontWeight.w800, color: _brandRed)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: _brandRed.withOpacity(0.1), borderRadius: UddoygiDesign.borderS),
+                child: Text(data['priority'] ?? 'Normal', style: AppFonts.banglaHeading(color: _brandRed, fontWeight: FontWeight.w800, fontSize: 12)),
+              )
+            ],
           ),
-        );
-      },
+          const SizedBox(height: UddoygiDesign.space12),
+          _infoRow(Icons.person, 'Customer', data['buyerName'] ?? 'Unknown'),
+          const SizedBox(height: UddoygiDesign.space8),
+          _infoRow(Icons.inventory_2_rounded, 'Total Pieces', '${data['totalPieces'] ?? 0}'),
+          const SizedBox(height: UddoygiDesign.space8),
+          _infoRow(Icons.event_rounded, 'Deadline', _niceDate(data['deadline'])),
+        ],
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _appBar(),
-      body: _selectedOrderNo == null ? _ordersList() : _orderDetail(),
+  Widget _infoRow(IconData icon, String label, String val) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: _muted),
+        const SizedBox(width: 8),
+        Text('$label: ', style: AppFonts.banglaBody(color: _muted, fontSize: 13)),
+        Text(val, style: AppFonts.banglaHeading(fontWeight: FontWeight.w700, color: _text, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _buildTimeline(String currentStage, bool isCompleted) {
+    int currIdx = _stages.indexOf(currentStage);
+    if (currIdx == -1) currIdx = 0;
+    if (isCompleted) currIdx = _stages.length - 1;
+
+    return Container(
+      padding: const EdgeInsets.all(UddoygiDesign.space16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: UddoygiDesign.borderM, border: Border.all(color: _border), boxShadow: UddoygiDesign.shadowSoft),
+      child: Column(
+        children: List.generate(_stages.length, (i) {
+          final stage = _stages[i];
+          final isDone = i < currIdx || isCompleted;
+          final isCurrent = i == currIdx && !isCompleted;
+
+          Color nodeColor = Colors.grey.shade200;
+          if (isDone) nodeColor = Colors.green;
+          if (isCurrent) nodeColor = _brandRed;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                children: [
+                  AnimatedContainer(
+                    duration: 300.ms,
+                    curve: Curves.easeOutBack,
+                    width: isCurrent ? 28 : 24,
+                    height: isCurrent ? 28 : 24,
+                    decoration: BoxDecoration(
+                      color: nodeColor,
+                      shape: BoxShape.circle,
+                      border: isCurrent ? Border.all(color: _brandRed.withOpacity(0.2), width: 6) : null,
+                      boxShadow: isCurrent ? [BoxShadow(color: _brandRed.withOpacity(0.4), blurRadius: 8)] : null,
+                    ),
+                    child: isDone ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+                  ),
+                  if (i != _stages.length - 1)
+                    AnimatedContainer(
+                      duration: 300.ms,
+                      width: 2,
+                      height: 36,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: isDone ? Colors.green : Colors.grey.shade200,
+                    ),
+                ],
+              ),
+              const SizedBox(width: UddoygiDesign.space16),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(top: isCurrent ? 4.0 : 2.0),
+                  child: Text(
+                    stage,
+                    style: (isCurrent || isDone ? AppFonts.banglaHeading : AppFonts.banglaBody)(
+                      fontSize: isCurrent ? 16 : 15,
+                      fontWeight: (isCurrent || isDone) ? FontWeight.w700 : FontWeight.w500,
+                      color: (isCurrent || isDone) ? _text : _muted,
+                    ),
+                  ),
+                ),
+              )
+            ],
+          ).animate(delay: (i * 50).ms).fadeIn().slideX(begin: 0.1);
+        }),
+      ),
+    );
+  }
+
+  Widget _buildActionArea(String currentStage) {
+    int currIdx = _stages.indexOf(currentStage);
+    if (currIdx == -1) currIdx = 0;
+    
+    if (currIdx == _stages.length - 1) return const SizedBox.shrink(); // Terminal
+    
+    final nextStage = _stages[currIdx + 1];
+    final isFinalSubmit = nextStage == 'Submit to Head Office';
+
+    return Container(
+      padding: const EdgeInsets.all(UddoygiDesign.space16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: UddoygiDesign.borderM,
+        border: Border.all(color: _border),
+        boxShadow: UddoygiDesign.shadowFloating,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.bolt, color: _brandRed, size: 20),
+              const SizedBox(width: 8),
+              Text('Advance Production', style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.w800, color: _brandRed)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Next Stage: $nextStage', style: AppFonts.banglaBody(color: _text, fontWeight: FontWeight.w600)),
+          if (isFinalSubmit) ...[
+            const SizedBox(height: UddoygiDesign.space12),
+            TextField(
+              controller: _qcNoteCtrl,
+              decoration: InputDecoration(
+                labelText: 'QC Inspector Note (Required)',
+                filled: true, fillColor: _bg,
+                border: OutlineInputBorder(borderRadius: UddoygiDesign.borderS, borderSide: BorderSide.none),
+              ),
+              maxLines: 2,
+            ),
+          ],
+          const SizedBox(height: UddoygiDesign.space16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: Icon(isFinalSubmit ? Icons.local_shipping : Icons.arrow_forward),
+              label: Text(isFinalSubmit ? 'Complete & Notify Marketing' : 'Advance to $nextStage'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isFinalSubmit ? Colors.green : _brandRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: UddoygiDesign.borderS)
+              ),
+              onPressed: () => _advanceStage(currentStage),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDailyNotesSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Daily Log / Notes', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, color: _text)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _dailyNoteCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Add progress note...',
+                    isDense: true,
+                    filled: true, fillColor: _bg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.send, color: _brandRed),
+                onPressed: _addDailyNote,
+              )
+            ],
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder<QuerySnapshot>(
+            stream: DB.colSync(_cid, C.workOrders).doc(widget.workOrderId).collection('daily_logs').orderBy('timestamp', descending: true).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.shrink();
+              final docs = snapshot.data!.docs;
+              if (docs.isEmpty) return Text('No notes yet.', style: AppFonts.banglaBody(color: _muted, fontSize: 12));
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) => const Divider(),
+                itemBuilder: (context, index) {
+                  final data = docs[index].data() as Map<String, dynamic>;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(data['note'] ?? '', style: AppFonts.banglaBody(fontSize: 14, color: _text)),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(data['loggedBy'] ?? 'Unknown', style: AppFonts.banglaHeading(fontSize: 10, color: _muted, fontWeight: FontWeight.w700)),
+                            Text(_niceDate(data['timestamp']), style: AppFonts.banglaBody(fontSize: 10, color: _muted)),
+                          ],
+                        )
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          )
+        ],
+      ),
     );
   }
 }
-

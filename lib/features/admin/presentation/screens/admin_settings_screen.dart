@@ -20,6 +20,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/services/email_otp_service.dart';
 import 'package:uddoygi/features/admin/presentation/screens/smtp_settings_screen.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Palette (matches admin brand) ────────────────────────────
 const Color _brand   = Color(0xFF2A0A4B);
@@ -216,21 +217,21 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.warning_rounded, color: _danger),
           SizedBox(width: 8),
-          Text('Reset All Data', style: TextStyle(color: _danger,
+          Text('Reset All Data', style: AppFonts.banglaBody(color: _danger,
               fontWeight: FontWeight.w800, fontSize: 16)),
         ]),
-        content: const Text(
+        content: Text(
           'This will permanently delete ALL data across every department.\n\n'
           'This action CANNOT be undone. Are you absolutely sure?',
-          style: TextStyle(fontSize: 14, height: 1.5),
+          style: AppFonts.banglaBody(fontSize: 14, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: Text('Cancel', style: AppFonts.banglaBody(fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             onPressed: () { Navigator.pop(context); _doReset(); },
@@ -238,7 +239,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               backgroundColor: _danger, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Yes, Delete All', style: TextStyle(fontWeight: FontWeight.w700)),
+            child: Text('Yes, Delete All', style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -383,8 +384,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       builder: (_) => StatefulBuilder(
         builder: (ctx, setSt) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Select Collections to Import',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          title: Text('Select Collections to Import',
+              style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w800)),
           content: SizedBox(
             width: double.maxFinite,
             height: 360,
@@ -405,7 +406,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                   children: _allCollections.map((col) => CheckboxListTile(
                     dense: true,
                     activeColor: _brand,
-                    title: Text(col, style: const TextStyle(fontSize: 13)),
+                    title: Text(col, style: AppFonts.banglaBody(fontSize: 13)),
                     value: _selectedCollections.contains(col),
                     onChanged: (v) => setSt(() {
                       if (v == true) _selectedCollections.add(col);
@@ -427,7 +428,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                 backgroundColor: _brand, foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text('Import', style: TextStyle(fontWeight: FontWeight.w700)),
+              child: Text('Import', style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -443,7 +444,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(fontSize: 14)),
+      content: Text(msg, style: AppFonts.banglaBody(fontSize: 14)),
       backgroundColor: error ? _danger : _safe,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -468,8 +469,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
           ),
         ),
         backgroundColor: Colors.transparent,
-        title: const Text('Settings',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700,
+        title: Text('Settings',
+            style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w700,
                 fontSize: 18)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
@@ -521,7 +522,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(maskedEmail,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                  style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600,
                       color: _brand)),
             ),
           ]),
@@ -538,7 +539,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.send_rounded, size: 18),
               label: Text(_sendingOtp ? 'Sending...' : 'Send OTP to Email',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _brand, foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -555,7 +556,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             maxLength: 6,
             textAlign: TextAlign.center,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
+            style: AppFonts.banglaData(fontSize: 28, fontWeight: FontWeight.w900,
                 letterSpacing: 14, color: _brand),
             decoration: _inputDec('• • • • • •').copyWith(counterText: ''),
           ),
@@ -572,8 +573,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               child: _verifyingOtp
                   ? const SizedBox(width: 20, height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Verify OTP',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  : Text('Verify OTP',
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
             ),
           ),
           const SizedBox(height: 4),
@@ -582,8 +583,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               setState(() { _otpSent = false; _otpCtrl.clear(); });
             },
             icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Resend OTP',
-                style: TextStyle(color: _accent, fontWeight: FontWeight.w600)),
+            label: Text('Resend OTP',
+                style: AppFonts.banglaBody(color: _accent, fontWeight: FontWeight.w600)),
           ),
         ],
 
@@ -594,8 +595,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             _otpSent = false;
             _otpCtrl.clear();
           }),
-          child: const Text('Cancel',
-              style: TextStyle(color: Colors.black45, fontWeight: FontWeight.w600)),
+          child: Text('Cancel',
+              style: AppFonts.banglaBody(color: Colors.black45, fontWeight: FontWeight.w600)),
         ),
       ]),
     );
@@ -646,15 +647,15 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2,
                         color: Colors.white))
-                : const Text('Verify Password',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                : Text('Verify Password',
+                    style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
           ),
         ),
         const SizedBox(height: 8),
         TextButton(
           onPressed: () => setState(() => _step = _VerifStep.idle),
-          child: const Text('Cancel',
-              style: TextStyle(color: Colors.black45, fontWeight: FontWeight.w600)),
+          child: Text('Cancel',
+              style: AppFonts.banglaBody(color: Colors.black45, fontWeight: FontWeight.w600)),
         ),
       ]),
     );
@@ -689,15 +690,15 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2,
                         color: Colors.white))
-                : const Text('Confirm Identity',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                : Text('Confirm Identity',
+                    style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
           ),
         ),
         const SizedBox(height: 8),
         TextButton(
           onPressed: () => setState(() => _step = _VerifStep.idle),
-          child: const Text('Cancel',
-              style: TextStyle(color: Colors.black45, fontWeight: FontWeight.w600)),
+          child: Text('Cancel',
+              style: AppFonts.banglaBody(color: Colors.black45, fontWeight: FontWeight.w600)),
         ),
       ]),
     );
@@ -720,11 +721,11 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: _safe.withOpacity(0.4)),
             ),
-            child: const Row(children: [
+            child: Row(children: [
               Icon(Icons.verified_rounded, color: _safe, size: 18),
               SizedBox(width: 10),
               Expanded(child: Text('Identity verified. Protected actions are unlocked.',
-                  style: TextStyle(fontSize: 13, color: _safe,
+                  style: AppFonts.banglaBody(fontSize: 13, color: _safe,
                       fontWeight: FontWeight.w600))),
             ]),
           ),
@@ -809,8 +810,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Log Output',
-                    style: TextStyle(color: Colors.white70, fontSize: 12,
+                Text('Log Output',
+                    style: AppFonts.banglaBody(color: Colors.white70, fontSize: 12,
                         fontWeight: FontWeight.w600)),
                 IconButton(
                   icon: const Icon(Icons.copy_rounded, color: Colors.white54, size: 16),
@@ -827,8 +828,8 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
                     color: _accent),
               const SizedBox(height: 8),
               Text(_opLog,
-                  style: const TextStyle(color: Color(0xFF98C379),
-                      fontSize: 12, fontFamily: 'UbuntuMono', height: 1.6)),
+                  style: AppFonts.banglaBody(color: Color(0xFF98C379),
+                      fontSize: 12, height: 1.6)),
             ]),
           ),
         ],
@@ -840,7 +841,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
 
   InputDecoration _inputDec(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: Colors.black26, fontSize: 14),
+    hintStyle: AppFonts.banglaBody(color: Colors.black26, fontSize: 14),
     filled: true, fillColor: Colors.white,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
@@ -874,7 +875,7 @@ class _SectionHeader extends StatelessWidget {
           borderRadius: BorderRadius.circular(2),
         )),
     const SizedBox(width: 10),
-    Text(text, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+    Text(text, style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w800,
         color: color ?? _brand)),
   ]);
 }
@@ -920,12 +921,12 @@ class _SettingsTile extends StatelessWidget {
           child: Icon(icon, color: iconColor, size: 22),
         ),
         title: Text(title,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+            style: AppFonts.banglaBody(fontSize: 15, fontWeight: FontWeight.w700,
                 color: danger ? _danger : Colors.black87)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(subtitle,
-              style: const TextStyle(fontSize: 13, color: Colors.black45,
+              style: AppFonts.banglaBody(fontSize: 13, color: Colors.black45,
                   height: 1.4)),
         ),
         trailing: trailing ?? Icon(
@@ -973,10 +974,10 @@ class _VerifCard extends StatelessWidget {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 15,
+            Text(title, style: AppFonts.banglaBody(fontSize: 15,
                 fontWeight: FontWeight.w800, color: _brand)),
             const SizedBox(height: 3),
-            Text(subtitle, style: const TextStyle(fontSize: 13,
+            Text(subtitle, style: AppFonts.banglaBody(fontSize: 13,
                 color: Colors.black45, height: 1.4)),
           ],
         )),
@@ -1018,7 +1019,7 @@ class _VerifProgress extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+          Text(label, style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w600,
               color: active ? _brand : done ? _safe : Colors.black38)),
         ])),
         if (i < steps.length - 1)
@@ -1046,7 +1047,7 @@ class _InfoBox extends StatelessWidget {
       Icon(Icons.info_outline_rounded, size: 16, color: color),
       const SizedBox(width: 8),
       Expanded(child: Text(text,
-          style: TextStyle(fontSize: 13, color: color.withOpacity(0.85),
+          style: AppFonts.banglaBody(fontSize: 13, color: color.withOpacity(0.85),
               height: 1.45))),
     ]),
   );

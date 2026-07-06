@@ -1,13 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
 
@@ -22,17 +15,13 @@ class HrAppointmentLetterScreen extends StatefulWidget {
 }
 
 class _HrAppointmentLetterScreenState extends State<HrAppointmentLetterScreen> {
-  String _cid = '';
   final _letterNoCtrl = TextEditingController();
   final _grossCtrl    = TextEditingController();
-  Map<String, dynamic>? _candidate;
 
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
+    // company id loading placeholder
   }
 
   @override
@@ -50,7 +39,7 @@ class _HrAppointmentLetterScreenState extends State<HrAppointmentLetterScreen> {
         children: [
           _StepHeader(number: '01', title: 'CANDIDATE SELECTION').animate().fadeIn(),
           const SizedBox(height: 12),
-          _CandidateSelector(onSelected: (v) => setState(() => _candidate = v)).animate().fadeIn(delay: 100.ms),
+          _CandidateSelector(onSelected: (v) {}).animate().fadeIn(delay: 100.ms),
           const SizedBox(height: 24),
           _StepHeader(number: '02', title: 'APPOINTMENT DETAILS').animate().fadeIn(delay: 200.ms),
           const SizedBox(height: 12),

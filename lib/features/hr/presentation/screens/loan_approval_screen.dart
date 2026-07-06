@@ -1,16 +1,6 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';

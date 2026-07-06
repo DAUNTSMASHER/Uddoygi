@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
@@ -34,7 +36,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: Text('Customer Relationships', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
+          title: Text('Customer Relationships', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
         elevation: 0,
@@ -59,15 +61,15 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                   children: [
                     _buildSummaryCards(stats),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('Customer Tiering', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('Customer Tiering', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildCustomerTiering(stats.tieredCustomers),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('Aging Receivables (>30 Days)', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('Aging Receivables (>30 Days)', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildAgingReceivables(stats.agingReceivables),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('At Risk (No orders in 30 days)', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('At Risk (No orders in 30 days)', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildAtRiskCustomers(stats.atRisk),
                     const SizedBox(height: 80),
@@ -115,12 +117,12 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
             children: [
               Text(
                 value,
-                style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040), letterSpacing: -0.5),
+                style: AppFonts.banglaHeading(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E0040), letterSpacing: -0.5),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w700),
+                style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -142,11 +144,11 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                 decoration: BoxDecoration(color: c.tierColor.withOpacity(0.1), shape: BoxShape.circle),
                 child: Icon(Icons.workspace_premium_rounded, color: c.tierColor, size: 18),
               ),
-              title: Text(c.name, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15)),
-              subtitle: Text(c.tierName, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: c.tierColor, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+              title: Text(c.name, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
+              subtitle: Text(c.tierName, style: AppFonts.banglaBody(fontSize: 12, color: c.tierColor, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
               trailing: Text(
                 '৳${NumberFormat('#,###').format(c.totalSpend)}',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16, color: const Color(0xFF1E0040)),
+                style: AppFonts.banglaData(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1E0040)),
               ),
             ),
             if (customers.indexOf(c) != customers.length - 1)
@@ -162,7 +164,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
       return UCard(
         padding: const EdgeInsets.all(UddoygiDesign.space24),
         child: Center(
-          child: Text('No overdue payments', style: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontWeight: FontWeight.w600)),
+          child: Text('No overdue payments', style: AppFonts.banglaBody(color: Colors.grey[500], fontWeight: FontWeight.w600)),
         ),
       );
     }
@@ -183,14 +185,14 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(inv.customerName, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15)),
-                  Text('${inv.daysLate} days overdue', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.w700)),
+                  Text(inv.customerName, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text('${inv.daysLate} days overdue', style: AppFonts.banglaBody(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
             Text(
               '৳${NumberFormat('#,###').format(inv.amount)}',
-              style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.redAccent),
+              style: AppFonts.banglaData(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.redAccent),
             ),
           ],
         ),
@@ -203,7 +205,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
       return UCard(
         padding: const EdgeInsets.all(UddoygiDesign.space24),
         child: Center(
-          child: Text('All customers are active', style: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontWeight: FontWeight.w600)),
+          child: Text('All customers are active', style: AppFonts.banglaBody(color: Colors.grey[500], fontWeight: FontWeight.w600)),
         ),
       );
     }
@@ -220,15 +222,15 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
                 decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), shape: BoxShape.circle),
                 child: const Icon(Icons.timer_off_rounded, color: Colors.orange, size: 18),
               ),
-              title: Text(c.name, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w700)),
+              title: Text(c.name, style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w700)),
               subtitle: Text(
                 'Last order: ${c.lastOrderDate != null ? DateFormat('MMM dd, yyyy').format(c.lastOrderDate!) : 'Never'}',
-                style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
+                style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
               ),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: UddoygiDesign.borderFull),
-                child: Text('AT RISK', style: GoogleFonts.outfit(color: Colors.orange, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5)),
+                child: Text('AT RISK', style: AppFonts.banglaData(color: Colors.orange, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5)),
               ),
             ),
             if (atRisk.indexOf(c) != atRisk.length - 1)
@@ -316,6 +318,7 @@ class _AdminCustomersScreenState extends State<AdminCustomersScreen> {
   }
 }
 
+// ── Model classes ─────────────────────────────────────────────────────────────
 class _CustomerDashboardStats {
   final int activeCount;
   final double totalOwed;
@@ -324,7 +327,6 @@ class _CustomerDashboardStats {
   final List<_TieredCustomer> tieredCustomers;
   final List<_AgingInvoice> agingReceivables;
   final List<_TieredCustomer> atRisk;
-
   _CustomerDashboardStats({
     required this.activeCount,
     required this.totalOwed,
@@ -340,141 +342,19 @@ class _TieredCustomer {
   final String name;
   final double totalSpend;
   final DateTime? lastOrderDate;
-  _TieredCustomer({required this.name, required this.totalSpend, this.lastOrderDate});
-
   String get tierName {
-    if (totalSpend > 1000000) return 'Gold';
-    if (totalSpend > 500000) return 'Silver';
-    return 'Bronze';
+    if (totalSpend >= 1000000) return 'PLATINUM';
+    if (totalSpend >= 500000)  return 'GOLD';
+    if (totalSpend >= 100000)  return 'SILVER';
+    return 'BRONZE';
   }
   Color get tierColor {
-    if (totalSpend > 1000000) return Colors.amber;
-    if (totalSpend > 500000) return Colors.blueGrey;
-    return Colors.brown;
+    if (totalSpend >= 1000000) return const Color(0xFF7C3AED);
+    if (totalSpend >= 500000)  return const Color(0xFFD97706);
+    if (totalSpend >= 100000)  return const Color(0xFF6B7280);
+    return const Color(0xFFB45309);
   }
-}
-
-class _AgingInvoice {
-  final String customerName;
-  final double amount;
-  final int daysLate;
-  _AgingInvoice({required this.customerName, required this.amount, required this.daysLate});
-}
-
-
-  _CustomerDashboardStats _calculateCustomerStats(List<QueryDocumentSnapshot> customers, List<QueryDocumentSnapshot> invoices) {
-    Map<String, double> customerSpend = {};
-    Map<String, double> customerOwed = {};
-    Map<String, DateTime?> customerLastOrder = {};
-    
-    for (var doc in invoices) {
-      final data = doc.data() as Map<String, dynamic>;
-      final cid = data['customerId'] ?? '';
-      final total = (data['grandTotal'] as num?)?.toDouble() ?? 0;
-      final status = data['status'] ?? '';
-      final ts = (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
-
-      customerSpend[cid] = (customerSpend[cid] ?? 0) + total;
-      if (status != 'Payment Taken' && status != 'Completed') {
-        customerOwed[cid] = (customerOwed[cid] ?? 0) + total;
-      }
-      
-      if (customerLastOrder[cid] == null || ts.isAfter(customerLastOrder[cid]!)) {
-        customerLastOrder[cid] = ts;
-      }
-    }
-
-    List<_TieredCustomer> tiered = [];
-    List<_TieredCustomer> atRisk = [];
-    double totalOwed = 0;
-    int goldCount = 0;
-
-    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-
-    for (var doc in customers) {
-      final d = doc.data() as Map<String, dynamic>;
-      final id = doc.id;
-      final name = d['name'] ?? 'Unknown';
-      final spend = customerSpend[id] ?? 0;
-      final owed = customerOwed[id] ?? 0;
-      final lastOrder = customerLastOrder[id];
-
-      totalOwed += owed;
-      if (spend > 1000000) goldCount++;
-
-      final tc = _TieredCustomer(name: name, totalSpend: spend, lastOrderDate: lastOrder);
-      tiered.add(tc);
-
-      if (lastOrder == null || lastOrder.isBefore(thirtyDaysAgo)) {
-        atRisk.add(tc);
-      }
-    }
-
-    tiered.sort((a, b) => b.totalSpend.compareTo(a.totalSpend));
-    final top10 = tiered.take(10).toList();
-
-    List<_AgingInvoice> aging = [];
-    for (var doc in invoices) {
-      final data = doc.data() as Map<String, dynamic>;
-      final status = data['status'] ?? '';
-      final ts = (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
-      if (status != 'Payment Taken' && status != 'Completed' && ts.isBefore(thirtyDaysAgo)) {
-        aging.add(_AgingInvoice(
-          customerName: data['customerName'] ?? 'Unknown',
-          amount: (data['grandTotal'] as num?)?.toDouble() ?? 0,
-          daysLate: DateTime.now().difference(ts).inDays,
-        ));
-      }
-    }
-
-    return _CustomerDashboardStats(
-      activeCount: customers.length,
-      totalOwed: totalOwed,
-      goldCount: goldCount,
-      atRiskCount: atRisk.length,
-      tieredCustomers: top10,
-      agingReceivables: aging,
-      atRisk: atRisk.take(5).toList(),
-    );
-  }
-}
-
-class _CustomerDashboardStats {
-  final int activeCount;
-  final double totalOwed;
-  final int goldCount;
-  final int atRiskCount;
-  final List<_TieredCustomer> tieredCustomers;
-  final List<_AgingInvoice> agingReceivables;
-  final List<_TieredCustomer> atRisk;
-
-  _CustomerDashboardStats({
-    required this.activeCount,
-    required this.totalOwed,
-    required this.goldCount,
-    required this.atRiskCount,
-    required this.tieredCustomers,
-    required this.agingReceivables,
-    required this.atRisk,
-  });
-}
-
-class _TieredCustomer {
-  final String name;
-  final double totalSpend;
-  final DateTime? lastOrderDate;
   _TieredCustomer({required this.name, required this.totalSpend, this.lastOrderDate});
-
-  String get tierName {
-    if (totalSpend > 1000000) return 'Gold';
-    if (totalSpend > 500000) return 'Silver';
-    return 'Bronze';
-  }
-  Color get tierColor {
-    if (totalSpend > 1000000) return Colors.amber;
-    if (totalSpend > 500000) return Colors.blueGrey;
-    return Colors.brown;
-  }
 }
 
 class _AgingInvoice {

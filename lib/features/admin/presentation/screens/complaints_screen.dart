@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 class ComplaintsScreen extends StatefulWidget {
   const ComplaintsScreen({super.key});
@@ -12,7 +13,6 @@ class ComplaintsScreen extends StatefulWidget {
 
 class _ComplaintsScreenState extends State<ComplaintsScreen> {
   String _cid = '';
-  final FirebaseFirestore _firestore = DB.firestore;
 
   Future<void> _addRecommendation(String complaintId, String recommendation) async {
     await DB.colSync(_cid, C.complaints).doc(complaintId).update({
@@ -71,9 +71,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Complaints Management',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
         backgroundColor: const Color(0xFF5B21B6),
@@ -119,13 +119,13 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             'Recommendation: ${data['recommendation']}',
-                            style: const TextStyle(color: Colors.blue),
+                            style: AppFonts.banglaBody(color: Colors.blue),
                           ),
                         ),
                       const SizedBox(height: 4),
                       Text(
                         'Status: ${data['status'] ?? 'pending'}',
-                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        style: AppFonts.banglaBody(fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),

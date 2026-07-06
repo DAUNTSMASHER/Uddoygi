@@ -1,7 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:uddoygi/theme/app_theme.dart';
+import 'package:uddoygi/widgets/global_ai_assistant.dart';
+import 'package:uddoygi/services/navigation_service.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +14,9 @@ import 'core/routes.dart';
 import 'services/db.dart';
 import 'services/local_storage_service.dart';
 import 'services/app_rules.dart';
+import 'services/ai_service.dart';
+import 'services/seed_data_service.dart';
+import 'services/language_service.dart';
 
 // Auth surfaces
 import 'features/auth/presentation/screens/splash_screen.dart';
@@ -78,6 +84,7 @@ Future<void> main() async {
     }
   });
 
+  await LanguageService.instance.init();
   runApp(const UddyogiApp());
 }
 
@@ -106,19 +113,27 @@ class _UddyogiAppState extends State<UddyogiApp> {
       ...appRoutes,
     };
 
-    return MaterialApp(
-      navigatorKey: messageNavigatorKey,
-      title: 'Uddyogi - Smart Company Management',
-      theme: buildAppTheme(),
-      debugShowCheckedModeBanner: false,
-      initialRoute: _computeInitialRoute(),
-      routes: mergedRoutes,
-      onUnknownRoute: (_) => MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Page Not Found')),
-          body: const Center(child: Text('404 - Page Not Found')),
-        ),
-      ),
+    return ValueListenableBuilder<Locale>(
+      valueListenable: LanguageService.instance.locale,
+      builder: (_, locale, __) {
+        return MaterialApp(
+          navigatorKey: messageNavigatorKey,
+          title: 'Uddyogi - Smart Company Management',
+          theme: buildAppTheme(),
+          locale: locale,
+          debugShowCheckedModeBanner: false,
+          initialRoute: _computeInitialRoute(),
+          routes: mergedRoutes,
+          navigatorObservers: [RouteObserverService()],
+          builder: (context, child) => GlobalAiAssistant(child: child),
+          onUnknownRoute: (_) => MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Page Not Found')),
+              body: const Center(child: Text('404 - Page Not Found')),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -150,21 +165,26 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
       String email, String password, String companyId) async {
     setState(() => _loading = true);
     try {
-      // Save companyId FIRST so DB.col() works immediately after login
       await LocalStorageService.saveCompanyId(companyId);
 
-      // Try company-namespaced email first (new employees), then raw email (admin/legacy).
-      // e.g. john@co.com in company ABC12345 → john+ABC12345@co.com in Firebase Auth.
-      final compoundEmail = _authEmail(email, companyId);
-      late final UserCredential cred;
+      UserCredential cred;
       try {
+        final compoundEmail = _authEmail(email, companyId);
         cred = await _auth.signInWithEmailAndPassword(
             email: compoundEmail, password: password);
       } on FirebaseAuthException catch (e) {
         if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-          // Fallback: try raw email (admin or legacy account)
-          cred = await _auth.signInWithEmailAndPassword(
-              email: email, password: password);
+          try {
+            cred = await _auth.signInWithEmailAndPassword(
+                email: email, password: password);
+          } on FirebaseAuthException catch (e2) {
+            if ((e2.code == 'user-not-found' || e2.code == 'invalid-credential') &&
+                companyId == '12345678') {
+              cred = await _setupDemoAccount(email, password, companyId);
+            } else {
+              rethrow;
+            }
+          }
         } else {
           rethrow;
         }
@@ -173,60 +193,42 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
       if (!kIsWeb) await registerForPushNotifications();
       await DevicePresence.instance.start();
 
-      // Fetch user doc from new path: data/{companyId}/users/{uid}
-      debugPrint('[Auth] Fetching user data for ${cred.user!.uid} in company $companyId');
       final snap = await DB.colSync(companyId, C.users)
           .doc(cred.user!.uid)
           .get();
       if (!snap.exists) {
-        debugPrint('[Auth] User data document NOT FOUND at data/$companyId/users/${cred.user!.uid}');
         throw Exception('User data not found.');
       }
-      debugPrint('[Auth] User data found: ${snap.data()}');
 
       final data = snap.data()!;
-
-      // ── Company ID guard ──────────────────────────────────
-      final userCompanyId =
-          (data['companyId'] ?? '').toString().trim();
-      if (userCompanyId.isNotEmpty &&
-          userCompanyId != companyId.trim()) {
+      final userCompanyId = (data['companyId'] ?? '').toString().trim();
+      if (userCompanyId.isNotEmpty && userCompanyId != companyId.trim()) {
         await _auth.signOut();
-        throw Exception(
-            'This account does not belong to Company ID $companyId.');
+        throw Exception('This account does not belong to Company ID $companyId.');
       }
 
-      // ── Clear any stale pending-reset field ───────────────────────────────
-      // If login succeeded, the password the user typed IS the current Firebase
-      // Auth password. If a _pendingPasswordReset exists in Firestore but the
-      // user already logged in successfully (meaning the reset was already
-      // applied), just clear the field.
       final pendingPass = (data['_pendingPasswordReset'] as String?)?.trim() ?? '';
       if (pendingPass.isNotEmpty && cred.user != null) {
         try {
           await DB.colSync(companyId, C.users).doc(cred.user!.uid).update({
             '_pendingPasswordReset': null,
-            '_passwordResetAt':      null,
-            '_passwordResetBy':      null,
+            '_passwordResetAt': null,
+            '_passwordResetBy': null,
           });
         } catch (_) {}
       }
 
-      // Persist session (also keeps companyId in local storage)
       final role = (data['role'] ?? 'unknown').toString();
-      await LocalStorageService.saveSession(
-          cred.user!.uid, email, role);
+      await LocalStorageService.saveSession(cred.user!.uid, email, role);
       await LocalStorageService.saveCompanyId(companyId);
 
-      // Load app-level rules — enforced client-side alongside Firebase rules
       AppRules.instance.loadSession(
-        uid:       cred.user!.uid,
+        uid: cred.user!.uid,
         companyId: companyId,
-        role:      role,
+        role: role,
       );
 
-      final dept =
-          (data['department'] ?? '').toString().toLowerCase();
+      final dept = (data['department'] ?? '').toString().toLowerCase();
       String route;
       switch (dept) {
         case 'admin':     route = '/admin/dashboard';     break;
@@ -237,6 +239,9 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
         default:
           throw Exception('Invalid department: $dept');
       }
+
+      AIService.init();
+      await SeedDataService.seedIfEmpty(companyId);
 
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, route);
@@ -266,6 +271,39 @@ class _LoginScreenWrapperState extends State<LoginScreenWrapper> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<UserCredential> _setupDemoAccount(
+      String email, String password, String companyId) async {
+    final dept = email.split('@').first;
+    final role = dept == 'admin' ? 'super_admin' : dept;
+    final displayName = '${dept[0].toUpperCase()}${dept.substring(1)} User';
+
+    await FirebaseFirestore.instance.collection('companies').doc(companyId).set({
+      'companyId': companyId,
+      'companyName': 'UDDYOGI Demo Corp.',
+      'isActive': true,
+      'email': 'demo@uddoygi.com',
+      'phone': '+8801700000000',
+      'industry': 'Manufacturing',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    final cred = await _auth.createUserWithEmailAndPassword(
+        email: email, password: password);
+    final uid = cred.user!.uid;
+
+    await DB.colSync(companyId, C.users).doc(uid).set({
+      'uid': uid,
+      'email': email,
+      'name': displayName,
+      'role': role,
+      'department': dept,
+      'companyId': companyId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    return cred;
   }
 
   /// Converts Firebase Auth error codes into friendly, human-readable messages.

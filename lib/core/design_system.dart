@@ -5,21 +5,14 @@ import 'package:intl/intl.dart';
 /// Follows the 8px grid system and premium aesthetics.
 class UddoygiDesign {
   // ── Spacing (8px Grid) ──────────────────────────────────────────
-  static const double space2 = 2.0;
   static const double space4 = 4.0;
   static const double space8 = 8.0;
-  static const double space10 = 10.0;
   static const double space12 = 12.0;
-  static const double space14 = 14.0;
   static const double space16 = 16.0;
-  static const double space18 = 18.0;
   static const double space20 = 20.0;
   static const double space24 = 24.0;
   static const double space32 = 32.0;
   static const double space48 = 48.0;
-
-  static const Color surface = Color(0xFFF8FAFC);
-  static final NumberFormat moneyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '৳', decimalDigits: 0);
 
   // ── Corners (Border Radii) ──────────────────────────────────────
   static const double radiusS = 8.0;
@@ -37,12 +30,12 @@ class UddoygiDesign {
   // ── Shadows (Premium Multi-layered) ─────────────────────────────
   static List<BoxShadow> get shadowSoft => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.04),
+          color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
         BoxShadow(
-          color: Colors.black.withOpacity(0.02),
+          color: Colors.black.withValues(alpha: 0.02),
           blurRadius: 2,
           offset: const Offset(0, 1),
         ),
@@ -50,12 +43,12 @@ class UddoygiDesign {
 
   static List<BoxShadow> get shadowFloating => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.08),
+          color: Colors.black.withValues(alpha: 0.08),
           blurRadius: 20,
           offset: const Offset(0, 10),
         ),
         BoxShadow(
-          color: Colors.black.withOpacity(0.03),
+          color: Colors.black.withValues(alpha: 0.03),
           blurRadius: 4,
           offset: const Offset(0, 2),
         ),
@@ -70,9 +63,9 @@ class UddoygiDesign {
     Border? border,
   }) {
     return BoxDecoration(
-      color: color.withOpacity(opacity),
+      color: color.withValues(alpha: opacity),
       borderRadius: radius ?? borderM,
-      border: border ?? Border.all(color: Colors.white.withOpacity(0.2)),
+      border: border ?? Border.all(color: Colors.white.withValues(alpha: 0.2)),
     );
   }
 
@@ -97,4 +90,20 @@ class UddoygiDesign {
     }
     return MaterialColor(color.value, swatch);
   }
+
+  // ── Semantic Colors ──────────────────────────────────────────────
+  static const Color surface      = Color(0xFFF8FAFC);
+  static const Color background   = Color(0xFFFFFFFF);
+  static const Color hrBrandGreen = Color(0xFF065F46);
+
+  // ── Factory Semantic Colors ──────────────────────────────────────
+  static const Color factoryBrandRed = Color(0xFFB91C1C); // Red-700
+  static const Color factoryHeroRed  = Color(0xFF7F1D1D); // Red-900
+  static const Color factorySurfaceRed = Color(0xFFFDF2F2); // Red-50
+  static const Color factoryAccentRed = Color(0xFFDC2626); // Red-600
+
+
+  // ── Number Formatters ───────────────────────────────────────────
+  static NumberFormat get moneyFormat =>
+      NumberFormat.currency(locale: 'en', symbol: '৳', decimalDigits: 0);
 }

@@ -25,8 +25,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   String _cid = '';
   // —— UI scale ——
   static const double _fontSmall = 12;
-  static const double _fontRegular = 14;
-  static const double _fontLarge = 16;
 
   // —— Theme accents ——
   static const _primary = Colors.indigo;
@@ -127,7 +125,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             'productName': item['model'] ?? '',
             'colour': item['colour'] ?? '',
             'quantity': (item['qty'] as num?)?.toInt() ?? 0,
-            'sellingPrice': (item['price'] as num?)?.toDouble() ?? 0.0,
+            'sellingPrice': (item['unitPrice'] as num?)?.toDouble() ?? 0.0,
             'purchaseCost': null,
             'dollarRate': dollarRate,
             'profit': null,
@@ -488,8 +486,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       bottomNavigationBar: (_selectedMonth == null)
           ? null
           : SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          margin: const EdgeInsets.only(bottom: 8),
           child: FilledButton.icon(
             icon: _submitting
                 ? const SizedBox(

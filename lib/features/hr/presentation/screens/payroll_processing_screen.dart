@@ -1,10 +1,6 @@
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
@@ -14,7 +10,6 @@ import 'package:uddoygi/widgets/u_card.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 final _money      = UddoygiDesign.moneyFormat;
-final _dateFmt    = DateFormat('d MMM yyyy');
 
 // ─────────────────────────────────────────────────────────────────────────────
 class PayrollProcessingScreen extends StatefulWidget {

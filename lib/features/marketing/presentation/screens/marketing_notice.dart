@@ -17,7 +17,6 @@ import '../widgets/notice_2.dart'; // NoticeComposerDialog
 import '../widgets/notice_3.dart'; // PostSettingsSheet (+ PostVisibility) -> we’ll call it “Notice settings” in UI
 import '../widgets/notice_4.dart'; // CommentSettingsSheet (+ CommentPermission)
 import '../widgets/notice_5.dart'; // CommentsPanel (noticeId version)
-import '../widgets/notice_6.dart';
 
 const _brandBlue = Color(0xFF0D47A1);
 
@@ -29,7 +28,6 @@ class MarketingNoticeScreen extends StatefulWidget {
 }
 
 class _MarketingNoticeScreenState extends State<MarketingNoticeScreen> {
-  String _cid = '';
   // session
   String? userEmail;
   String? userName;
@@ -58,9 +56,6 @@ class _MarketingNoticeScreenState extends State<MarketingNoticeScreen> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _loadSession();
   }
 
@@ -254,7 +249,7 @@ class _MarketingNoticeScreenState extends State<MarketingNoticeScreen> {
           final meAvatar = (me != null && me.photoUrl.isNotEmpty)
               ? me.photoUrl
               : null;
-          final meName = (me?.name?.trim().isNotEmpty == true ? me!.name : null) ?? (userName?.trim().isNotEmpty == true ? userName : null) ?? (myEmail.isNotEmpty ? myEmail : 'User');
+          final meName = (me?.name.trim().isNotEmpty == true ? me!.name : null) ?? (userName?.trim().isNotEmpty == true ? userName : null) ?? (myEmail.isNotEmpty ? myEmail : 'User');
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

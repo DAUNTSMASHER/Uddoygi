@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminMonitoringScreen extends StatefulWidget {
@@ -34,7 +33,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: Text('Live Floor Monitoring', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
+        title: Text('Live Floor Monitoring', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
         elevation: 0,
@@ -94,7 +93,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
             children: [
               Text(
                 'Today\'s Production',
-                style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -104,7 +103,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
                   children: [
                     Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
                     const SizedBox(width: 6),
-                    Text('LIVE', style: GoogleFonts.outfit(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                    Text('LIVE', style: AppFonts.banglaBody(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
                   ],
                 ),
               ),
@@ -116,9 +115,9 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text('1,284', style: GoogleFonts.outfit(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w900, letterSpacing: -1)),
+              Text('1,284', style: AppFonts.banglaBody(color: Colors.white, fontSize: 48, fontWeight: FontWeight.w900, letterSpacing: -1)),
               const SizedBox(width: 8),
-              Text('/ 1,500', style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.3), fontSize: 24, fontWeight: FontWeight.w700)),
+              Text('/ 1,500', style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.3), fontSize: 24, fontWeight: FontWeight.w700)),
             ],
           ),
           const SizedBox(height: UddoygiDesign.space24),
@@ -134,7 +133,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
           const SizedBox(height: UddoygiDesign.space12),
           Text(
             '85.6% of daily goal reached',
-            style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.5), fontSize: 12, fontWeight: FontWeight.w600),
+            style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.5), fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -147,7 +146,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
       children: [
         Text(
           'Machine Status',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         const SizedBox(height: UddoygiDesign.space16),
         UCard(
@@ -182,7 +181,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'M-${index + 1}',
-                          style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w800, color: color.withOpacity(0.8)),
+                          style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w800, color: color.withOpacity(0.8)),
                         ),
                       ],
                     ),
@@ -214,7 +213,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
         const SizedBox(width: 8),
         Text(
           label,
-          style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w700),
+          style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w700),
         ),
       ],
     );
@@ -226,7 +225,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
       children: [
         Text(
           'Utility Consumption',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         const SizedBox(height: UddoygiDesign.space16),
         UCard(
@@ -261,8 +260,8 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14)),
-                  Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: color, fontSize: 15)),
+                  Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 14)),
+                  Text(value, style: AppFonts.banglaData(fontWeight: FontWeight.w900, color: color, fontSize: 15)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -288,7 +287,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
       children: [
         Text(
           'Safety Alerts & Logs',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         const SizedBox(height: UddoygiDesign.space16),
         UCard(
@@ -322,9 +321,9 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
           size: 20,
         ),
       ),
-      title: Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 14)),
-      subtitle: Text(body, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
-      trailing: Text(time, style: GoogleFonts.plusJakartaSans(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w700)),
+      title: Text(title, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 14)),
+      subtitle: Text(body, style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+      trailing: Text(time, style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w700)),
     );
   }
 
@@ -333,12 +332,12 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusL)),
-        title: Text('Call Floor Supervisor', style: GoogleFonts.outfit(fontWeight: FontWeight.w800)),
-        content: Text('Notify the supervisor about a critical floor issue?', style: GoogleFonts.plusJakartaSans(fontSize: 14)),
+        title: Text('Call Floor Supervisor', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800)),
+        content: Text('Notify the supervisor about a critical floor issue?', style: AppFonts.banglaBody(fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.grey)),
+            child: Text('Cancel', style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -353,7 +352,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusM)),
             ),
-            child: Text('Flag Issue & Call', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+            child: Text('Flag Issue & Call', style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -366,7 +365,7 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
       children: [
         Text(
           'Operational Health (Sync)',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         const SizedBox(height: UddoygiDesign.space16),
         UCard(
@@ -399,12 +398,12 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
         Expanded(
           child: Text(
             label,
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, color: Colors.grey[800], fontSize: 14),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: Colors.grey[800], fontSize: 14),
           ),
         ),
         Text(
           value,
-          style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 16, color: color),
+          style: AppFonts.banglaBody(fontWeight: FontWeight.w800, fontSize: 16, color: color),
         ),
       ],
     );
@@ -426,10 +425,10 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Quality Red Flag', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.red[900])),
+                Text('Quality Red Flag', style: AppFonts.banglaBody(fontWeight: FontWeight.w800, color: Colors.red[900])),
                 Text(
                   'Raw materials from "Asia Steels" causing 15% wastage spike.',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.red[800], fontWeight: FontWeight.w600),
+                  style: AppFonts.banglaBody(fontSize: 12, color: Colors.red[800], fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -438,6 +437,4 @@ class _AdminMonitoringScreenState extends State<AdminMonitoringScreen> {
       ),
     );
   }
-}
-
 }

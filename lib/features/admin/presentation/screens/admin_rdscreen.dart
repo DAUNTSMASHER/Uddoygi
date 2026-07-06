@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:intl/intl.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminRDScreen extends StatefulWidget {
   const AdminRDScreen({super.key});
@@ -34,7 +30,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Innovation & R&D', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text('Innovation & R&D', style: AppFonts.banglaBody(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -70,7 +66,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('R&D Timeline', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('R&D Timeline', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
@@ -95,14 +91,14 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
           const SizedBox(width: 16),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(m['title'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
-              Text(m['date'], style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey)),
+              Text(m['title'], style: AppFonts.banglaBody(fontWeight: FontWeight.bold, fontSize: 14)),
+              Text(m['date'], style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey)),
             ]),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: (m['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-            child: Text(m['status'], style: GoogleFonts.outfit(color: m['color'], fontSize: 10, fontWeight: FontWeight.bold)),
+            child: Text(m['status'], style: AppFonts.banglaBody(color: m['color'], fontSize: 10, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -113,7 +109,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Prototype Status', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Prototype Status', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         _prototypeCard('Chair Armrest v3.1', 'Stress Testing Stage', 0.65, Colors.orange),
         const SizedBox(height: 12),
@@ -132,12 +128,12 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+              Text(title, style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
               Icon(Icons.biotech_rounded, color: color, size: 20),
             ],
           ),
           const SizedBox(height: 4),
-          Text(status, style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+          Text(status, style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
@@ -152,7 +148,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Design Feedback Loop', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Design Feedback Loop', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
@@ -163,11 +159,11 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
                 children: [
                   const Icon(Icons.feedback_rounded, color: Colors.red),
                   const SizedBox(width: 12),
-                  Expanded(child: Text('QC Alert: High failure rate in Base Welding', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.red[900]))),
+                  Expanded(child: Text('QC Alert: High failure rate in Base Welding', style: AppFonts.banglaBody(fontWeight: FontWeight.bold, color: Colors.red[900]))),
                 ],
               ),
               const SizedBox(height: 12),
-              Text('R&D fix required for the next production batch to reinforce joint strength.', style: GoogleFonts.outfit(fontSize: 12, color: Colors.red[800])),
+              Text('R&D fix required for the next production batch to reinforce joint strength.', style: AppFonts.banglaBody(fontSize: 12, color: Colors.red[800])),
             ],
           ),
         ),
@@ -179,7 +175,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Cost Optimization', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Cost Optimization', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(20),
@@ -192,8 +188,8 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Project: Reduce Plastic Waste', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text('72%', style: GoogleFonts.outfit(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+                  Text('Project: Reduce Plastic Waste', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('72%', style: AppFonts.banglaBody(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 12),
@@ -202,7 +198,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
                 child: LinearProgressIndicator(value: 0.72, minHeight: 10, backgroundColor: Colors.white10, color: Colors.greenAccent),
               ),
               const SizedBox(height: 12),
-              Text('Target: 10% reduction in scrap. Current: 7.2% achieved.', style: GoogleFonts.outfit(color: Colors.white60, fontSize: 12)),
+              Text('Target: 10% reduction in scrap. Current: 7.2% achieved.', style: AppFonts.banglaBody(color: Colors.white60, fontSize: 12)),
             ],
           ),
         ),
@@ -213,7 +209,7 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Product Optimization (Sync)', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Product Optimization (Sync)', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(20),
@@ -237,8 +233,8 @@ class _AdminRDScreenState extends State<AdminRDScreen> {
       children: [
         Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 20)),
         const SizedBox(width: 16),
-        Expanded(child: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: Colors.grey[700]))),
-        Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+        Expanded(child: Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w600, color: Colors.grey[700]))),
+        Text(value, style: AppFonts.banglaBody(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
       ],
     );
   }

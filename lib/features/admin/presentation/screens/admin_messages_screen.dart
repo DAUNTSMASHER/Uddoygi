@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 class AdminMessagesScreen extends StatefulWidget {
   const AdminMessagesScreen({super.key});
@@ -105,7 +106,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
               padding: const EdgeInsets.only(top: 6, left: 8),
               child: Text(
                 "↪ ${data['sender'] ?? ''}: ${data['text'] ?? ''}",
-                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                style: AppFonts.banglaBody(fontSize: 14, color: Colors.black87),
               ),
             );
           }).toList(),
@@ -152,7 +153,7 @@ class _AdminMessagesScreenState extends State<AdminMessagesScreen> {
               child: const Text('Send Message'),
             ),
             const Divider(height: 30),
-            const Text('All Messages:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+Text('All Messages:', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(

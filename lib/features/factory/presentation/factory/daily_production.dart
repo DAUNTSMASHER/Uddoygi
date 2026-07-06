@@ -1,434 +1,565 @@
-// lib/features/factory/presentation/screens/daily_production_screen.dart
+// lib/features/factory/presentation/factory/daily_production.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'production_dashboard.dart';
-
-const Color _darkBlue = Color(0xFFD51616);
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/widgets/u_inventory_analytics.dart';
 
 class DailyProductionScreen extends StatefulWidget {
   const DailyProductionScreen({Key? key}) : super(key: key);
 
   @override
-  _DailyProductionScreenState createState() => _DailyProductionScreenState();
+  State<DailyProductionScreen> createState() => _DailyProductionScreenState();
 }
 
-class _DailyProductionScreenState extends State<DailyProductionScreen> {
+class _DailyProductionScreenState extends State<DailyProductionScreen> with SingleTickerProviderStateMixin {
   String _cid = '';
-  final _userEmail = FirebaseAuth.instance.currentUser?.email;
-
-  // model dropdown
-  List<String> _models = [];
-  bool _loadingModels = true;
-
-  // filters
-  static const List<String> _filters = ['দিন', 'সপ্তাহ', 'মাস', 'বছর'];
-  String _selectedFilter = _filters.first;
+  bool _loading = true;
+  late TabController _tabController;
+  final Color _brandRed = const Color(0xFF991B1B);
 
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
-    _fetchModels();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadData();
   }
 
-  Future<void> _fetchModels() async {
-    final snap = await DB.colSync(_cid, C.products).orderBy('model_name').get();
-    setState(() {
-      _models = snap.docs.map((d) => (d.data()['model_name'] as String?) ?? d.id).toList();
-      _loadingModels = false;
-    });
+  Future<void> _loadData() async {
+    final id = await LocalStorageService.getSavedCompanyId();
+    if (mounted) setState(() { _cid = id ?? ''; _loading = false; });
   }
 
-  DateTime _computeStart() {
-    final now = DateTime.now();
-    switch (_selectedFilter) {
-      case 'সপ্তাহ':
-        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        return DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-      case 'মাস':
-        return DateTime(now.year, now.month, 1);
-      case 'বছর':
-        return DateTime(now.year, 1, 1);
-      case 'দিন':
-      default:
-        return DateTime(now.year, now.month, now.day);
-    }
-  }
-
-  DateTime _computeEnd(DateTime start) {
-    switch (_selectedFilter) {
-      case 'সপ্তাহ':
-        return start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
-      case 'মাস':
-        return DateTime(start.year, start.month + 1, 0, 23, 59, 59);
-      case 'বছর':
-        return DateTime(start.year, 12, 31, 23, 59, 59);
-      case 'দিন':
-      default:
-        return start.add(const Duration(hours: 23, minutes: 59, seconds: 59));
-    }
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> _streamByRange() {
-    final start = _computeStart();
-    final end = _computeEnd(start);
-    return DB.colSync(_cid, C.dailyProduction)
-        .where('managerEmail', isEqualTo: _userEmail)
-        .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
-        .orderBy('productionDate', descending: true)
-        .snapshots();
-  }
-
-  Stream<int> _sumQuantityInRange(DateTime start, DateTime end) =>
-      DB.colSync(_cid, C.dailyProduction)
-          .where('managerEmail', isEqualTo: _userEmail)
-          .where('productionDate', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-          .where('productionDate', isLessThanOrEqualTo: Timestamp.fromDate(end))
-          .snapshots()
-          .map((snap) => snap.docs.fold<int>(
-        0,
-            (sum, doc) => sum + (doc.data()['quantity'] as int? ?? 0),
-      ));
-
-  Stream<int> _dailyTotal() {
-    final today = DateTime.now();
-    final start = DateTime(today.year, today.month, today.day);
-    final end = start.add(const Duration(hours: 23, minutes: 59, seconds: 59));
-    return _sumQuantityInRange(start, end);
-  }
-
-  Stream<int> _monthlyTotal() {
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, 1);
-    final end = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-    return _sumQuantityInRange(start, end);
-  }
-
-  Future<void> _showEntryDialog({DocumentSnapshot<Map<String, dynamic>>? existing}) async {
-    String? model  = existing?.data()?['productModel'] as String?;
-    String? base   = existing?.data()?['base']        as String?;
-    String? size   = existing?.data()?['size']        as String?;
-    String? colour = existing?.data()?['colour']      as String?;
-    String? curl   = existing?.data()?['curl']        as String?;
-    final qtyCtrl  = TextEditingController(text: existing?.data()?['quantity']?.toString() ?? '');
-    final whomCtrl = TextEditingController(text: existing?.data()?['forWhom'] as String? ?? '');
-    DateTime date  = existing != null
-        ? (existing.data()!['productionDate'] as Timestamp).toDate()
-        : DateTime.now();
-    final formKey  = GlobalKey<FormState>();
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(existing == null ? 'উৎপাদন যোগ করুন' : 'উৎপাদন সম্পাদনা'),
-        content: _loadingModels
-            ? SizedBox(
-          height: 80,
-          child: Center(child: CircularProgressIndicator()),
-        )
-            : SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Model
-                DropdownButtonFormField<String>(
-                  value: model,
-                  decoration: _inputDecoration('পণ্যের মডেল'),
-                  items: _models
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                      .toList(),
-                  onChanged: (v) => model = v,
-                  validator: (v) => v == null ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                // Base
-                TextFormField(
-                  initialValue: base,
-                  decoration: _inputDecoration('বেস'),
-                  onChanged: (v) => base = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: size,
-                  decoration: _inputDecoration('সাইজ'),
-                  onChanged: (v) => size = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: colour,
-                  decoration: _inputDecoration('রঙ'),
-                  onChanged: (v) => colour = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: curl,
-                  decoration: _inputDecoration('কার্ল'),
-                  onChanged: (v) => curl = v.trim(),
-                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: qtyCtrl,
-                  decoration: _inputDecoration('পরিমাণ'),
-                  keyboardType: TextInputType.number,
-                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: whomCtrl,
-                  decoration: _inputDecoration('কার জন্য / কী'),
-                  validator: (v) => v == null || v.isEmpty ? 'আবশ্যক' : null,
-                ),
-                const SizedBox(height: 12),
-                // Date
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text('তারিখ: ${DateFormat.yMd().format(date)}'),
-                    ),
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: ctx,
-                          initialDate: date,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) setState(() => date = picked);
-                      },
-                      child: const Text('পরিবর্তন'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('বাতিল')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _darkBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              if (!formKey.currentState!.validate() || model == null) return;
-              final entry = {
-                'productModel': model,
-                'base'        : base,
-                'size'        : size,
-                'colour'      : colour,
-                'curl'        : curl,
-                'quantity'    : int.parse(qtyCtrl.text),
-                'forWhom'     : whomCtrl.text,
-                'productionDate': Timestamp.fromDate(date),
-                'managerEmail': _userEmail,
-                'timestamp'   : FieldValue.serverTimestamp(),
-              };
-              if (existing == null) {
-                await DB.colSync(_cid, C.dailyProduction).add(entry);
-              } else {
-                await existing.reference.update(entry);
-              }
-              Navigator.of(ctx).pop();
-            },
-            child: Text(existing == null ? 'যোগ করুন' : 'সংরক্ষণ'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String label) => InputDecoration(
-    labelText: label,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-  );
-
-  Widget _buildDashboardCard(String label, Stream<int> stream) {
-    return Card(
-      color: _darkBlue,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: StreamBuilder<int>(
-          stream: stream,
-          builder: (ctx, snap) {
-            final qty = snap.data ?? 0;
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                    )),
-                const SizedBox(height: 8),
-                Text('$qty',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    )),
-              ],
-            );
-          },
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_userEmail == null) {
-      return const Scaffold(body: Center(child: Text('অনুগ্রহ করে সাইন ইন করুন')));
-    }
-
-    // pre‑compute for dashboard
-    final today     = DateTime.now();
-    final dayStart  = DateTime(today.year, today.month, today.day);
-    final dayEnd    = dayStart.add(const Duration(hours: 23, minutes: 59, seconds: 59));
-    final monthStart= DateTime(today.year, today.month, 1);
-    final monthEnd  = DateTime(today.year, today.month + 1, 0, 23, 59, 59);
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return Scaffold(
+      backgroundColor: const Color(0xFFFDF2F2),
       appBar: AppBar(
-        title: const Text('উৎপাদন', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        backgroundColor: _darkBlue,
-        foregroundColor: Colors.white,
+        title: Text('দৈনিক উৎপাদন ও স্টক', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, color: Colors.white)),
+        backgroundColor: _brandRed,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.dashboard),
-            tooltip: 'পূর্ণ ড্যাশবোর্ড',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ProductionDashboard()),
-            ),
-          ),
+        foregroundColor: Colors.white,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          indicatorWeight: 4,
+          labelStyle: AppFonts.banglaHeading(fontWeight: FontWeight.w700),
+          tabs: const [
+            Tab(text: 'উৎপাদন লগ'),
+            Tab(text: 'পণ্য তালিকা'),
+            Tab(text: 'রিসোর্স/কাঁচামাল'),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openActionSheet,
+        backgroundColor: _brandRed,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: Text('নতুন এন্ট্রি', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildLogTab(),
+          _buildProductsTab(),
+          _buildResourcesTab(),
         ],
       ),
-      body: Column(
-        children: [
-          // ─── Dashboard Grid ──────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+    );
+  }
+
+  void _openActionSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('আপনি কী করতে চান?', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 20),
+            _ActionButton(
+              label: 'উৎপাদন রিপোর্ট করুন',
+              icon: Icons.history_edu,
+              color: Colors.red,
+              onTap: () { Navigator.pop(context); _showProductionLogForm(); },
+            ),
+            const SizedBox(height: 12),
+            _ActionButton(
+              label: 'নতুন পণ্য যোগ করুন',
+              icon: Icons.inventory_2,
+              color: Colors.blue,
+              onTap: () { Navigator.pop(context); _showAddProductForm(); },
+            ),
+            const SizedBox(height: 12),
+            _ActionButton(
+              label: 'নতুন রিসোর্স যোগ করুন',
+              icon: Icons.category,
+              color: Colors.orange,
+              onTap: () { Navigator.pop(context); _showAddResourceForm(); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── TAB 1: LOG OUTPUT ──────────────────────────────────────────────────────
+
+  Widget _buildLogTab() {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const UInventoryAnalytics(themeColor: Color(0xFF991B1B)),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            const Icon(Icons.history, color: Color(0xFF991B1B)),
+            const SizedBox(width: 8),
+            Text('সাম্প্রতিক উৎপাদন লগ', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 18)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.dailyProduction).orderBy('timestamp', descending: true).limit(20).snapshots(),
+          builder: (context, snap) {
+            if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+            final docs = snap.data!.docs;
+            if (docs.isEmpty) return _buildEmptyState('কোন উৎপাদন রেকর্ড নেই');
+
+            return Column(
+              children: docs.map((doc) {
+                final d = doc.data();
+                final date = (d['productionDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: UCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: _brandRed.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                          child: Icon(Icons.check_circle, color: _brandRed),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(d['productModel'] ?? 'Unknown', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 16)),
+                              Text('${d['quantity']} ইউনিট • ${d['type'] ?? 'পণ্য'}', style: AppFonts.banglaBody(color: Colors.grey.shade600, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(DateFormat.yMMMd().format(date), style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text(DateFormat.jm().format(date), style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn().slideX(begin: 0.1, end: 0),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  // ── TAB 2: PRODUCTS ─────────────────────────────────────────────────────────
+
+  Widget _buildProductsTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.products).orderBy('model_name').snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final d = docs[i].data();
+            final stock = (d['stock'] as num?) ?? 0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: UCard(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50, height: 50,
+                      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.inventory_2, color: Colors.blue),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(d['model_name'] ?? 'Untitled', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 16)),
+                          Text('${d['colour'] ?? '-'} • ${d['size'] ?? '-'}', style: AppFonts.banglaBody(color: Colors.grey.shade600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('$stock', style: AppFonts.banglaData(fontWeight: FontWeight.w900, fontSize: 18, color: stock < 10 ? Colors.red : Colors.green)),
+                        Text('স্টক', style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── TAB 3: RESOURCES ───────────────────────────────────────────────────────
+
+  Widget _buildResourcesTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.stocks).orderBy('name').snapshots(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snap.data!.docs;
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final d = docs[i].data();
+            final qty = (d['qty'] as num?) ?? 0;
+            final min = (d['minThreshold'] as num?) ?? 0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: UCard(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50, height: 50,
+                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.category, color: Colors.orange),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(d['name'] ?? 'Untitled', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 16)),
+                          Text(d['category'] ?? 'Raw Material', style: AppFonts.banglaBody(color: Colors.grey.shade600, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('$qty ${d['unit'] ?? ''}', style: AppFonts.banglaData(fontWeight: FontWeight.w900, fontSize: 16, color: qty < min ? Colors.red : Colors.black87)),
+                        Text('স্টক', style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── FORMS ──────────────────────────────────────────────────────────────────
+
+  void _showProductionLogForm() {
+    String type = 'Finished Good';
+    String? selectedItem;
+    final qtyCtl = TextEditingController();
+    DateTime date = DateTime.now();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildDashboardCard('আজ', _sumQuantityInRange(dayStart, dayEnd)),
-                _buildDashboardCard('এই মাস', _sumQuantityInRange(monthStart, monthEnd)),
+                Text('উৎপাদন এন্ট্রি করুন', style: AppFonts.banglaHeading(fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: type,
+                  decoration: _fieldDeco('ধরণ'),
+                  items: const [
+                    DropdownMenuItem(value: 'Finished Good', child: Text('তৈরি পণ্য')),
+                    DropdownMenuItem(value: 'Raw Material', child: Text('বেস / কাঁচামাল')),
+                  ],
+                  onChanged: (v) {
+                    setModalState(() { type = v!; selectedItem = null; });
+                  },
+                ),
+                const SizedBox(height: 12),
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _cid.isEmpty ? const Stream.empty() : (type == 'Finished Good' 
+                    ? DB.colSync(_cid, C.products).orderBy('model_name').snapshots()
+                    : DB.colSync(_cid, C.stocks).orderBy('name').snapshots()),
+                  builder: (context, snap) {
+                    final docs = snap.data?.docs ?? [];
+                    return DropdownButtonFormField<String>(
+                      value: selectedItem,
+                      decoration: _fieldDeco('আইটেম নির্বাচন করুন'),
+                      items: docs.map((d) {
+                        final name = type == 'Finished Good' ? d.data()['model_name'] : d.data()['name'];
+                        return DropdownMenuItem(value: d.id, child: Text(name ?? 'Unnamed'));
+                      }).toList(),
+                      onChanged: (v) => setModalState(() => selectedItem = v),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: qtyCtl,
+                  decoration: _fieldDeco('পরিমাণ'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('উৎপাদন তারিখ', style: AppFonts.banglaBody(fontSize: 14)),
+                  subtitle: Text(DateFormat.yMMMd().format(date)),
+                  trailing: const Icon(Icons.calendar_today, size: 20),
+                  onTap: () async {
+                    final picked = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2023), lastDate: DateTime.now());
+                    if (picked != null) setModalState(() => date = picked);
+                  },
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () => _saveProductionLog(type, selectedItem, qtyCtl.text, date),
+                    style: ElevatedButton.styleFrom(backgroundColor: _brandRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    child: Text('সংরক্ষণ করুন', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
 
-          // ─── Filter + summary ─────────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              child: ListTile(
-                leading: const Icon(Icons.filter_list, color: _darkBlue),
-                title: DropdownButton<String>(
-                  value: _selectedFilter,
-                  underline: const SizedBox(),
-                  items: _filters
-                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _selectedFilter = v!),
-                ),
-                subtitle: StreamBuilder<int>(
-                  stream: _sumQuantityInRange(_computeStart(), _computeEnd(_computeStart())),
-                  builder: (ctx, snap) {
-                    final qty = snap.data ?? 0;
-                    return Text('মোট পরিমাণ: $qty');
-                  },
-                ),
+  Future<void> _saveProductionLog(String type, String? id, String qtyStr, DateTime date) async {
+    if (id == null || qtyStr.isEmpty) return;
+    final qty = int.tryParse(qtyStr) ?? 0;
+    if (qty <= 0) return;
+
+    final batch = DB.firestore.batch();
+    final logRef = DB.colSync(_cid, C.dailyProduction).doc();
+    
+    String itemName = '';
+    if (type == 'Finished Good') {
+      final snap = await DB.colSync(_cid, C.products).doc(id).get();
+      itemName = snap.data()?['model_name'] ?? id;
+      batch.update(snap.reference, {'stock': FieldValue.increment(qty)});
+    } else {
+      final snap = await DB.colSync(_cid, C.stocks).doc(id).get();
+      itemName = snap.data()?['name'] ?? id;
+      batch.update(snap.reference, {'qty': FieldValue.increment(qty)});
+    }
+
+    batch.set(logRef, {
+      'productModel': itemName,
+      'itemId': id,
+      'type': type,
+      'quantity': qty,
+      'productionDate': Timestamp.fromDate(date),
+      'timestamp': FieldValue.serverTimestamp(),
+      'managerEmail': FirebaseAuth.instance.currentUser?.email,
+    });
+
+    await batch.commit();
+    if (mounted) Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ উৎপাদন রেকর্ড সংরক্ষণ করা হয়েছে')));
+  }
+
+  void _showAddProductForm() {
+    final modelCtl = TextEditingController();
+    final colorCtl = TextEditingController();
+    final sizeCtl = TextEditingController();
+    final priceCtl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('নতুন পণ্য যোগ করুন', style: AppFonts.banglaHeading(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 16),
+            TextField(controller: modelCtl, decoration: _fieldDeco('মডেল নাম')),
+            const SizedBox(height: 12),
+            TextField(controller: colorCtl, decoration: _fieldDeco('রঙ')),
+            const SizedBox(height: 12),
+            TextField(controller: sizeCtl, decoration: _fieldDeco('সাইজ')),
+            const SizedBox(height: 12),
+            TextField(controller: priceCtl, decoration: _fieldDeco('ইউনিট মূল্য (৳)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (modelCtl.text.isEmpty) return;
+                  await DB.colSync(_cid, C.products).add({
+                    'model_name': modelCtl.text.trim(),
+                    'colour': colorCtl.text.trim(),
+                    'size': sizeCtl.text.trim(),
+                    'unit_price': double.tryParse(priceCtl.text) ?? 0,
+                    'stock': 0,
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: _brandRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: Text('পণ্য তৈরি করুন', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
-          ),
-
-          // ─── List of entries ─────────────────────────
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _streamByRange(),
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return const Center(child: Text('কোনো এন্ট্রি নেই'));
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: docs.length,
-                  itemBuilder: (ctx, i) {
-                    final doc  = docs[i];
-                    final data = doc.data();
-                    final model  = data['productModel'] as String? ?? '—';
-                    final base   = data['base']         as String? ?? '—';
-                    final size   = data['size']         as String? ?? '—';
-                    final colour = data['colour']       as String? ?? '—';
-                    final curl   = data['curl']         as String? ?? '—';
-                    final qty    = data['quantity']?.toString() ?? '—';
-                    final whom   = data['forWhom']      as String? ?? '—';
-                    final ts     = data['productionDate'] as Timestamp?;
-                    final date   = ts != null ? DateFormat.yMMMd().format(ts.toDate()) : '—';
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 2,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                        title: Text('$model × $qty', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('বেস: $base    সাইজ: $size'),
-                            Text('রঙ: $colour    কার্ল: $curl'),
-                            Text('জন্য: $whom'),
-                            Text('তারিখ: $date'),
-                          ],
-                        ),
-                        isThreeLine: true,
-                        trailing: IconButton(
-                          icon: const Icon(Icons.edit, color: _darkBlue),
-                          onPressed: () => _showEntryDialog(existing: doc),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: _darkBlue,
-        child: const Icon(Icons.add),
-        onPressed: () => _showEntryDialog(),
+    );
+  }
+
+  void _showAddResourceForm() {
+    final nameCtl = TextEditingController();
+    final unitCtl = TextEditingController();
+    final minCtl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('নতুন রিসোর্স যোগ করুন', style: AppFonts.banglaHeading(fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 16),
+            TextField(controller: nameCtl, decoration: _fieldDeco('রিসোর্সের নাম (উদা: বেস, হেয়ার)')),
+            const SizedBox(height: 12),
+            TextField(controller: unitCtl, decoration: _fieldDeco('ইউনিট (উদা: গ্রাম, পিস)')),
+            const SizedBox(height: 12),
+            TextField(controller: minCtl, decoration: _fieldDeco('মিনিমাম থ্রেশহোল্ড'), keyboardType: TextInputType.number),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (nameCtl.text.isEmpty) return;
+                  await DB.colSync(_cid, C.stocks).add({
+                    'name': nameCtl.text.trim(),
+                    'unit': unitCtl.text.trim(),
+                    'minThreshold': int.tryParse(minCtl.text) ?? 10,
+                    'qty': 0,
+                    'category': 'Raw Material',
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: _brandRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: Text('রিসোর্স তৈরি করুন', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _fieldDeco(String hint) => InputDecoration(
+    labelText: hint,
+    labelStyle: AppFonts.banglaBody(fontSize: 14),
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  );
+
+  Widget _buildEmptyState(String msg) => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+        const SizedBox(height: 16),
+        Text(msg, style: AppFonts.banglaBody(color: Colors.grey.shade500)),
+      ],
+    ),
+  );
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionButton({required this.label, required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: color.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.1))),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 16),
+            Text(label, style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
+            const Spacer(),
+            Icon(Icons.arrow_forward_ios, size: 14, color: color),
+          ],
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uddoygi/services/drive_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ─────────────────────────────────────────────────────────────
 // DESIGN TOKENS  (matches the reference design)
@@ -21,18 +22,13 @@ class _C {
   static const primary     = Color(0xFF6C0B96);
   static const primaryFg   = Colors.white;
   static const secondary   = Color(0xFFE8F0FF);
-  static const secondaryFg = Color(0xFF0B3A66);
   static const muted       = Color(0xFFF1F5F9);
   static const mutedFg     = Color(0xFF667085);
   static const success     = Color(0xFF10B981);
   static const successFg   = Colors.white;
-  static const warning     = Color(0xFFF59E0B);
-  static const warningFg   = Color(0xFF1F2937);
   static const destructive = Color(0xFFEF4444);
-  static const destructiveFg = Colors.white;
 
   static const rSm = 4.0;
-  static const rMd = 6.0;
   static const rLg = 8.0;
   static const rXl = 12.0;
 }
@@ -515,17 +511,17 @@ class _AppBar extends StatelessWidget {
             onTap: onBack,
             child: const Icon(Icons.arrow_back_rounded, size: 22, color: _C.fg),
           ),
-          const Expanded(
+          Expanded(
             child: Text('My Company',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+                style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w600,
                     color: _C.fg)),
           ),
           if (!editing)
             GestureDetector(
               onTap: onEdit,
-              child: const Text('Edit',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+              child: Text('Edit',
+                  style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600,
                       color: _C.primary)),
             )
           else
@@ -639,7 +635,7 @@ class _TopBlock extends StatelessWidget {
                         if (uploadingLogo && uploadProgress != null)
                           Text(
                             '${(uploadProgress! * 100).round()}%',
-                            style: const TextStyle(
+                            style: AppFonts.banglaBody(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
                               color: _C.primary,
@@ -653,7 +649,7 @@ class _TopBlock extends StatelessWidget {
                 // Company name
                 Text(
                   data.legalName.isNotEmpty ? data.legalName : 'Your Company',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600,
+                  style: AppFonts.banglaBody(fontSize: 18, fontWeight: FontWeight.w600,
                       color: _C.fg),
                   textAlign: TextAlign.center,
                 ),
@@ -679,11 +675,11 @@ class _TopBlock extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Profile Completion',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+                        Text('Profile Completion',
+                            style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w500,
                                 color: _C.mutedFg)),
                         Text('$pct%',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                            style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w600,
                                 color: _C.primary)),
                       ],
                     ),
@@ -730,7 +726,7 @@ class _TopBlock extends StatelessWidget {
                       ),
                     ),
                     child: Text(labels[t]!,
-                        style: TextStyle(
+                        style: AppFonts.banglaBody(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                           color: active ? _C.primary : _C.mutedFg,
@@ -771,12 +767,12 @@ class _AlertBanner extends StatelessWidget {
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Missing Compliance Info',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+              Text('Missing Compliance Info',
+                  style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w600,
                       color: Color(0xFF92400E))),
               const SizedBox(height: 4),
               Text(message,
-                  style: const TextStyle(fontSize: 12, color: Color(0xFFB45309),
+                  style: AppFonts.banglaBody(fontSize: 12, color: Color(0xFFB45309),
                       height: 1.4)),
             ],
           )),
@@ -886,8 +882,8 @@ class _PhoneFieldWithBadge extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const Text('Contact Phone',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+          Text('Contact Phone',
+              style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w500,
                   color: _C.mutedFg)),
           const SizedBox(width: 6),
           Container(
@@ -897,8 +893,8 @@ class _PhoneFieldWithBadge extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               border: Border.all(color: const Color(0xFFFCD34D)),
             ),
-            child: const Text('Used for OTP',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
+            child: Text('Used for OTP',
+                style: AppFonts.banglaBody(fontSize: 9, fontWeight: FontWeight.w700,
                     color: Color(0xFF92400E))),
           ),
         ]),
@@ -907,11 +903,11 @@ class _PhoneFieldWithBadge extends StatelessWidget {
             ? TextFormField(
                 controller: ctrl,
                 keyboardType: TextInputType.phone,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+                style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
                     color: _C.fg),
                 decoration: InputDecoration(
                   hintText: '+8801XXXXXXXXX',
-                  hintStyle: const TextStyle(fontSize: 13, color: _C.mutedFg),
+                  hintStyle: AppFonts.banglaBody(fontSize: 13, color: _C.mutedFg),
                   contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 12),
                   filled: true,
@@ -935,7 +931,7 @@ class _PhoneFieldWithBadge extends StatelessWidget {
                 ),
                 child: Text(
                   ctrl.text.isNotEmpty ? ctrl.text : '—',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+                  style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
                       color: _C.fg),
                 ),
               ),
@@ -1034,17 +1030,17 @@ class _ContactsTab extends StatelessWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Icon(Icons.security_rounded, size: 16, color: Color(0xFFD97706)),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Used for Data Reset Verification',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                    style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w700,
                         color: Color(0xFF92400E))),
                 SizedBox(height: 3),
                 Text(
                   'This phone number will be used to send an OTP when resetting, '
                   'backing up, or importing data in Admin Settings. '
                   'Keep it accurate and in international format (e.g. +8801XXXXXXXXX).',
-                  style: TextStyle(fontSize: 11, color: Color(0xFFB45309), height: 1.45),
+                  style: AppFonts.banglaBody(fontSize: 11, color: Color(0xFFB45309), height: 1.45),
                 ),
               ]),
             ),
@@ -1083,9 +1079,9 @@ class _BankingTab extends StatelessWidget {
           child: Row(children: [
             const Icon(Icons.info_outline_rounded, size: 16, color: _C.primary),
             const SizedBox(width: 8),
-            const Expanded(child: Text(
+            Expanded(child: Text(
               'Banking details can be configured by contacting your system administrator.',
-              style: TextStyle(fontSize: 12, color: _C.mutedFg),
+              style: AppFonts.banglaBody(fontSize: 12, color: _C.mutedFg),
             )),
           ]),
         ),
@@ -1191,8 +1187,8 @@ class _BottomBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(_C.rLg),
               ),
               alignment: Alignment.center,
-              child: const Text('Cancel',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+              child: Text('Cancel',
+                  style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600,
                       color: _C.fg)),
             ),
           ),
@@ -1213,8 +1209,8 @@ class _BottomBar extends StatelessWidget {
                   ? const SizedBox(width: 20, height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : const Text('Save Changes',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                  : Text('Save Changes',
+                      style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600,
                           color: _C.primaryFg)),
             ),
           ),
@@ -1277,7 +1273,7 @@ class _CompanyIdBadge extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               'ID  $formatted',
-              style: const TextStyle(
+              style: AppFonts.banglaBody(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
@@ -1352,15 +1348,15 @@ class _CompanyIdCard extends StatelessWidget {
                     size: 18, color: Colors.white),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Company Registration ID',
-                        style: TextStyle(fontSize: 11, color: Colors.white60,
+                        style: AppFonts.banglaBody(fontSize: 11, color: Colors.white60,
                             fontWeight: FontWeight.w600)),
                     Text('System-generated · Read only',
-                        style: TextStyle(fontSize: 10, color: Colors.white38)),
+                        style: AppFonts.banglaBody(fontSize: 10, color: Colors.white38)),
                   ],
                 ),
               ),
@@ -1372,12 +1368,12 @@ class _CompanyIdCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(99),
                   border: Border.all(color: Colors.white24),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.verified_rounded, size: 11, color: Color(0xFF86EFAC)),
                     SizedBox(width: 4),
-                    Text('Registered', style: TextStyle(fontSize: 10,
+                    Text('Registered', style: AppFonts.banglaBody(fontSize: 10,
                         color: Color(0xFF86EFAC), fontWeight: FontWeight.w700)),
                   ],
                 ),
@@ -1391,7 +1387,7 @@ class _CompanyIdCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   formatted,
-                  style: const TextStyle(
+                  style: AppFonts.banglaBody(
                     fontSize: 28,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -1410,10 +1406,10 @@ class _CompanyIdCard extends StatelessWidget {
             children: [
               const Icon(Icons.info_outline_rounded, size: 12, color: Colors.white38),
               const SizedBox(width: 6),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Use this ID to verify your company registration in the system.',
-                  style: TextStyle(fontSize: 10, color: Colors.white54, height: 1.4),
+                  style: AppFonts.banglaBody(fontSize: 10, color: Colors.white54, height: 1.4),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1427,13 +1423,13 @@ class _CompanyIdCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white24),
                   ),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.copy_rounded, size: 13, color: Colors.white),
                       SizedBox(width: 5),
                       Text('Copy ID',
-                          style: TextStyle(fontSize: 11, color: Colors.white,
+                          style: AppFonts.banglaBody(fontSize: 11, color: Colors.white,
                               fontWeight: FontWeight.w700)),
                     ],
                   ),
@@ -1470,7 +1466,7 @@ class _SectionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
+              style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w600,
                   color: _C.fg)),
           const SizedBox(height: 16),
           ...children.map((w) => Padding(
@@ -1491,7 +1487,7 @@ class _LockedField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+        Text(label, style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w500,
             color: _C.mutedFg)),
         const SizedBox(width: 4),
         const Icon(Icons.lock_outline_rounded, size: 12, color: _C.mutedFg),
@@ -1507,7 +1503,7 @@ class _LockedField extends StatelessWidget {
         ),
         child: Text(
           value.isNotEmpty ? value : '—',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+          style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
               color: _C.mutedFg),
           overflow: TextOverflow.ellipsis,
         ),
@@ -1533,7 +1529,7 @@ class _EditableField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+      Text(label, style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w500,
           color: _C.mutedFg)),
       const SizedBox(height: 6),
       editing
@@ -1541,7 +1537,7 @@ class _EditableField extends StatelessWidget {
               controller: ctrl,
               keyboardType: keyboardType,
               maxLines: maxLines,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+              style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
                   color: _C.fg),
               decoration: InputDecoration(
                 contentPadding: const EdgeInsets.symmetric(
@@ -1567,7 +1563,7 @@ class _EditableField extends StatelessWidget {
               ),
               child: Text(
                 ctrl.text.isNotEmpty ? ctrl.text : '—',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+                style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
                     color: _C.fg),
                 overflow: TextOverflow.ellipsis,
                 maxLines: maxLines,
@@ -1588,19 +1584,19 @@ class _RequiredField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+        Text(label, style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w500,
             color: _C.mutedFg)),
         const Spacer(),
         if (missing)
-          const Text('Required',
-              style: TextStyle(fontSize: 11, color: _C.destructive,
+          Text('Required',
+              style: AppFonts.banglaBody(fontSize: 11, color: _C.destructive,
                   fontWeight: FontWeight.w600)),
       ]),
       const SizedBox(height: 6),
       editing
           ? TextFormField(
               controller: ctrl,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+              style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
                   color: _C.fg),
               decoration: InputDecoration(
                 contentPadding: const EdgeInsets.symmetric(
@@ -1641,7 +1637,7 @@ class _RequiredField extends StatelessWidget {
               ),
               child: Text(
                 ctrl.text.isNotEmpty ? ctrl.text : 'Not provided',
-                style: TextStyle(
+                style: AppFonts.banglaBody(
                   fontSize: 14, fontWeight: FontWeight.w500,
                   color: missing ? _C.destructive : _C.fg,
                 ),
@@ -1665,14 +1661,14 @@ class _DropdownField extends StatelessWidget {
       return _EditableField(label: label, ctrl: ctrl, editing: false);
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+      Text(label, style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w500,
           color: _C.mutedFg)),
       const SizedBox(height: 6),
       DropdownButtonFormField<String>(
         value: options.contains(ctrl.text) ? ctrl.text : null,
         onChanged: (v) { if (v != null) ctrl.text = v; },
         items: options.map((o) => DropdownMenuItem(value: o, child: Text(o,
-            style: const TextStyle(fontSize: 14)))).toList(),
+            style: AppFonts.banglaBody(fontSize: 14)))).toList(),
         decoration: InputDecoration(
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           filled: true,
@@ -1686,7 +1682,7 @@ class _DropdownField extends StatelessWidget {
             borderSide: const BorderSide(color: _C.primary),
           ),
         ),
-        style: const TextStyle(fontSize: 14, color: _C.fg),
+        style: AppFonts.banglaBody(fontSize: 14, color: _C.fg),
         dropdownColor: _C.card,
         icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _C.mutedFg),
       ),
@@ -1706,7 +1702,7 @@ class _ToggleRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(child: Text(label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+            style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w500,
                 color: _C.fg))),
         Switch(
           value: value,
@@ -1742,10 +1738,10 @@ class _AssetRow extends StatelessWidget {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(fontSize: 14,
+            Text(label, style: AppFonts.banglaBody(fontSize: 14,
                 fontWeight: FontWeight.w500, color: _C.fg)),
             const SizedBox(height: 2),
-            Text(meta, style: const TextStyle(fontSize: 12, color: _C.mutedFg)),
+            Text(meta, style: AppFonts.banglaBody(fontSize: 12, color: _C.mutedFg)),
           ],
         )),
         uploaded
@@ -1759,8 +1755,8 @@ class _AssetRow extends StatelessWidget {
                     color: _C.secondary,
                     borderRadius: BorderRadius.circular(_C.rSm),
                   ),
-                  child: const Text('Upload',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                  child: Text('Upload',
+                      style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w600,
                           color: _C.primary)),
                 ),
               ),
@@ -1798,9 +1794,9 @@ class _DocItem extends StatelessWidget {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 14,
+            Text(title, style: AppFonts.banglaBody(fontSize: 14,
                 fontWeight: FontWeight.w500, color: _C.fg)),
-            Text(meta, style: const TextStyle(fontSize: 12, color: _C.mutedFg)),
+            Text(meta, style: AppFonts.banglaBody(fontSize: 12, color: _C.mutedFg)),
           ],
         )),
         Container(
@@ -1811,7 +1807,7 @@ class _DocItem extends StatelessWidget {
           ),
           child: Text(
             valid ? 'Valid' : 'Missing',
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+            style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w600,
                 color: valid ? _C.successFg : _C.mutedFg),
           ),
         ),
@@ -1841,7 +1837,7 @@ class _SmallBadge extends StatelessWidget {
           Icon(icon, size: 11, color: fg),
           const SizedBox(width: 4),
         ],
-        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+        Text(label, style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w600,
             color: fg)),
       ]),
     );
@@ -1867,8 +1863,8 @@ class _InfoRow extends StatelessWidget {
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: _C.mutedFg)),
-            Text(value, style: const TextStyle(fontSize: 14,
+            Text(label, style: AppFonts.banglaBody(fontSize: 12, color: _C.mutedFg)),
+            Text(value, style: AppFonts.banglaBody(fontSize: 14,
                 fontWeight: FontWeight.w500, color: _C.fg)),
           ],
         )),

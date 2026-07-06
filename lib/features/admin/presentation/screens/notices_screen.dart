@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:uddoygi/theme/app_fonts.dart';
+
 import 'package:uddoygi/services/local_storage_service.dart';
 
 // widgets generated earlier
@@ -17,7 +19,6 @@ import 'package:uddoygi/features/marketing/presentation/widgets/notice_2.dart'; 
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_3.dart'; // PostSettingsSheet (+ PostVisibility) -> we’ll call it “Notice settings” in UI
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_4.dart'; // CommentSettingsSheet (+ CommentPermission)
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_5.dart'; // CommentsPanel (noticeId version)
-import 'package:uddoygi/features/marketing/presentation/widgets/notice_6.dart';
 
 const _brandPurple = Color(0xFF2A0A4B);
 
@@ -29,7 +30,6 @@ class AdminNoticeScreen extends StatefulWidget {
 }
 
 class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
-  String _cid = '';
   // session
   String? userEmail;
   String? userName;
@@ -58,9 +58,6 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _loadSession();
   }
 
@@ -232,9 +229,9 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
         backgroundColor: _brandPurple,     // blue background
         foregroundColor: Colors.white,   // makes title & icons white
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Notices',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: AppFonts.banglaHeading(fontWeight: FontWeight.w800),
         ),
         actions: [
           IconButton(
@@ -312,9 +309,9 @@ class _MarketingNoticeScreenState extends State<AdminNoticeScreen> {
                               final match = employees.firstWhere(
                                     (e) =>
                                 e.email.toLowerCase() ==
-                                    (v ?? '').toLowerCase(),
+                                    v.toLowerCase(),
                                 orElse: () => _Employee(
-                                    name: v ?? '', email: v ?? '', department: ''),
+                                    name: v, email: v, department: ''),
                               );
                               return match.name;
                             },
@@ -454,7 +451,7 @@ class _NoticeCard extends StatelessWidget {
                   child: authorPhoto.isEmpty
                       ? Text(
                     _initials(displayAuthor),
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                     ),
@@ -467,7 +464,7 @@ class _NoticeCard extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                    style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 16),
                   ),
                 ),
                 _DeptChip(label: department),
@@ -488,17 +485,17 @@ class _NoticeCard extends StatelessWidget {
                   'By $displayAuthor',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                  style: AppFonts.banglaBody(color: Colors.black54, fontWeight: FontWeight.w600),
                 ),
                 Text(
                   DateFormat('MMM d, yyyy • h:mm a').format(time),
-                  style: const TextStyle(color: Colors.black45),
+                  style: AppFonts.banglaBody(color: Colors.black45),
                 ),
                 if ((authorProfile?.role ?? '').isNotEmpty)
                   Text(
                     '• ${authorProfile!.role}',
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.black45),
+                    style: AppFonts.banglaBody(color: Colors.black45),
                   ),
               ],
             ),
@@ -506,7 +503,7 @@ class _NoticeCard extends StatelessWidget {
             if (files.isNotEmpty) ...[
               const SizedBox(height: 10),
               const Divider(height: 20),
-              const Text('Attachments', style: TextStyle(fontWeight: FontWeight.w800)),
+Text('Attachments', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
               ...files.map((m) {
                 final name = (m['name']?.toString() ?? 'file');
@@ -577,7 +574,7 @@ class _DeptChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: const Color(0xFFD5DBE7)),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -643,9 +640,9 @@ class _CompactCommentsState extends State<_CompactComments> {
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: const Color(0xFFD5DBE7)),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Write a comment…',
-                        style: TextStyle(color: Color(0xFF98A2B3), fontWeight: FontWeight.w600),
+                        style: AppFonts.banglaBody(color: Color(0xFF98A2B3), fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),

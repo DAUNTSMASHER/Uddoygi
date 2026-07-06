@@ -19,12 +19,9 @@ import 'package:uddoygi/features/admin/presentation/screens/admin_all_notices_sc
 import 'package:uddoygi/features/admin/presentation/screens/admin_messages_screen.dart';
 import 'package:uddoygi/features/admin/presentation/widgets/admin_allbuyer.dart';
 import 'package:uddoygi/features/admin/presentation/screens/employee_management_screen.dart';
-import 'package:uddoygi/features/admin/presentation/screens/admin_research.dart';
 import 'package:uddoygi/features/admin/presentation/screens/company_profile_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_settings_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/smtp_settings_screen.dart';
-import 'package:uddoygi/features/admin/presentation/screens/company_monitoring_screen.dart';
-import 'package:uddoygi/features/admin/presentation/screens/admin_order_analysis_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_insights_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_monitoring_screen.dart';
 import 'package:uddoygi/features/admin/presentation/screens/admin_orders_management_screen.dart';
@@ -96,6 +93,7 @@ import 'package:uddoygi/features/payments/presentation/screens/employee_payment_
 import 'package:uddoygi/features/payments/presentation/screens/employee_payment_methods_screen.dart';
 import 'package:uddoygi/features/payments/presentation/screens/hr_bank_accounts_screen.dart';
 import 'package:uddoygi/features/payments/presentation/screens/piprapay_settings_screen.dart';
+import 'package:uddoygi/features/factory/presentation/factory/utility_costs_screen.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
 // 🖥️ HR Web Shell
@@ -111,6 +109,7 @@ import 'package:uddoygi/features/factory/presentation/screens/loan_request_scree
 import 'package:uddoygi/features/marketing/presentation/screens/new_invoices_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/all_invoices_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/sales_report_screen.dart';
+import 'package:uddoygi/features/marketing/presentation/screens/campaign_screen.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/marketing_notice.dart';
 import 'package:uddoygi/features/marketing/presentation/screens/renumeration_dashboard.dart';
 
@@ -121,9 +120,16 @@ import 'package:uddoygi/features/marketing/presentation/work_order/incoming_prod
 import 'package:uddoygi/features/marketing/presentation/work_order/QC_report.dart';
 
 // 🟣 Factory Screens
+import 'package:uddoygi/features/factory/presentation/factory/industrial_velocity_dashboard_screen.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_dashboard.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_notice.dart';
 import 'package:uddoygi/features/factory/presentation/screens/factory_attendance_screen.dart';
+import 'package:uddoygi/features/factory/presentation/factory/work_order.dart';
+import 'package:uddoygi/features/factory/presentation/factory/purchase_order.dart';
+import 'package:uddoygi/features/factory/presentation/factory/daily_production.dart';
+import 'package:uddoygi/features/factory/presentation/factory/inventory_screen.dart';
+import 'package:uddoygi/features/factory/presentation/factory/QC_report.dart';
+import 'package:uddoygi/features/factory/presentation/screens/progress_update_screen.dart';
 
 
 // 🔁 Common Screens
@@ -153,6 +159,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/admin/reports': (context) => const ReportsScreen(),
   '/admin/research': (context) => const AdminRDScreen(),
   '/admin/reports/incentives': (context) => const IncentiveScreen(),
+  '/admin/factory/utilities': (context) => const UtilityCostsScreen(),
   '/admin/welfare': (context) => const WelfareSchemeScreen(),
   '/admin/complaints': (context) => const ComplaintsScreen(),
   '/admin/notices': (context) => const AdminNoticeScreen(),
@@ -276,12 +283,25 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/marketing/incoming_products': (context) => const IncomingProductsScreen(),
   '/marketing/qc_report': (context) => MarketingQCReportScreen(),
   '/marketing/renumeration': (context) => const RenumerationDashboard(),
+  '/marketing/campaign': (context) => const AdsManagerMobile(),
 
   // 🟣 Factory
   '/factory/dashboard': (context) => const FactoryDashboard(),
+  '/factory/work_orders': (context) => const IndustrialVelocityDashboardScreen(),
   '/factory/notices': (context) => const FactoryNoticeScreen(),
   '/factory/attendance':    (context) => const FactoryAttendanceScreen(),
   '/factory/salary_overtime': (context) => const SalaryScreen(),
+  '/factory/work_orders_list': (context) => const WorkOrdersScreen(),
+  '/factory/purchase_orders': (context) => const PurchaseOrdersScreen(),
+  '/factory/daily_production': (context) => const DailyProductionScreen(),
+  '/factory/inventory': (context) => const InventoryScreen(),
+  '/factory/qc_reports': (context) => const QCReportScreen(),
+  '/factory/resource_requests': (context) => const RndProjectRequestScreen(), // Placeholder for resource request
+  '/factory/progress_update': (context) {
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    return ProgressUpdateScreen(workOrderId: args?['workOrderId'] ?? '');
+  },
+  '/factory/loan_requests': (context) => LoanRequestScreen(),
   '/marketing/attendance':  (context) => const FactoryAttendanceScreen(),
   '/admin/attendance':      (context) => const FactoryAttendanceScreen(),
   '/admin/salary':          (context) => const SalaryManagementScreen(),

@@ -1,23 +1,23 @@
+// lib/features/admin/presentation/screens/admin_dashboard.dart
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:uddoygi/services/local_storage_service.dart';
-import '../widgets/admin_drawer.dart';
-import '../widgets/admin_dashboard_summary.dart';
+import 'package:uddoygi/features/admin/presentation/widgets/admin_drawer.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
+import 'package:uddoygi/features/hr/presentation/screens/hr_category_screen.dart';
 import 'package:uddoygi/features/common/notification.dart';
+import 'package:uddoygi/widgets/u_inventory_analytics.dart';
+import 'package:uddoygi/widgets/global_department_switcher.dart';
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-const Color _p900 = Color(0xFF1E0040);
-const Color _p700 = Color(0xFF2A0A4B);
-const Color _p500 = Color(0xFF6D28D9);
-const Color _p100 = Color(0xFFEDE9FE);
-const Color _bg   = Color(0xFFF3F0FA);
+const _primaryPurple = Color(0xFF311042);
+const _accentPurple  = Color(0xFF4C1D95);
+const _backgroundColor = Color(0xFFF8FAFC);
+const _secondaryColor = Color(0xFFF3E8FF);
+const _surfaceColor   = Color(0xFFFFFFFF);
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -25,52 +25,48 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _DashboardItem {
-  final String keyId;
-  final String title;
-  final IconData icon;
-  final String route;
-  final List<Query<Map<String, dynamic>>> queries;
-  const _DashboardItem({
-    required this.keyId,
-    required this.title,
-    required this.icon,
-    required this.route,
-    required this.queries,
-  });
-}
-
 class _AdminDashboardState extends State<AdminDashboard> {
-  String _cid          = '';
-  bool   _isRefreshing = false;
-
-  String? uid;
+  String _cid = '';
   String? name;
   String? photoUrl;
+  int _currentIndex = 0;
 
-  int _currentTab = 0;
+  final List<_DashboardItem> _allItems = const [
+    _DashboardItem('অর্ডার বিশ্লেষণ (Orders)',     Icons.precision_manufacturing_outlined, '/admin/orders/analysis'),
+    _DashboardItem('মজুদ ও ইনভেন্টরি (Inventory)',  Icons.inventory_2_outlined,             '/admin/products/inventory'),
+    _DashboardItem('কিউসি রিপোর্ট (QC Reports)',   Icons.fact_check_outlined,              '/admin/qc_reports'),
+    _DashboardItem('গ্রাহক তালিকা (Customers)',  Icons.assignment_ind_outlined,          '/admin/customers'),
+    _DashboardItem('ক্রেতা ও বায়ার (All Buyers)',   Icons.shopping_cart_checkout,           '/admin/all-buyers'),
+    _DashboardItem('মার্কেটিং ক্যাম্পেইন (Campaigns)',  Icons.campaign_outlined,                '/admin/campaigns'),
+    _DashboardItem('সেলস পাইপলাইন (Pipeline)',   Icons.account_tree_outlined,            '/admin/pipeline'),
+    _DashboardItem('টিম সেলস (Team Sales)',   Icons.groups_outlined,                  '/admin/team_sales'),
+    _DashboardItem('সেলস ইনসাইটস (Insights)',   Icons.insights_outlined,                '/admin/sales/insights'),
+    _DashboardItem('মুনাফা ও লাভ (Profitability)',Icons.monetization_on_outlined,         '/admin/profitability'),
+    _DashboardItem('গবেষণা ও উন্নয়ন (R&D)',          Icons.science_outlined,                 '/admin/research'),
+    _DashboardItem('আরএন্ডডি অনুমোদন (R&D Inbox)',    Icons.mark_as_unread_outlined,          '/admin/rnd/approval'),
+    _DashboardItem('ইনসেনটিভ রিপোর্ট (Incentives)', Icons.star_outline_rounded,             '/admin/reports/incentives'),
+    _DashboardItem('ফ্যাক্টরি ইউটিলিটি (Utilities)',  Icons.bolt_rounded,                  '/admin/factory/utilities'),
+    _DashboardItem('কর্মী ব্যবস্থাপনা (Employees)',  Icons.people_outline,                   '/admin/employees'),
+    _DashboardItem('পে-রোল ও বেতন (Payroll)',      Icons.payments_outlined,                '/admin/salary'),
+    _DashboardItem('কর্মদক্ষতা (Efficiency)', Icons.bolt,                             '/admin/efficiency'),
+    _DashboardItem('কল্যাণ তহবিল (Welfare)',    Icons.favorite_outline,                 '/admin/welfare'),
+    _DashboardItem('আর্থিক রিপোর্ট (Reports)',    Icons.bar_chart_outlined,               '/admin/reports'),
+    _DashboardItem('সিস্টেম মনিটরিং (Monitoring)', Icons.monitor_heart,                    '/admin/monitoring'),
+    _DashboardItem('নোটিশ বোর্ড (Notices)',    Icons.notifications_outlined,           '/admin/notices'),
+    _DashboardItem('মেসেজ ও বার্তা (Messages)',   Icons.chat_bubble_outline,              '/common/messages'),
+    _DashboardItem('অভিযোগ বক্স (Complaints)', Icons.report_problem_outlined,          '/admin/complaints'),
+    _DashboardItem('সিস্টেম সেটিংস (Settings)',   Icons.settings_outlined,                '/admin/settings'),
+    _DashboardItem('এসএমটিপি কনফিগ (SMTP)',       Icons.alternate_email,                  '/admin/smtp'),
+    _DashboardItem('কোম্পানি প্রোফাইল (Profile)',      Icons.business_outlined,                '/admin/company'),
+  ];
 
-  Stream<int> _notifStream = Stream.value(0);
-  Stream<int> _msgStream   = Stream.value(0);
-
-  List<_DashboardItem> get _items {
-    if (_cid.isEmpty) return [];
-    return [
-      _DashboardItem(keyId: 'notices',    title: 'Notices',    icon: Icons.announcement_outlined,  route: '/admin/notices',     queries: [DB.colSync(_cid, C.notices)]),
-      _DashboardItem(keyId: 'employees',  title: 'Employees',  icon: Icons.people_outline,          route: '/admin/employees',   queries: [DB.colSync(_cid, C.users)]),
-      _DashboardItem(keyId: 'reports',    title: 'Reports',    icon: Icons.bar_chart_outlined,      route: '/admin/reports',     queries: [DB.colSync(_cid, C.invoices), DB.colSync(_cid, C.expenses)]),
-      _DashboardItem(keyId: 'welfare',    title: 'Welfare',    icon: Icons.favorite_outline,        route: '/common/welfare',    queries: [DB.colSync(_cid, C.welfare)]),
-      _DashboardItem(keyId: 'complaints', title: 'Complaints', icon: Icons.report_problem_outlined, route: '/common/complaints', queries: [DB.colSync(_cid, C.complaints)]),
-      _DashboardItem(keyId: 'salary',     title: 'Payroll',    icon: Icons.payments_outlined,       route: '/admin/salary',     queries: [DB.colSync(_cid, C.salaries)]),
-      _DashboardItem(keyId: 'messages',   title: 'Messages',   icon: Icons.chat_bubble_outline,     route: '/common/messages',   queries: [DB.colSync(_cid, C.messages)]),
-      _DashboardItem(keyId: 'rnd',        title: 'R&D',        icon: Icons.science_outlined,        route: '/admin/research',    queries: [DB.colSync(_cid, C.rndUpdates)]),
-      _DashboardItem(keyId: 'incentives', title: 'Incentives', icon: Icons.stars_outlined,          route: '/admin/reports/incentives', queries: [DB.colSync(_cid, C.marketingIncentives)]),
-      _DashboardItem(keyId: 'company',    title: 'My Company', icon: Icons.business_outlined,         route: '/admin/company',     queries: []),
-      _DashboardItem(keyId: 'settings',   title: 'Settings',   icon: Icons.settings_outlined,         route: '/admin/settings',    queries: []),
-      _DashboardItem(keyId: 'attendance', title: 'Attendance', icon: Icons.event_available_outlined,  route: '/admin/attendance',  queries: []),
-    ];
-  }
-
+  static const _sections = [
+    _Section('অপারেশনস (Operations)',  [0, 1, 2, 3, 4]),
+    _Section('প্রবৃদ্ধি (Growth)',      [5, 6, 7, 8]),
+    _Section('অর্থ ও আরএন্ডডি (Finance)',     [9, 10, 11, 12, 13]),
+    _Section('মানবসম্পদ (HR)',          [14, 15, 16, 17]),
+    _Section('প্রশাসনিক (Administration)', [18, 19, 20, 21, 22, 23, 24, 25]),
+  ];
 
   @override
   void initState() {
@@ -80,634 +76,365 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> _init() async {
     final id = await LocalStorageService.getSavedCompanyId();
-    if (!mounted) return;
-    setState(() {
-      _cid = id ?? '';
-      if (_cid.isNotEmpty) {
-        _notifStream = _buildNotifStream();
-        _msgStream   = _buildMsgStream();
-      }
-    });
-    await _loadUser();
-  }
-
-  Future<void> _loadUser() async {
+    if (mounted) setState(() => _cid = id ?? '');
     final session = await LocalStorageService.getSession();
     final current = FirebaseAuth.instance.currentUser;
-    if (!mounted) return;
-    setState(() {
-      uid      = session?['uid']  as String? ?? current?.uid;
-      name     = session?['name'] as String? ?? current?.displayName ?? current?.email ?? 'Admin';
-      photoUrl = current?.photoURL;
-    });
-    if (uid != null && _cid.isNotEmpty) {
-      try {
-        final snap = await DB.colSync(_cid, C.users).doc(uid).get();
-        if (snap.exists && mounted) {
-          final d = snap.data()!;
-          setState(() {
-            final n = (d['fullName'] as String?)?.trim();
-            if (n != null && n.isNotEmpty) name = n;
-            final p = (d['profilePhotoUrl'] as String?)?.trim();
-            if (p != null && p.isNotEmpty) photoUrl = p;
-          });
-        }
-      } catch (_) {}
+    if (mounted) {
+      setState(() {
+        name = session?['name'] ?? current?.displayName ?? current?.email ?? 'অ্যাডমিন (Admin)';
+        photoUrl = current?.photoURL;
+      });
     }
   }
 
-  Stream<int> _buildNotifStream() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || _cid.isEmpty) return Stream.value(0);
-    return DB.colSync(_cid, C.notifications)
-        .where('to', isEqualTo: user.email ?? '')
-        .where('read', isEqualTo: false)
-        .snapshots()
-        .map((s) => s.docs.length);
-  }
-
-  Stream<int> _buildMsgStream() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || _cid.isEmpty) return Stream.value(0);
-    return DB.colSync(_cid, C.messages)
-        .where('to', isEqualTo: user.email ?? '')
-        .where('read', isEqualTo: false)
-        .snapshots()
-        .map((s) => s.docs.length);
-  }
-
-  Future<void> _openSection(_DashboardItem item) async {
-    await _markSeen(item.keyId);
-    if (!mounted) return;
-    setState(() {});
-    await Navigator.pushNamed(context, item.route);
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Future<void> _markSeen(String key) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setInt('lastSeen_$key', DateTime.now().millisecondsSinceEpoch);
-  }
-
-  static Future<DateTime> _getLastSeen(String key) async {
-    final p = await SharedPreferences.getInstance();
-    final ms = p.getInt('lastSeen_$key');
-    if (ms == null) {
-      final now = DateTime.now();
-      await p.setInt('lastSeen_$key', now.millisecondsSinceEpoch);
-      return now;
-    }
-    return DateTime.fromMillisecondsSinceEpoch(ms);
+  void _openCategory(String label, List<int> indices) {
+    final categoryItems = indices.map((i) => HrCategoryItem(_allItems[i].title, _allItems[i].icon, _allItems[i].route)).toList();
+    HrCategoryScreen.navigate(context, label, categoryItems, themeColor: _primaryPurple);
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayName = (name ?? 'Admin').trim();
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+
+    if (isDesktop) {
+      return Scaffold(
+        backgroundColor: _backgroundColor,
+        drawer: const AdminDrawer(),
+        appBar: AppBar(title: Text('অ্যাডমিন ড্যাশবোর্ড (Admin Dashboard)', style: AppFonts.banglaHeading(color: Colors.white, fontSize: 18)), backgroundColor: _primaryPurple),
+        body: _buildScrollBody(),
+      );
+    }
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _backgroundColor,
       drawer: const AdminDrawer(),
-      bottomNavigationBar: _buildBottomNav(),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, _) => [_buildAppBar(displayName)],
-        body: _buildBody(),
+      body: Stack(
+        children: [
+          _buildMobileBody(),
+          _buildFloatingBottomBar(),
+        ],
       ),
     );
   }
 
-  // ── Sliver App Bar ────────────────────────────────────────────────────────
-  SliverAppBar _buildAppBar(String displayName) {
-    return SliverAppBar(
-      pinned: true,
-      floating: false,
-      elevation: 0,
-      expandedHeight: 0,
-      backgroundColor: _p700,
-      foregroundColor: Colors.white,
-      iconTheme: const IconThemeData(color: Colors.white),
-      titleSpacing: 0,
-      title: Row(children: [
-        const SizedBox(width: 4),
-        Container(
-          width: 34, height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white30, width: 1.5),
-          ),
-          child: ClipOval(
-            child: (photoUrl != null && photoUrl!.isNotEmpty)
-                ? Image.network(photoUrl!, fit: BoxFit.cover,
-                    errorBuilder: (ctx, err, st) => _InitialsAvatar(displayName))
-                : _InitialsAvatar(displayName),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Admin Panel',
-                  style: GoogleFonts.inter(
-                      color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w500)),
-              Text(displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                      color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
-            ],
-          ),
-        ),
-      ]),
-      actions: [
-        StreamBuilder<int>(
-          stream: _notifStream,
-          builder: (_, s) => _AppBarAction(
-            icon: Icons.notifications_outlined,
-            badge: s.data ?? 0,
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const NotificationPage())),
-          ),
-        ),
-        _AppBarAction(
-          icon: Icons.logout_rounded,
-          onTap: () async {
-            await LocalStorageService.performLogout();
-            if (mounted) Navigator.pushReplacementNamed(context, '/login');
-          },
-        ),
-        const SizedBox(width: 4),
-      ],
-    );
-  }
-
-  // ── Body ──────────────────────────────────────────────────────────────────
-  Widget _buildBody() {
-    return CustomScrollView(
-      slivers: [
-        // ── Summary hero card ────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
+  Widget _buildMobileBody() {
+    return Column(
+      children: [
+        _Header(name: name ?? 'অ্যাডমিন (Admin)', onNotifTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage()))),
+        const GlobalDepartmentSwitcher(current: 'Admin'),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(width: 12),
-                Container(
-                  width: 22, height: 22,
-                  decoration: BoxDecoration(
-                      color: _p100, borderRadius: BorderRadius.circular(6)),
-                  child: const Icon(Icons.insights_rounded, size: 12, color: _p500),
+                const SizedBox(height: 12),
+                _AdminOverview(cid: _cid),
+                const SizedBox(height: 12),
+                const UInventoryAnalytics(themeColor: _accentPurple).animate().fadeIn(delay: 200.ms),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    'ব্যবস্থাপনা মডিউল (Management Modules)',
+                    style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  ),
                 ),
-                const SizedBox(width: 6),
-                Text('Overview',
-                    style: GoogleFonts.inter(
-                        fontSize: 13, fontWeight: FontWeight.w800, color: _p700)),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () async {
-                    setState(() => _isRefreshing = true);
-                    await Future.delayed(const Duration(milliseconds: 600));
-                    if (mounted) setState(() => _isRefreshing = false);
-                  },
-                  child: _isRefreshing
-                      ? const Padding(
-                          padding: EdgeInsets.only(right: 12),
-                          child: SizedBox(
-                              width: 12, height: 12,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: _p500)),
-                        )
-                      : Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Container(
-                            width: 26, height: 26,
-                            decoration: BoxDecoration(
-                                color: _p100,
-                                borderRadius: BorderRadius.circular(7)),
-                            child: const Icon(Icons.refresh_rounded,
-                                size: 13, color: _p500),
-                          ),
-                        ),
-                ),
+                const SizedBox(height: 12),
+                _ModuleGrid(sections: _sections, onCategoryTap: _openCategory),
               ],
             ),
           ),
         ),
-
-        // ── Summary (single big hero card) ───────────────────────────────
-        const SliverToBoxAdapter(child: AdminDashboardSummary()),
-
-        // ── Quick Actions header ─────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-            child: Row(children: [
-              Container(
-                width: 22, height: 22,
-                decoration: BoxDecoration(
-                    color: _p100, borderRadius: BorderRadius.circular(6)),
-                child: const Icon(Icons.bolt_rounded, size: 12, color: _p500),
-              ),
-              const SizedBox(width: 6),
-              Text('Quick Actions',
-                  style: GoogleFonts.inter(
-                      fontSize: 13, fontWeight: FontWeight.w800, color: _p700)),
-            ]),
-          ),
-        ),
-
-        // ── Quick action 4-column grid ───────────────────────────────────
-        _cid.isEmpty
-            ? const SliverFillRemaining(
-                child: Center(child: CircularProgressIndicator(color: _p500)))
-            : SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 7,
-                    mainAxisSpacing: 7,
-                    childAspectRatio: 0.88,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final item = _items[index];
-                      return _ActionTile(
-                        item: item,
-                        getLastSeen: _getLastSeen,
-                        onTap: () => _openSection(item),
-                        noticeBadgeStream:
-                            item.keyId == 'notices' ? _notifStream : null,
-                      );
-                    },
-                    childCount: _items.length,
-                  ),
-                ),
-              ),
       ],
     );
   }
 
-  // ── Bottom nav ────────────────────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    final tabs = [
-      _NavItem('Home',          Icons.home_rounded,         () => setState(() => _currentTab = 0)),
-      _NavItem('Employees',     Icons.people_rounded,       () => Navigator.pushNamed(context, '/admin/employees')),
-      _NavItem('Messages',      Icons.chat_bubble_rounded,  () => Navigator.pushNamed(context, '/common/messages'),  badge: _msgStream),
-      _NavItem('Notifications', Icons.notifications_rounded,
-          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())),
-          badge: _notifStream),
-    ];
+  Widget _buildScrollBody() {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const GlobalDepartmentSwitcher(current: 'Admin'),
+        const SizedBox(height: 16),
+        _AdminOverview(cid: _cid),
+        const SizedBox(height: 20),
+        const UInventoryAnalytics(themeColor: _accentPurple).animate().fadeIn(delay: 200.ms),
+        const SizedBox(height: 24),
+        _ModuleGrid(sections: _sections, onCategoryTap: _openCategory),
+      ],
+    );
+  }
 
+  Widget _buildFloatingBottomBar() {
+    return Positioned(
+      bottom: 24,
+      left: 24,
+      right: 24,
+      child: Container(
+        height: 70,
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(35),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, spreadRadius: 5),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _BottomBarIcon(icon: Icons.home_rounded, isActive: _currentIndex == 0, onTap: () => setState(() => _currentIndex = 0)),
+            _BottomBarIcon(icon: Icons.inventory_2_rounded, isActive: _currentIndex == 1, onTap: () => setState(() => _currentIndex = 1)),
+            _BottomBarIcon(icon: Icons.notifications_none_rounded, isActive: _currentIndex == 2, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())), hasBadge: true),
+            _BottomBarIcon(icon: Icons.person_outline_rounded, isActive: _currentIndex == 3, onTap: () => Navigator.pushNamed(context, '/admin/company')),
+          ],
+        ),
+      ),
+    ).animate().slideY(begin: 1, end: 0, duration: 600.ms, curve: Curves.easeOutBack);
+  }
+}
+
+class _Header extends StatelessWidget {
+  final String name;
+  final VoidCallback onNotifTap;
+  const _Header({required this.name, required this.onNotifTap});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: _p900,
-        boxShadow: [
-          BoxShadow(
-            color: _p900.withValues(alpha: 0.4),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 32, 16, 12),
+      decoration: const BoxDecoration(
+        color: _primaryPurple,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
+          ),
+          Expanded(
+            child: Column(
+            children: [
+              Text('স্বাগতম (Welcome back)', style: AppFonts.banglaBody(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
+              Text(name, style: AppFonts.banglaHeading(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          )),
+          GestureDetector(
+            onTap: onNotifTap,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, spreadRadius: 1),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.notifications_rounded, color: Colors.white, size: 22),
+            ),
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: List.generate(tabs.length, (i) {
-              final t        = tabs[i];
-              final selected = i == _currentTab;
-              return Expanded(
-                child: InkWell(
-                  onTap: () {
-                    setState(() => _currentTab = i);
-                    t.onTap();
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                          color: selected ? _p500 : Colors.transparent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        t.badge == null
-                            ? Icon(t.icon,
-                                color: selected ? Colors.white : Colors.white38,
-                                size: 22)
-                            : StreamBuilder<int>(
-                                stream: t.badge,
-                                builder: (_, s) {
-                                  final n = s.data ?? 0;
-                                  return Stack(clipBehavior: Clip.none, children: [
-                                    Icon(t.icon,
-                                        color: selected ? Colors.white : Colors.white38,
-                                        size: 22),
-                                    if (n > 0)
-                                      Positioned(
-                                        right: -6, top: -4,
-                                        child: _Dot(n),
-                                      ),
-                                  ]);
-                                },
-                              ),
-                        const SizedBox(height: 3),
-                        Text(t.label,
-                            maxLines: 1,
-                            style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                                color: selected ? Colors.white : Colors.white38)),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
+    ).animate().fadeIn().slideY(begin: -0.1, end: 0);
+  }
+}
+
+class _AdminOverview extends StatelessWidget {
+  final String cid;
+  const _AdminOverview({required this.cid});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(1),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 15, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('অ্যাডমিন ওভারভিউ (Overview)', style: AppFonts.banglaHeading(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+              Text('সকল তথ্য', style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: _primaryPurple)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            mainAxisSpacing: 1,
+            crossAxisSpacing: 1,
+            childAspectRatio: 1.4,
+            children: [
+              _MetricItem(label: 'রেভিনিউ (Revenue)', stream: DB.colSync(cid, C.invoices).snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryPurple),
+              _MetricItem(label: 'অর্ডার (Orders)', stream: DB.colSync(cid, C.workOrders).snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryPurple),
+              _MetricItem(label: 'কর্মী (Staff)', stream: DB.colSync(cid, C.users).snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryPurple),
+              _MetricItem(label: 'গ্রাহক (Clients)', stream: DB.colSync(cid, C.customers).snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryPurple),
+              _MetricItem(label: 'অভিযোগ (Issues)', stream: DB.colSync(cid, C.complaints).where('status', isEqualTo: 'pending').snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryPurple),
+              _MetricItem(label: 'মোট ব্যয় (Expense)', stream: Stream.value('৳২৫.৮ল'), primaryColor: _primaryPurple),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1, end: 0);
+  }
+}
+
+class _MetricItem extends StatelessWidget {
+  final String label;
+  final Stream<String> stream;
+  final Color primaryColor;
+
+  _MetricItem({
+    required this.label,
+    required this.stream,
+    required this.primaryColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        StreamBuilder<String>(
+          stream: stream,
+          builder: (_, snap) => FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              (snap.data ?? '—').toBanglaDigits,
+              style: AppFonts.banglaData(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: primaryColor,
+                height: 1.0,
+              ),
+            ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ── Action tile — 4-column grid, white card with dark-purple label ─────────────
-class _ActionTile extends StatefulWidget {
-  final _DashboardItem item;
-  final Future<DateTime> Function(String) getLastSeen;
-  final VoidCallback onTap;
-  final Stream<int>? noticeBadgeStream;
-
-  const _ActionTile({
-    required this.item,
-    required this.getLastSeen,
-    required this.onTap,
-    this.noticeBadgeStream,
-  });
-
-  @override
-  State<_ActionTile> createState() => _ActionTileState();
-}
-
-class _ActionTileState extends State<_ActionTile> {
-  int _newCount = 0;
-  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _subs = [];
-  final Map<int, int> _perQ = {};
-
-  // One icon-box colour per tile (cycles through purple shades)
-  static const _iconColors = [
-    Color(0xFF3B0764),
-    Color(0xFF4C1D95),
-    Color(0xFF312E81),
-    Color(0xFF1E1B4B),
-    Color(0xFF2A0A4B),
-    Color(0xFF2E1065),
-    Color(0xFF1E0040),
-    Color(0xFF1A0533),
-  ];
-
-  Color get _iconBg =>
-      _iconColors[widget.item.keyId.hashCode.abs() % _iconColors.length];
-
-  @override
-  void initState() {
-    super.initState();
-    _attach();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ActionTile old) {
-    super.didUpdateWidget(old);
-    _detach();
-    _attach();
-  }
-
-  @override
-  void dispose() {
-    _detach();
-    super.dispose();
-  }
-
-  Future<void> _attach() async {
-    if (widget.item.queries.isEmpty) return;
-    final lastSeen = await widget.getLastSeen(widget.item.keyId);
-    _perQ.clear();
-    for (final q in widget.item.queries) {
-      final sub = q
-          .where('createdAt', isGreaterThan: Timestamp.fromDate(lastSeen))
-          .snapshots()
-          .listen((snap) {
-        _perQ[q.hashCode] = snap.docs.length;
-        final total = _perQ.values.fold(0, (s, n) => s + n);
-        if (mounted) setState(() => _newCount = total);
-      });
-      _subs.add(sub);
-    }
-  }
-
-  void _detach() {
-    for (final s in _subs) s.cancel();
-    _subs.clear();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final badgeStream = widget.noticeBadgeStream;
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFEDE9FE), width: 1),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0A000000),
-              blurRadius: 6,
-              offset: Offset(0, 2),
-            ),
-          ],
+        const SizedBox(height: 1),
+        Text(
+          label,
+          style: AppFonts.banglaBody(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF6B7280),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        child: Stack(
-          children: [
-            // Badge (top-right)
-            if (badgeStream != null)
-              Positioned(
-                top: 5, right: 5,
-                child: StreamBuilder<int>(
-                  stream: badgeStream,
-                  builder: (_, s) {
-                    final n = s.data ?? 0;
-                    final show = n > 0 || _newCount > 0;
-                    if (!show) return const SizedBox.shrink();
-                    return _Dot(n > 0 ? n : _newCount);
-                  },
-                ),
-              )
-            else if (_newCount > 0)
-              Positioned(
-                top: 5, right: 5,
-                child: _Dot(_newCount),
-              ),
-
-            // Content
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Icon box
-                  Container(
-                    width: 34, height: 34,
-                    decoration: BoxDecoration(
-                      color: _iconBg,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(widget.item.icon,
-                        color: Colors.white, size: 17),
-                  ),
-                  const SizedBox(height: 6),
-                  // Label
-                  Text(
-                    widget.item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _p900,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
 
-// ── Initials avatar ───────────────────────────────────────────────────────────
-class _InitialsAvatar extends StatelessWidget {
-  final String name;
-  const _InitialsAvatar(this.name);
-
-  String get _initials {
-    final parts = name.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty) return 'A';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts.last[0]).toUpperCase();
-  }
+class _ModuleGrid extends StatelessWidget {
+  final List<_Section> sections;
+  final void Function(String, List<int>) onCategoryTap;
+  const _ModuleGrid({required this.sections, required this.onCategoryTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white24,
-      child: Center(
-        child: Text(_initials,
-            style: GoogleFonts.inter(
-                color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
-      ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: sections.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 2.2),
+      itemBuilder: (context, i) {
+        final sec = sections[i];
+        return _ModuleTile(label: sec.label, icon: _getIcon(sec.label), onTap: () => onCategoryTap(sec.label, sec.indices));
+      },
     );
   }
-}
 
-// ── App bar action ────────────────────────────────────────────────────────────
-class _AppBarAction extends StatelessWidget {
-  final IconData icon;
-  final int badge;
-  final VoidCallback onTap;
-
-  const _AppBarAction({
-    required this.icon,
-    required this.onTap,
-    this.badge = 0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(clipBehavior: Clip.none, children: [
-      IconButton(icon: Icon(icon, size: 22), onPressed: onTap, color: Colors.white),
-      if (badge > 0) Positioned(right: 6, top: 6, child: _Dot(badge)),
-    ]);
+  IconData _getIcon(String label) {
+    if (label.contains('Operations') || label.contains('অপারেশনস')) return Icons.precision_manufacturing_rounded;
+    if (label.contains('Growth') || label.contains('প্রবৃদ্ধি')) return Icons.trending_up_rounded;
+    if (label.contains('Finance') || label.contains('অর্থ')) return Icons.account_balance_wallet_outlined;
+    if (label.contains('HR') || label.contains('মানবসম্পদ')) return Icons.people_outline_rounded;
+    if (label.contains('Administration') || label.contains('প্রশাসনিক')) return Icons.settings_rounded;
+    return Icons.category_rounded;
   }
 }
 
-// ── Section header ────────────────────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Widget? trailing;
-
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Row(children: [
-        Container(
-          width: 26, height: 26,
-          decoration: BoxDecoration(color: _p100, borderRadius: BorderRadius.circular(6)),
-          child: Icon(icon, size: 14, color: _p500),
-        ),
-        const SizedBox(width: 8),
-        Text(title,
-            style: GoogleFonts.inter(
-                fontSize: 14, fontWeight: FontWeight.w800, color: _p700)),
-        const Spacer(),
-        if (trailing != null) trailing!,
-      ]),
-    );
-  }
-}
-
-// ── Badge dot ─────────────────────────────────────────────────────────────────
-class _Dot extends StatelessWidget {
-  final int count;
-  const _Dot(this.count);
-
-  @override
-  Widget build(BuildContext context) {
-    if (count <= 0) return const SizedBox.shrink();
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.redAccent,
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: Colors.white, width: 1.2),
-      ),
-      child: Text(
-        count > 99 ? '99+' : '$count',
-        style: GoogleFonts.inter(
-            color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800, height: 1.1),
-      ),
-    );
-  }
-}
-
-// ── Nav item model ────────────────────────────────────────────────────────────
-class _NavItem {
+class _ModuleTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  final Stream<int>? badge;
-  _NavItem(this.label, this.icon, this.onTap, {this.badge});
+  const _ModuleTile({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 2))],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: _secondaryColor, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: _accentPurple, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label, style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF111827)))),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1, end: 0);
+  }
+}
+
+class _BottomBarIcon extends StatelessWidget {
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+  final bool hasBadge;
+  const _BottomBarIcon({required this.icon, required this.isActive, required this.onTap, this.hasBadge = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, color: isActive ? _accentPurple : const Color(0xFF9CA3AF), size: 28),
+          if (hasBadge) Positioned(top: 0, right: 0, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardItem {
+  final String title;
+  final IconData icon;
+  final String route;
+  const _DashboardItem(this.title, this.icon, this.route);
+}
+
+class _Section {
+  final String label;
+  final List<int> indices;
+  const _Section(this.label, this.indices);
 }

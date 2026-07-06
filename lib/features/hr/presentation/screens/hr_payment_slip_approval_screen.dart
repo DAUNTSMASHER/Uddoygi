@@ -28,14 +28,19 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 
 // ── Design Tokens (Standardized) ─────────────────────────────────────────────
 const _brandGreen = Color(0xFF065F46);
-const _accentGreen = Color(0xFF10B981);
 const _surface    = UddoygiDesign.surface;
 const _success    = Color(0xFF16A34A);
 const _warn       = Color(0xFFF59E0B);
 const _danger     = Color(0xFFDC2626);
+const _brand      = Color(0xFF065F46);   // alias for _brandGreen
+const _pending    = Color(0xFFF59E0B);   // amber for pending states
+const _info       = Color(0xFF2563EB);   // blue for informational states
 
 final _fmt = UddoygiDesign.moneyFormat;
 
@@ -1750,8 +1755,7 @@ class _SlipCard extends StatelessWidget {
             ],
           ]),
         ),
-      ),
-    );
+      );
   }
 }
 

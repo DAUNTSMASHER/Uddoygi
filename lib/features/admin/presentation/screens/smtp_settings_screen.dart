@@ -16,7 +16,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:uddoygi/services/db.dart';
@@ -275,7 +275,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
   void _snack(String msg, {bool ok = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: GoogleFonts.inter(fontSize: 13)),
+      content: Text(msg, style: AppFonts.banglaBody(fontSize: 13)),
       backgroundColor: ok ? _success : _danger,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -342,7 +342,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: Text('Email Server Setup',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 16)),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -438,7 +438,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text('Use SSL/TLS',
-                                    style: GoogleFonts.inter(
+                                    style: AppFonts.banglaBody(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: _fg)),
@@ -477,7 +477,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Password / App Password',
-                              style: GoogleFonts.inter(
+                              style: AppFonts.banglaBody(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: _fg)),
@@ -485,7 +485,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                           TextFormField(
                             controller: _passCtl,
                             obscureText: !_passVisible,
-                            style: GoogleFonts.inter(fontSize: 14, color: _fg),
+                            style: AppFonts.banglaBody(fontSize: 14, color: _fg),
                             onChanged: (_) => setState(() {
                               _saved = false; _testResult = null;
                             }),
@@ -493,7 +493,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                                 ? null : 'Password is required',
                             decoration: InputDecoration(
                               hintText: _selectedPreset?.hint ?? 'SMTP password',
-                              hintStyle: GoogleFonts.inter(
+                              hintStyle: AppFonts.banglaBody(
                                   color: _muted, fontSize: 13),
                               prefixIcon: const Icon(Icons.key_rounded,
                                   color: _muted, size: 18),
@@ -579,7 +579,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(_testResult!,
-                                style: GoogleFonts.inter(
+                                style: AppFonts.banglaBody(
                                     fontSize: 13,
                                     color: _testOk ? _success : _danger,
                                     fontWeight: FontWeight.w600,
@@ -613,7 +613,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                                 size: 16, color: _accent),
                         label: Text(
                           _testing ? 'Testing…' : 'Test',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.banglaBody(
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
                               color: _testing ? _muted : _accent),
@@ -646,7 +646,7 @@ class _SmtpSettingsScreenState extends State<SmtpSettingsScreen> {
                           _saving
                               ? 'Saving…'
                               : (_saved ? 'Saved ✓' : 'Save Settings'),
-                          style: GoogleFonts.inter(
+                          style: AppFonts.banglaBody(
                               fontWeight: FontWeight.w700, fontSize: 14),
                         ),
                       ),
@@ -716,7 +716,7 @@ class _ProviderGrid extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(p.icon,
-                      style: TextStyle(
+                      style: AppFonts.banglaBody(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
                           color: active ? Colors.white : _accent)),
@@ -728,7 +728,7 @@ class _ProviderGrid extends StatelessWidget {
                   p.name.split(' ').first, // short name
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.banglaBody(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: active ? Colors.white : _fg),
@@ -767,14 +767,14 @@ class _HelpBanner extends StatelessWidget {
                 size: 16, color: Color(0xFFD97706)),
             const SizedBox(width: 8),
             Text('${preset.name} Setup Tip',
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF92400E))),
           ]),
           const SizedBox(height: 6),
           Text(preset.hint,
-              style: GoogleFonts.inter(
+              style: AppFonts.banglaBody(
                   fontSize: 12,
                   color: const Color(0xFF92400E),
                   height: 1.4)),
@@ -782,11 +782,10 @@ class _HelpBanner extends StatelessWidget {
             const SizedBox(height: 8),
             GestureDetector(
               child: Text('Open setup guide →',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.banglaBody(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFFD97706),
-                      decoration: TextDecoration.underline)),
+                      color: const Color(0xFFD97706)).copyWith(decoration: TextDecoration.underline)),
             ),
           ],
         ],
@@ -824,7 +823,7 @@ class _SetupGuide extends StatelessWidget {
             const Icon(Icons.menu_book_rounded, size: 18, color: _accent),
             const SizedBox(width: 8),
             Text('Setup Guide',
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: _fg)),
@@ -895,7 +894,7 @@ class _StepRow extends StatelessWidget {
             ),
             child: Center(
               child: Text('$number',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.banglaBody(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       color: _accent)),
@@ -904,7 +903,7 @@ class _StepRow extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(text,
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     fontSize: 13, color: _fg, height: 1.45)),
           ),
         ],
@@ -927,7 +926,7 @@ class _SectionLabel extends StatelessWidget {
     ),
     const SizedBox(width: 8),
     Text(text,
-        style: GoogleFonts.inter(
+        style: AppFonts.banglaBody(
             fontSize: 14, fontWeight: FontWeight.w800, color: _fg)),
   ]);
 }
@@ -970,7 +969,7 @@ class _InfoCard extends StatelessWidget {
       const SizedBox(width: 10),
       Expanded(
         child: Text(text,
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaBody(
                 fontSize: 13, color: color, height: 1.45)),
       ),
     ]),
@@ -1004,7 +1003,7 @@ class _SmtpField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaBody(
                 fontSize: 12, fontWeight: FontWeight.w600, color: _fg)),
         const SizedBox(height: 6),
         TextFormField(
@@ -1013,10 +1012,10 @@ class _SmtpField extends StatelessWidget {
           inputFormatters: inputFormatters,
           validator: validator,
           onChanged: onChanged,
-          style: GoogleFonts.inter(fontSize: 14, color: _fg),
+          style: AppFonts.banglaBody(fontSize: 14, color: _fg),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(color: _muted, fontSize: 13),
+            hintStyle: AppFonts.banglaBody(color: _muted, fontSize: 13),
             prefixIcon: Icon(icon, color: _muted, size: 18),
             filled: true,
             fillColor: const Color(0xFFF8F7FF),

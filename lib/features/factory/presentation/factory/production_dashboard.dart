@@ -6,6 +6,7 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 const Color _darkBlue = Color(0xFFD51616);
 
@@ -64,7 +65,7 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
     if (userEmail == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('à¦¡à§à¦¯à¦¾à¦¶à¦¬à§‹à¦°à§à¦¡', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          title: Text('à¦¡à§à¦¯à¦¾à¦¶à¦¬à§‹à¦°à§à¦¡', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
           backgroundColor: _darkBlue,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -75,7 +76,7 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-          title: const Text('à¦‰à§Žà¦ªà¦¾à¦¦à¦¨ à¦¡à§à¦¯à¦¾à¦¶à¦¬à§‹à¦°à§à¦¡', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          title: Text('à¦‰à§Žà¦ªà¦¾à¦¦à¦¨ à¦¡à§à¦¯à¦¾à¦¶à¦¬à§‹à¦°à§à¦¡', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -102,7 +103,7 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
                     ),
                     trailing: Text(
                       qty.toString(),
-                      style: const TextStyle(
+                      style: AppFonts.banglaData(
                           fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -128,7 +129,7 @@ class _ProductionDashboardState extends State<ProductionDashboard> {
                     ),
                     trailing: Text(
                       qty.toString(),
-                      style: const TextStyle(
+                      style: AppFonts.banglaData(
                           fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ),

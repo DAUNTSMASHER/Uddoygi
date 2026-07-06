@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminOrdersManagementScreen extends StatefulWidget {
@@ -34,7 +33,7 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Fulfillment Hub', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text('Fulfillment Hub', style: AppFonts.banglaBody(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -79,7 +78,7 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
           children: [
             const Icon(Icons.assignment_turned_in_rounded, color: Colors.blue, size: 20),
             const SizedBox(width: 8),
-            Text('Pending Approval (${pending.length})', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Pending Approval (${pending.length})', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 12),
@@ -99,9 +98,9 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('WO: ${d['workOrderNo']}', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                      Text('Customer: ${d['buyerName']}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.blue[800])),
-                      Text('Value: ৳${d['revenueValue']}', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600)),
+                      Text('WO: ${d['workOrderNo']}', style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
+                      Text('Customer: ${d['buyerName']}', style: AppFonts.banglaBody(fontSize: 12, color: Colors.blue[800])),
+                      Text('Value: ৳${d['revenueValue']}', style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -113,7 +112,7 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
-                  child: const Text('Release to Factory', style: TextStyle(fontSize: 12)),
+                  child: Text('Release to Factory', style: AppFonts.banglaBody(fontSize: 12)),
                 ),
               ],
             ),
@@ -156,7 +155,7 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Production Pipeline', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Production Pipeline', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -176,9 +175,9 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[100]!)),
       child: Column(
         children: [
-          Text('$count', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF0F172A))),
+          Text('$count', style: AppFonts.banglaData(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
           const SizedBox(height: 4),
-          Text(stage, textAlign: TextAlign.center, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+          Text(stage, textAlign: TextAlign.center, style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w600)),
         ],
       ),
     ).animate().fadeIn().scale();
@@ -194,11 +193,11 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
             const SizedBox(width: 8),
-            Text('Bottleneck Alerts', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Bottleneck Alerts', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 12),
-        if (stuckOrders.isEmpty) Text('No bottlenecks detected', style: GoogleFonts.outfit(color: Colors.grey)),
+        if (stuckOrders.isEmpty) Text('No bottlenecks detected', style: AppFonts.banglaBody(color: Colors.grey)),
         ...stuckOrders.map((o) {
           final d = o.data() as Map;
           return Container(
@@ -211,8 +210,8 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('WO: ${d['workOrderNo']}', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                    Text('Stuck in QC Testing for 48h+', style: GoogleFonts.outfit(fontSize: 12, color: Colors.orange[800])),
+                    Text('WO: ${d['workOrderNo']}', style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
+                    Text('Stuck in QC Testing for 48h+', style: AppFonts.banglaBody(fontSize: 12, color: Colors.orange[800])),
                   ]),
                 ),
                 TextButton(onPressed: () {}, child: const Text('Resolve')),
@@ -228,7 +227,7 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Line Utilization', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Line Utilization', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
@@ -254,8 +253,8 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13)),
-            Text('${(val * 100).toStringAsFixed(0)}%', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: color)),
+            Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w600, fontSize: 13)),
+            Text('${(val * 100).toStringAsFixed(0)}%', style: AppFonts.banglaBody(fontWeight: FontWeight.bold, color: color)),
           ],
         ),
         const SizedBox(height: 6),
@@ -273,7 +272,7 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Priority Countdowns', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Priority Countdowns', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         ...highPriority.map((o) {
           final d = o.data() as Map;
@@ -285,13 +284,13 @@ class _AdminOrdersManagementScreenState extends State<AdminOrdersManagementScree
               children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(d['buyerName'] ?? 'Priority Order', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                    Text('WO: ${d['workOrderNo']}', style: GoogleFonts.outfit(color: Colors.white60, fontSize: 12)),
+                    Text(d['buyerName'] ?? 'Priority Order', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text('WO: ${d['workOrderNo']}', style: AppFonts.banglaBody(color: Colors.white60, fontSize: 12)),
                   ]),
                 ),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('4h : 12m', style: GoogleFonts.outfit(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 18)),
-                  Text('Until Ship Deadline', style: GoogleFonts.outfit(color: Colors.white38, fontSize: 10)),
+                  Text('4h : 12m', style: AppFonts.banglaBody(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 18)),
+                  Text('Until Ship Deadline', style: AppFonts.banglaBody(color: Colors.white38, fontSize: 10)),
                 ]),
               ],
             ),

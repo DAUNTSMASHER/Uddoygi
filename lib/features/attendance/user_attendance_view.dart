@@ -62,6 +62,7 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
   String? _userName;
   String? _profilePhoto;
   bool    _loading    = true;
+  bool    _submitting = false;
   String? _error;
 
   late Timer _clockTimer;
@@ -131,11 +132,49 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     return DB.colSync(_cid, C.attendance)
         .doc(today)
-        .collection('records')
+        .collection(C.records)
         .doc(_employeeId!)
         .snapshots()
         .map((s) => s.exists ? s.data() : null);
   }
+
+  Future<void> _toggleAttendance(Map<String, dynamic>? currentData) async {
+    if (_employeeId == null || _cid.isEmpty || _submitting) return;
+
+    setState(() => _submitting = true);
+    try {
+      final now = DateTime.now();
+      final today = DateFormat('yyyy-MM-dd').format(now);
+      final ref = DB.colSync(_cid, C.attendance).doc(today).collection(C.records).doc(_employeeId!);
+
+      if (currentData == null) {
+        // Check In
+        final lateThreshold = DateTime(now.year, now.month, now.day, 9, 30);
+        final status = now.isAfter(lateThreshold) ? 'late' : 'present';
+
+        await ref.set({
+          'employeeId': _employeeId,
+          'name': _userName ?? 'Employee',
+          'checkIn': Timestamp.fromDate(now),
+          'checkOut': null,
+          'status': status,
+          'date': today,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } else if (currentData['checkOut'] == null) {
+        // Check Out
+        await ref.update({
+          'checkOut': Timestamp.fromDate(now),
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  // Helper moved to top-level
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +215,7 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
                   children: [
                     const SizedBox(height: 20),
                     GestureDetector(
-                      onTap: () {},
+                      onTap: _submitting ? null : () => _toggleAttendance(data),
                       child: Container(
                         width: 180, height: 180,
                         decoration: BoxDecoration(
@@ -185,14 +224,27 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
                         ),
                         child: Container(
                           margin: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(color: _primary, shape: BoxShape.circle),
+                          decoration: BoxDecoration(
+                            color: checkOut != null ? _muted : _primary, 
+                            shape: BoxShape.circle
+                          ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.touch_app_outlined, color: Colors.white, size: 40),
-                              const SizedBox(height: 8),
-                              Text(checkIn == null ? 'Check In' : (checkOut == null ? 'Check Out' : 'Done'),
-                                style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
+                              if (_submitting)
+                                const CircularProgressIndicator(color: Colors.white)
+                              else ...[
+                                Icon(
+                                  checkIn == null ? Icons.login_rounded : (checkOut == null ? Icons.logout_rounded : Icons.check_circle_outline_rounded), 
+                                  color: Colors.white, 
+                                  size: 40
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  checkIn == null ? 'Check In' : (checkOut == null ? 'Check Out' : 'Completed'),
+                                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -219,7 +271,7 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
                           _StatIconItem(
                             icon: Icons.schedule_rounded, 
                             label: 'Total Hrs', 
-                            value: '08:45' // Mocked for UI
+                            value: _calculateHoursFn(checkIn as Timestamp?, checkOut as Timestamp?)
                           ),
                         ],
                       ),
@@ -227,6 +279,60 @@ class _UserAttendanceViewState extends State<UserAttendanceView> {
                   ],
                 );
               },
+            ),
+          ),
+
+          // ── Monthly Performance Summary ──────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: DB.colSync(_cid, C.attendance).snapshots(),
+                builder: (context, snap) {
+                  final docs = snap.data?.docs ?? [];
+                  final currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
+                  
+                  // This is a collection-group style query simulation
+                  // In a real app with many records, you'd use a server-side aggregation or a filtered query
+                  return FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _fetchMonthlyRecordsFn(_cid, _employeeId!, currentMonth),
+                    builder: (context, recSnap) {
+                      final records = recSnap.data ?? [];
+                      final presentCount = records.where((r) => r['status'] == 'present' || r['status'] == 'late').length;
+                      final lateCount = records.where((r) => r['status'] == 'late').length;
+                      
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Monthly Performance', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: _fg)),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _PerformanceStat(
+                                  label: 'Days Present',
+                                  value: '$presentCount',
+                                  icon: Icons.calendar_today_rounded,
+                                  color: _primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _PerformanceStat(
+                                  label: 'Late Arrivals',
+                                  value: '$lateCount',
+                                  icon: Icons.timer_outlined,
+                                  color: _warning,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    }
+                  );
+                },
+              ),
             ),
           ),
 
@@ -310,6 +416,9 @@ class AttendanceHistoryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final monthStr = DateFormat('yyyy-MM').format(now);
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -318,44 +427,44 @@ class AttendanceHistoryPage extends StatelessWidget {
         elevation: 0,
         foregroundColor: _fg,
       ),
-      body: Column(
-        children: [
-          // Month Selector
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Icon(Icons.chevron_left_rounded, color: _muted),
-                  Text('April 2024', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
-                  const Icon(Icons.chevron_right_rounded, color: _muted),
-                ],
-              ),
-            ),
-          ),
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: Stream.fromFuture(_fetchMonthlyRecordsFn(cid, empId, monthStr)),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          final records = snap.data ?? [];
+          
+          if (records.isEmpty) {
+            return Center(child: Text('No records for this month', style: GoogleFonts.outfit(color: _muted)));
+          }
 
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              children: [
-                _HistoryCard(date: '10/Mar/2024', totalHours: '09:00', records: [
-                  {'in': '09:00:00', 'out': '18:00:00', 'total': '09:00 hours'}
-                ]),
-                _HistoryCard(date: '21/Mar/2024', totalHours: '11:20', records: [
-                  {'in': '03:36:00', 'out': '14:48:16', 'total': '11:12 hours'},
-                  {'in': '03:45:00', 'out': '03:53:00', 'total': '00:08 hours'},
-                  {'in': '18:54:00', 'out': '18:54:00', 'total': '00:00 hours'},
-                ]),
-              ],
-            ),
-          ),
-        ],
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            itemCount: records.length,
+            itemBuilder: (context, i) {
+              final r = records[i];
+              final checkIn = r['checkIn'] as Timestamp?;
+              final checkOut = r['checkOut'] as Timestamp?;
+              final totalHours = _calculateHoursFn(checkIn, checkOut);
+
+              return _HistoryCard(
+                date: r['date'] ?? 'N/A',
+                totalHours: totalHours,
+                records: [
+                  {
+                    'in': checkIn != null ? DateFormat('hh:mm:ss a').format(checkIn.toDate()) : '--:--',
+                    'out': checkOut != null ? DateFormat('hh:mm:ss a').format(checkOut.toDate()) : '--:--',
+                    'total': totalHours,
+                  }
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
+
+  String _calculateHours(Timestamp? inTs, Timestamp? outTs) => _calculateHoursFn(inTs, outTs);
 }
 
 class _HistoryCard extends StatelessWidget {
@@ -430,7 +539,8 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
@@ -458,30 +568,50 @@ class _NavIcon extends StatelessWidget {
   }
 }
 
-class _RecordItem extends StatelessWidget {
+class _PerformanceStat extends StatelessWidget {
+  final String label, value;
   final IconData icon;
-  final String title;
-  final String value;
-  const _RecordItem({required this.icon, required this.title, required this.value});
+  final Color color;
+  const _PerformanceStat({required this.label, required this.value, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: UCard(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Icon(icon, color: _primary, size: 20),
-            const SizedBox(width: 16),
-            Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: _fg)),
-            const Spacer(),
-            Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
-          ],
-        ),
+    return UCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 12),
+          Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: _fg)),
+          Text(label, style: GoogleFonts.outfit(fontSize: 12, color: _muted)),
+        ],
       ),
     );
   }
+}
+
+// ── Global Helpers ────────────────────────────────────────────────────────────
+Future<List<Map<String, dynamic>>> _fetchMonthlyRecordsFn(String cid, String empId, String monthKey) async {
+  final List<Map<String, dynamic>> all = [];
+  final snap = await DB.colSync(cid, C.attendance).get();
+  for (final doc in snap.docs) {
+    if (doc.id.startsWith(monthKey)) {
+      final rec = await doc.reference.collection(C.records).doc(empId).get();
+      if (rec.exists) {
+        all.add(rec.data()!);
+      }
+    }
+  }
+  return all;
+}
+
+String _calculateHoursFn(Timestamp? start, Timestamp? end) {
+  if (start == null || end == null) return '--:--';
+  final diff = end.toDate().difference(start.toDate());
+  final h = diff.inHours.toString().padLeft(2, '0');
+  final m = (diff.inMinutes % 60).toString().padLeft(2, '0');
+  return '$h:$m';
 }
 
 
@@ -855,28 +985,6 @@ class _LogCard extends StatelessWidget {
           ],
         ),
       ]),
-    );
-  }
-}
-
-// ── Error view ────────────────────────────────────────────────────────────────
-class _ErrorView extends StatelessWidget {
-  final String message;
-  const _ErrorView({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.error_outline_rounded, color: _danger, size: 48),
-          const SizedBox(height: 12),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 14, color: _fg)),
-        ]),
-      ),
     );
   }
 }

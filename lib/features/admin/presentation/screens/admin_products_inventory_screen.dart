@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminProductsInventoryScreen extends StatefulWidget {
@@ -32,14 +33,12 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
   Widget build(BuildContext context) {
     if (_cid.isEmpty) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    final theme = Theme.of(context);
-
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
         title: Text(
           'Inventory & Costing',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
+          style: AppFonts.banglaBody(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
@@ -90,11 +89,11 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
           const SizedBox(height: UddoygiDesign.space12),
           Text(
             value,
-            style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+            style: AppFonts.banglaHeading(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5),
           ),
           Text(
             label,
-            style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500),
+            style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -108,7 +107,7 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
         onChanged: (v) => setState(() => _search = v),
         decoration: InputDecoration(
           hintText: 'Search product BOM, specs, costing...',
-          hintStyle: GoogleFonts.plusJakartaSans(fontSize: 14, color: Colors.grey[400]),
+          hintStyle: AppFonts.banglaBody(fontSize: 14, color: Colors.grey[400]),
           prefixIcon: const Icon(Icons.search, color: Color(0xFF7C3AED)),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -146,18 +145,18 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(UddoygiDesign.radiusM),
                 ),
-                child: Center(child: Text(p['img'], style: const TextStyle(fontSize: 28))),
+                child: Center(child: Text(p['img'], style: AppFonts.banglaBody(fontSize: 28))),
               ),
               const SizedBox(width: UddoygiDesign.space16),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(p['name'], style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text('SKU: ${p['sku']}', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500])),
+                  Text(p['name'], style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text('SKU: ${p['sku']}', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500])),
                 ]),
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('৳${p['cost']}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: const Color(0xFF1E0040))),
-                Text('Unit Cost', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: Colors.grey[500])),
+                Text('৳${p['cost']}', style: AppFonts.banglaData(fontWeight: FontWeight.w900, color: Color(0xFF1E0040))),
+                Text('Unit Cost', style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey[500])),
               ]),
             ],
           ),
@@ -170,7 +169,7 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
               TextButton.icon(
                 onPressed: () => _showBOMDialog(p['name']),
                 icon: const Icon(Icons.list_alt_rounded, size: 16),
-                label: Text('BOM Breakdown', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+                label: Text('BOM Breakdown', style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w600)),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF7C3AED),
                   visualDensity: VisualDensity.compact,
@@ -187,8 +186,8 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w600)),
-        Text(val, style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: color, fontSize: 15)),
+        Text(label, style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+        Text(val, style: AppFonts.banglaData(fontWeight: FontWeight.w800, color: color, fontSize: 15)),
       ],
     );
   }
@@ -197,7 +196,7 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       isScrollControlled: true,
       builder: (context) => StreamBuilder<QuerySnapshot>(
         stream: DB.colSync(_cid, C.stocks).snapshots(),
@@ -213,15 +212,15 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Bill of Materials (BOM)', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('Bill of Materials (BOM)', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text('Live Stock Sync', style: GoogleFonts.outfit(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+                      child: Text('Live Stock Sync', style: AppFonts.banglaBody(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
-                Text(productName, style: GoogleFonts.outfit(color: Colors.grey)),
+                Text(productName, style: AppFonts.banglaBody(color: Colors.grey)),
                 const SizedBox(height: 20),
                 _bomRow('Steel Frame (Main)', '1 unit', '৳1,200', stockMap['Steel Frame (Main)']),
                 _bomRow('Mesh Fabric (Black)', '2.5m', '৳450', stockMap['Mesh Fabric (Black)']),
@@ -231,8 +230,8 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total Material Cost', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                    Text('৳2,800', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text('Total Material Cost', style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
+                    Text('৳2,800', style: AppFonts.banglaBody(fontWeight: FontWeight.bold, fontSize: 18)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -265,23 +264,23 @@ class _AdminProductsInventoryScreenState extends State<AdminProductsInventoryScr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w500)),
+                Text(label, style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w500)),
                 Row(
                   children: [
                     Icon(isLow ? Icons.error_outline : Icons.check_circle_outline, 
                          size: 10, color: isLow ? Colors.red : Colors.green),
                     const SizedBox(width: 4),
                     Text(isLow ? 'Stock Low: $available' : 'In Stock: $available', 
-                         style: GoogleFonts.outfit(fontSize: 10, color: isLow ? Colors.red : Colors.green)),
+                         style: AppFonts.banglaBody(fontSize: 10, color: isLow ? Colors.red : Colors.green)),
                   ],
                 ),
               ],
             ),
           ),
           Row(children: [
-            Text(qty, style: GoogleFonts.outfit(color: Colors.grey, fontSize: 12)),
+            Text(qty, style: AppFonts.banglaBody(color: Colors.grey, fontSize: 12)),
             const SizedBox(width: 12),
-            Text(cost, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            Text(cost, style: AppFonts.banglaBody(fontWeight: FontWeight.w600)),
           ]),
         ],
       ),

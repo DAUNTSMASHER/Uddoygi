@@ -1,13 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'package:uddoygi/services/db.dart';
-import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
 
@@ -22,17 +15,13 @@ class HrSalaryCertificateScreen extends StatefulWidget {
 }
 
 class _HrSalaryCertificateScreenState extends State<HrSalaryCertificateScreen> {
-  String _cid = '';
   final _certNoCtrl = TextEditingController();
   final _basicCtrl  = TextEditingController();
-  Map<String, dynamic>? _employee;
 
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
+    // company id loading placeholder
   }
 
   @override
@@ -50,7 +39,7 @@ class _HrSalaryCertificateScreenState extends State<HrSalaryCertificateScreen> {
         children: [
           _StepHeader(number: '01', title: 'IDENTIFY RECIPIENT').animate().fadeIn(),
           const SizedBox(height: 12),
-          _EmployeeSelector(onSelected: (v) => setState(() => _employee = v)).animate().fadeIn(delay: 100.ms),
+          _EmployeeSelector(onSelected: (v) {}).animate().fadeIn(delay: 100.ms),
           const SizedBox(height: 24),
           _StepHeader(number: '02', title: 'FINANCIAL DATA').animate().fadeIn(delay: 200.ms),
           const SizedBox(height: 12),

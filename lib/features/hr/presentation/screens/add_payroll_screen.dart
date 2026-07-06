@@ -7,10 +7,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'edit_payroll_screen.dart';
 
 // ── Palette (matches payroll screens) ────────────────────────────────────────
@@ -184,10 +184,10 @@ class _AddPayrollScreenState extends State<AddPayrollScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Add Payroll',
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaHeading(
                     fontWeight: FontWeight.w800, fontSize: 17, color: _fg)),
             Text(_currentPeriod,
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     fontSize: 11,
                     color: _muted,
                     fontWeight: FontWeight.w500)),
@@ -205,11 +205,11 @@ class _AddPayrollScreenState extends State<AddPayrollScreen> {
                     controller: _searchCtl,
                     onChanged: (v) =>
                         setState(() => _search = v.trim().toLowerCase()),
-                    style: GoogleFonts.inter(fontSize: 14, color: _fg),
+                    style: AppFonts.banglaBody(fontSize: 14, color: _fg),
                     decoration: InputDecoration(
                       hintText: 'Search employee…',
                       hintStyle:
-                          GoogleFonts.inter(color: _muted, fontSize: 14),
+                          AppFonts.banglaBody(color: _muted, fontSize: 14),
                       prefixIcon: const Icon(Icons.search_rounded,
                           size: 20, color: _muted),
                       filled: true,
@@ -249,7 +249,7 @@ class _AddPayrollScreenState extends State<AddPayrollScreen> {
                       Expanded(
                         child: Text(
                           'Select an employee to add or edit their payroll for $_currentPeriod.',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.banglaBody(
                               fontSize: 12,
                               color: _greenDk,
                               fontWeight: FontWeight.w500),
@@ -304,7 +304,7 @@ class _AddPayrollScreenState extends State<AddPayrollScreen> {
                               ),
                               const SizedBox(height: 14),
                               Text('No employees found',
-                                  style: GoogleFonts.inter(
+                                  style: AppFonts.banglaHeading(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 15,
                                       color: _fg)),
@@ -312,7 +312,7 @@ class _AddPayrollScreenState extends State<AddPayrollScreen> {
                               Text(
                                   'Add employees first from the Employee Management section.',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.inter(
+                                  style: AppFonts.banglaBody(
                                       color: _muted, fontSize: 13)),
                             ],
                           ),
@@ -453,7 +453,7 @@ class _EmployeeTile extends StatelessWidget {
                                 fit: BoxFit.cover))
                         : Center(
                             child: Text(initials,
-                                style: GoogleFonts.inter(
+                                style: AppFonts.banglaHeading(
                                     color: _greenDk,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 15)),
@@ -469,21 +469,21 @@ class _EmployeeTile extends StatelessWidget {
                         Text(name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: AppFonts.banglaHeading(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                                 color: _fg)),
                         const SizedBox(height: 2),
                         Text(
                           dept.isNotEmpty ? dept : 'Employee',
-                          style: GoogleFonts.inter(
+                          style: AppFonts.banglaBody(
                               color: _muted, fontSize: 12),
                         ),
                         if (baseSalary > 0) ...[
                           const SizedBox(height: 2),
                           Text(
                             'Base: ${money.format(baseSalary)}',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.banglaBody(
                                 color: _green,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600),
@@ -510,7 +510,7 @@ class _EmployeeTile extends StatelessWidget {
                           Icon(statusIcon, size: 11, color: statusColor),
                           const SizedBox(width: 4),
                           Text(statusLabel,
-                              style: GoogleFonts.inter(
+                              style: AppFonts.banglaHeading(
                                   color: statusColor,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 10)),

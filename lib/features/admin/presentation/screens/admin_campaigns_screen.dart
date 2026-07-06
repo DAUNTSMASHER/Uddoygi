@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
@@ -34,7 +36,7 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: Text('Marketing Campaigns', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.white, fontSize: 18)),
+        title: Text('Marketing Campaigns', style: AppFonts.banglaHeading()),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
         elevation: 0,
@@ -59,11 +61,11 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                   children: [
                     _buildSummaryCards(stats),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('Active Promotions', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('Active Promotions', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildActivePromotions(campaigns),
                     const SizedBox(height: UddoygiDesign.space32),
-                    Text('Lead Sources', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                    Text('Lead Sources', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                     const SizedBox(height: UddoygiDesign.space16),
                     _buildLeadSourceBreakdown(customers),
                     const SizedBox(height: UddoygiDesign.space32),
@@ -113,12 +115,12 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
             children: [
               Text(
                 value,
-                style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040), letterSpacing: -0.5),
+                style: AppFonts.banglaData(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF1E0040), letterSpacing: -0.5),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w700),
+                style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -132,7 +134,7 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
       return UCard(
         padding: const EdgeInsets.all(UddoygiDesign.space24),
         child: Center(
-          child: Text('No active campaigns', style: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontWeight: FontWeight.w600)),
+          child: Text('No active campaigns', style: AppFonts.banglaBody(color: Colors.grey[500], fontWeight: FontWeight.w600)),
         ),
       );
     }
@@ -155,14 +157,14 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(d['name'] ?? 'Promo', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 15)),
-                    Text(d['description'] ?? 'Ongoing deal', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500)),
+                    Text(d['name'] ?? 'Promo', style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 15)),
+                    Text(d['description'] ?? 'Ongoing deal', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
               Text(
                 '৳${NumberFormat('#,###').format(d['spend'] ?? 0)}',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.redAccent, fontSize: 15),
+                style: AppFonts.banglaData(),
               ),
             ],
           ),
@@ -189,9 +191,9 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
               children: [
                 Row(
                   children: [
-                    Text(e.key, style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700, fontSize: 14)),
+                    Text(e.key, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 14)),
                     const Spacer(),
-                    Text('${e.value} leads', style: GoogleFonts.plusJakartaSans(color: Colors.grey[600], fontWeight: FontWeight.w600, fontSize: 12)),
+                    Text('${e.value} leads', style: AppFonts.banglaBody(color: Colors.grey[600], fontWeight: FontWeight.w600, fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -240,13 +242,13 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
               const SizedBox(width: 10),
               Text(
                 'ROI Tracker',
-                style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
               ),
             ],
           ),
           const SizedBox(height: UddoygiDesign.space24),
           if (campaigns.isEmpty)
-            Text('No data for ROI analysis', style: GoogleFonts.plusJakartaSans(color: Colors.white60, fontSize: 14)),
+            Text('No data for ROI analysis', style: AppFonts.banglaBody(color: Colors.white60, fontSize: 14)),
           ...campaigns.map((doc) {
             final d = doc.data() as Map<String, dynamic>;
             final spend = (d['spend'] as num?)?.toDouble() ?? 1;
@@ -260,50 +262,25 @@ class _AdminCampaignsScreenState extends State<AdminCampaignsScreen> {
                 children: [
                   Text(
                     d['name'] ?? 'Campaign',
-                    style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w600),
+                    style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w600),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.15), borderRadius: UddoygiDesign.borderFull),
                     child: Text(
                       '${roi.toStringAsFixed(1)}x ROI',
-                      style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: Colors.greenAccent, fontSize: 12),
+                      style: AppFonts.banglaData(),
                     ),
                   ),
                 ],
               ),
             );
+
           }).toList(),
         ],
       ),
     ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.05, end: 0);
   }
-
-  _CampaignStats _calculateCampaignStats(List<QueryDocumentSnapshot> camp, List<QueryDocumentSnapshot> cust) {
-    double totalSpend = 0;
-    double totalRev = 0;
-    for (var c in camp) {
-      final d = c.data() as Map;
-      totalSpend += (d['spend'] as num?)?.toDouble() ?? 0;
-      totalRev += (d['revenueGenerated'] as num?)?.toDouble() ?? 0;
-    }
-    return _CampaignStats(
-      activeCount: camp.length,
-      totalLeads: cust.length,
-      avgROI: totalSpend == 0 ? 0 : totalRev / totalSpend,
-      totalSpend: totalSpend,
-    );
-  }
-}
-
-class _CampaignStats {
-  final int activeCount;
-  final int totalLeads;
-  final double avgROI;
-  final double totalSpend;
-  _CampaignStats({required this.activeCount, required this.totalLeads, required this.avgROI, required this.totalSpend});
-}
-
 
   _CampaignStats _calculateCampaignStats(List<QueryDocumentSnapshot> camp, List<QueryDocumentSnapshot> cust) {
     double totalSpend = 0;

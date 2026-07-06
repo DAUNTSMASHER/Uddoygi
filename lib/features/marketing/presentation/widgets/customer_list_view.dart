@@ -475,7 +475,7 @@ class _PerCustomerOrdersRowState extends State<_PerCustomerOrdersRow> {
               : (m['timestamp'] is Timestamp)
               ? (m['timestamp'] as Timestamp).toDate()
               : null;
-          if (created != null && (last == null || created.isAfter(last!))) {
+          if (created != null && (last == null || created.isAfter(last))) {
             last = created;
           }
         }
@@ -483,7 +483,7 @@ class _PerCustomerOrdersRowState extends State<_PerCustomerOrdersRow> {
         return _pillRow(
           children: [
             _StatPill(icon: Icons.shopping_bag_outlined, label: 'Orders', value: '$count'),
-            _StatPill(icon: Icons.event_outlined, label: 'Last', value: last == null ? '—' : _fmtDate(last!)),
+            _StatPill(icon: Icons.event_outlined, label: 'Last', value: last == null ? '—' : _fmtDate(last)),
             _StatPill(icon: Icons.attach_money, label: 'Total', value: total.toStringAsFixed(0)),
           ],
         );

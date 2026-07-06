@@ -56,14 +56,21 @@ class _StockHistoryScreenState extends State<StockHistoryScreen> {
       ),
 
       body: pages[_tab],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-          NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: 'History'),
-          NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: 'Products'),
-        ],
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          height: 40,
+          indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 9, fontWeight: FontWeight.w600)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.dashboard_outlined, size: 16), selectedIcon: Icon(Icons.dashboard, size: 16), label: 'Dashboard'),
+            NavigationDestination(icon: Icon(Icons.history_outlined, size: 16), selectedIcon: Icon(Icons.history, size: 16), label: 'History'),
+            NavigationDestination(icon: Icon(Icons.inventory_2_outlined, size: 16), selectedIcon: Icon(Icons.inventory_2, size: 16), label: 'Products'),
+          ],
+        ),
       ),
     );
   }

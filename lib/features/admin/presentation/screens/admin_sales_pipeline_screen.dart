@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -14,7 +15,6 @@ class AdminSalesPipelineScreen extends StatefulWidget {
 }
 
 class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
-  String _cid = '';
   double _pipelineValue = 0;
   double _completedValue = 0;
   int _activeLeads = 0;
@@ -29,7 +29,6 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
   Future<void> _loadData() async {
     final id = await LocalStorageService.getSavedCompanyId();
     if (id == null) return;
-    _cid = id;
 
     final results = await Future.wait([
       FirebaseFirestore.instance.collection('companies').doc(id).collection('tasks').where('status', isNotEqualTo: 'completed').get(),
@@ -56,7 +55,7 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: Text('Revenue Pipeline', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: Text('Revenue Pipeline', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 18)),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
         elevation: 0,
@@ -69,7 +68,7 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
           children: [
             _buildPipelineHero(),
             const SizedBox(height: UddoygiDesign.space32),
-            Text('Forecast vs. Reality', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            Text('Forecast vs. Reality', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
             const SizedBox(height: UddoygiDesign.space16),
             _buildStatBox('Ongoing Deals', _pipelineValue, 'Estimated future revenue', const Color(0xFF7C3AED), Icons.hourglass_empty_rounded),
             _buildStatBox('Completed Sales', _completedValue, 'Realized cash flow', Colors.green, Icons.check_circle_rounded),
@@ -95,11 +94,11 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
             children: [
               Text(
                 'CONVERSION RATE',
-                style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey[500], letterSpacing: 1.2),
+                style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.grey[500], letterSpacing: 1.2),
               ),
               Text(
                 '${(pct * 100).toStringAsFixed(1)}%',
-                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900, color: const Color(0xFF7C3AED)),
+                style: AppFonts.banglaData(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF7C3AED)),
               ),
             ],
           ),
@@ -119,12 +118,12 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
             children: [
               Text(
                 '$_activeLeads',
-                style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w900, color: const Color(0xFF1E0040)),
+                style: AppFonts.banglaData(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF1E0040)),
               ),
               const SizedBox(width: 12),
               Text(
                 'Active Negotiations',
-                style: GoogleFonts.plusJakartaSans(color: Colors.grey[600], fontWeight: FontWeight.w600, fontSize: 14),
+                style: AppFonts.banglaBody(color: Colors.grey[600], fontWeight: FontWeight.w600, fontSize: 14),
               ),
             ],
           ),
@@ -154,18 +153,18 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 16, color: const Color(0xFF1E0040)),
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF1E0040)),
                 ),
                 Text(
                   sub,
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
+                  style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ),
           Text(
             '৳${NumberFormat('#,##,###').format(value)}',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 18, color: color),
+            style: AppFonts.banglaData(fontWeight: FontWeight.w900, fontSize: 18, color: color),
           ),
         ],
       ),
@@ -178,7 +177,7 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
       children: [
         Text(
           'Lead Source Performance',
-          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+          style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         const SizedBox(height: UddoygiDesign.space16),
         UCard(
@@ -207,11 +206,11 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
             children: [
               Text(
                 label,
-                style: GoogleFonts.plusJakartaSans(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[800]),
+                style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[800]),
               ),
               Text(
                 '${(val * 100).toStringAsFixed(0)}%',
-                style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: color, fontSize: 14),
+                style: AppFonts.banglaBody(fontWeight: FontWeight.w800, color: color, fontSize: 14),
               ),
             ],
           ),
@@ -229,6 +228,4 @@ class _AdminSalesPipelineScreenState extends State<AdminSalesPipelineScreen> {
       ),
     );
   }
-}
-
 }

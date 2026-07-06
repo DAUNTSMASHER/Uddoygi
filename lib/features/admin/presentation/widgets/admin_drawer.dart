@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uddoygi/profile.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 const Color _darkBlue = Color(0xFF2A0A4B);
 
@@ -33,24 +34,24 @@ class _AdminDrawerState extends State<AdminDrawer> {
 
   // Items are built as a getter so they always use the current _cid
   List<_DrawerItemCfg> get _items => [
-    _DrawerItemCfg('dashboard', 'Dashboard', Icons.dashboard, '/admin/dashboard', const []),
-    _DrawerItemCfg('notices', 'All Notices', Icons.list_alt, '/admin/notices/all',
+    _DrawerItemCfg('dashboard', 'ড্যাশবোর্ড (Dashboard)', Icons.dashboard, '/admin/dashboard', const []),
+    _DrawerItemCfg('notices', 'সকল নোটিশ (Notices)', Icons.list_alt, '/admin/notices/all',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.notices)]),
-    _DrawerItemCfg('notice_publish', 'Publish Notice', Icons.add_alert, '/admin/notices',
+    _DrawerItemCfg('notice_publish', 'নোটিশ প্রকাশ (Publish)', Icons.add_alert, '/admin/notices',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.notices)]),
-    _DrawerItemCfg('employees', 'Employee Directory', Icons.people, '/admin/employees',
+    _DrawerItemCfg('employees', 'কর্মী তালিকা (Employees)', Icons.people, '/admin/employees',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.users)]),
-    _DrawerItemCfg('reports', 'Generate Reports', Icons.bar_chart, '/admin/reports',
+    _DrawerItemCfg('reports', 'রিপোর্ট তৈরি (Reports)', Icons.bar_chart, '/admin/reports',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.invoices), DB.colSync(_cid, C.expenses)]),
-    _DrawerItemCfg('welfare', 'Welfare Scheme', Icons.favorite, '/common/welfare',
+    _DrawerItemCfg('welfare', 'কল্যাণ তহবিল (Welfare)', Icons.favorite, '/common/welfare',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.welfare)]),
-    _DrawerItemCfg('complaints', 'Complaints', Icons.report_problem, '/common/complaints',
+    _DrawerItemCfg('complaints', 'অভিযোগ (Complaints)', Icons.report_problem, '/common/complaints',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.complaints)]),
-    _DrawerItemCfg('salary', 'Salary Management', Icons.attach_money, '/admin/salary',
+    _DrawerItemCfg('salary', 'বেতন ব্যবস্থাপনা (Salary)', Icons.attach_money, '/admin/salary',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.salaries)]),
-    _DrawerItemCfg('messages', 'Messages', Icons.message_rounded, '/common/messages',
+    _DrawerItemCfg('messages', 'বার্তা (Messages)', Icons.message_rounded, '/common/messages',
         _cid.isEmpty ? const [] : [DB.colSync(_cid, C.messages)]),
-    _DrawerItemCfg('settings', 'Settings', Icons.settings_rounded, '/admin/settings', const []),
+    _DrawerItemCfg('settings', 'সেটিংস (Settings)', Icons.settings_rounded, '/admin/settings', const []),
   ];
 
   @override
@@ -112,7 +113,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                       child: photoUrl.isEmpty
                           ? Text(
                         _initialsFor(name),
-                        style: const TextStyle(
+                        style: AppFonts.banglaBody(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -130,7 +131,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                             name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: AppFonts.banglaBody(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
@@ -141,7 +142,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                             children: [
                               _HeaderPill(
                                 icon: Icons.person,
-                                label: 'View Profile',
+                                label: 'প্রোফাইল দেখুন',
                                 onTap: () {
                                   Navigator.pop(context);
                                   Navigator.push(
@@ -161,7 +162,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
               ),
 
               // MENU SECTIONS
-              _SectionTitle('GENERAL'),
+              _SectionTitle('সাধারণ (General)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'dashboard'),
                 onTap: () async {
@@ -172,7 +173,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
-              _SectionTitle('NOTICES'),
+              _SectionTitle('নোটিশ (Notices)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'notices'),
                 onTap: () async {
@@ -192,7 +193,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
-              _SectionTitle('EMPLOYEES'),
+              _SectionTitle('কর্মী ব্যবস্থাপনা (Employees)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'employees'),
                 onTap: () async {
@@ -203,7 +204,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
-              _SectionTitle('REPORTS'),
+              _SectionTitle('রিপোর্ট (Reports)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'reports'),
                 onTap: () async {
@@ -215,7 +216,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
               ),
 
 
-              _SectionTitle('WELFARE & COMPLAINTS'),
+              _SectionTitle('কল্যাণ ও অভিযোগ (Welfare)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'welfare'),
                 onTap: () async {
@@ -235,7 +236,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
-              _SectionTitle('FINANCE & COMMS'),
+              _SectionTitle('অর্থ ও যোগাযোগ (Finance)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'salary'),
                 onTap: () async {
@@ -255,7 +256,7 @@ class _AdminDrawerState extends State<AdminDrawer> {
                 },
               ),
 
-              _SectionTitle('SYSTEM'),
+              _SectionTitle('সিস্টেম (System)'),
               _DrawerTile(
                 cfg: _items.firstWhere((e) => e.keyId == 'settings'),
                 onTap: () async {
@@ -270,9 +271,9 @@ class _AdminDrawerState extends State<AdminDrawer> {
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(
+                title: Text(
+                  'লগআউট (Logout)',
+                  style: AppFonts.banglaBody(
                     color: Colors.redAccent,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -317,7 +318,7 @@ class _HeaderPill extends StatelessWidget {
             children: [
               Icon(icon, color: Colors.white, size: 16),
               const SizedBox(width: 6),
-              Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(label, style: AppFonts.banglaBody(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -329,7 +330,7 @@ class _HeaderPill extends StatelessWidget {
 /* -------------------- Section title -------------------- */
 class _SectionTitle extends StatelessWidget {
   final String title;
-  const _SectionTitle(this.title, {super.key});
+  const _SectionTitle(this.title);
 
   @override
   Widget build(BuildContext context) {
@@ -337,10 +338,10 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
       child: Text(
         title,
-        style: const TextStyle(
+        style: AppFonts.banglaHeading(
           fontSize: 11,
           letterSpacing: 1.1,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.bold,
           color: _darkBlue,
         ),
       ),
@@ -367,7 +368,7 @@ class _DrawerTile extends StatelessWidget {
       ),
       title: Text(
         cfg.title,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -392,7 +393,6 @@ class _BadgeCounter extends StatefulWidget {
 }
 
 class _BadgeCounterState extends State<_BadgeCounter> {
-  String _cid = '';
   int _count = 0;
   final Map<int, int> _perStream = {};
   final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _subs = [];
@@ -400,9 +400,6 @@ class _BadgeCounterState extends State<_BadgeCounter> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _attach();
   }
 
@@ -464,8 +461,8 @@ class _BadgeCounterState extends State<_BadgeCounter> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        _count > 99 ? '99+' : '$_count',
-        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+        (_count > 99 ? '99+' : '$_count').toBanglaDigits,
+        style: AppFonts.banglaData(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
       ),
     );
   }

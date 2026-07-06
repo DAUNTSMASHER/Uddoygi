@@ -61,7 +61,10 @@ dependencies:
   permission_handler: ^12.0.1
   mailer: ^6.1.0
   csc_picker: ^0.2.7
+  google_generative_ai: ^0.4.5
+  flutter_markdown: ^0.7.3
   google_mlkit_text_recognition: ^0.13.1
+  timeago: ^3.7.1
 
 dev_dependencies:
   flutter_test:
@@ -82,6 +85,45 @@ flutter:
     - assets/icons/
     - assets/videos/
     - assets/videos/login_bg.mp4
+    - assets/fonts/
+
+  # ── CUSTOM FONTS CONFIGURATION (3 Bangla & 2 English) ───────────────────
+  fonts:
+    # 1. Bangla Primary (Body text, general ERP content after login)
+    - family: BanglaPrimary
+      fonts:
+        - asset: assets/fonts/LiAdorNoirrit-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/LiAdorNoirrit-Bold.ttf
+          weight: 700
+
+    # 2. Bangla Heading (Titles, banners, prominent section headers)
+    - family: BanglaHeading
+      fonts:
+        - asset: assets/fonts/LiSirajeeSanjar-Regular.ttf
+          weight: 700
+
+    # 3. Bangla Data (Tabular numbers, currency ৳, stock counts, invoices)
+    - family: BanglaData
+      fonts:
+        - asset: assets/fonts/LiSKBishal-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/LiSKBishal-Regular.ttf
+          weight: 700
+
+    # 4. English System (Pre-login, system navigation, UI buttons, settings)
+    - family: EnglishSystem
+      fonts:
+        - asset: assets/fonts/CabinetGrotesk-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/CabinetGrotesk-Variable.ttf
+          weight: 700
+
+    # 5. English Tech (Work Order IDs, technical codes, timestamps, logs)
+    - family: EnglishTech
+      fonts:
+        - asset: assets/fonts/CabinetGrotesk-Variable.ttf
+          weight: 400
 
 dependency_overrides:
   csc_picker:

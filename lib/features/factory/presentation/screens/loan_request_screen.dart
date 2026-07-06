@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -120,14 +121,14 @@ class _LoanScreenState extends State<LoanRequestScreen>
         backgroundColor: _brand,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Loans', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: Text('Loans', style: AppFonts.banglaBody(fontWeight: FontWeight.w800)),
         bottom: TabBar(
           controller: _tab,
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 13),
           tabs: const [Tab(text: 'My Loans'), Tab(text: 'Apply')],
         ),
       ),
@@ -149,7 +150,7 @@ class _LoanScreenState extends State<LoanRequestScreen>
         if (snap.hasError) {
           return Center(
             child: Text('Failed to load loans',
-                style: TextStyle(color: Colors.red.shade400)));
+                style: AppFonts.banglaBody(color: Colors.red.shade400)));
         }
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator(color: _brand));
@@ -184,7 +185,7 @@ class _LoanScreenState extends State<LoanRequestScreen>
             ),
 
             if (docs.isEmpty)
-              const SliverFillRemaining(
+              SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -192,7 +193,7 @@ class _LoanScreenState extends State<LoanRequestScreen>
                         size: 48, color: Colors.black26),
                     SizedBox(height: 12),
                     Text('No loan records yet.',
-                        style: TextStyle(color: Colors.black45,
+                        style: AppFonts.banglaBody(color: Colors.black45,
                             fontWeight: FontWeight.w600)),
                   ]),
                 ),
@@ -259,10 +260,10 @@ class _LoanScreenState extends State<LoanRequestScreen>
           child: Row(children: [
             Icon(Icons.info_outline, color: _brand.withOpacity(.7), size: 20),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text(
                 'Select a loan type to apply. Your request will be reviewed by HR.',
-                style: TextStyle(fontSize: 13, color: _brand,
+                style: AppFonts.banglaBody(fontSize: 13, color: _brand,
                     fontWeight: FontWeight.w600),
               ),
             ),
@@ -388,8 +389,8 @@ class _SummaryCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Loan Summary',
-                style: TextStyle(color: Colors.white70, fontSize: 12,
+            Text('Loan Summary',
+                style: AppFonts.banglaBody(color: Colors.white70, fontSize: 12,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Row(children: [
@@ -408,7 +409,7 @@ class _SummaryCard extends StatelessWidget {
                   border: Border.all(color: Colors.orange.withOpacity(.4)),
                 ),
                 child: Text('$pending request${pending > 1 ? 's' : ''} pending review',
-                    style: const TextStyle(color: Colors.orange,
+                    style: AppFonts.banglaBody(color: Colors.orange,
                         fontSize: 11, fontWeight: FontWeight.w700)),
               ),
             ],
@@ -429,13 +430,13 @@ class _Stat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(value,
-          style: TextStyle(
+          style: AppFonts.banglaData(
               color: highlight ? const Color(0xFFFFC857) : Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 15)),
       const SizedBox(height: 2),
       Text(label,
-          style: const TextStyle(color: Colors.white60, fontSize: 11)),
+          style: AppFonts.banglaBody(color: Colors.white60, fontSize: 11)),
     ]);
   }
 }
@@ -490,7 +491,7 @@ class _LoanTile extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(type,
-                  style: const TextStyle(fontWeight: FontWeight.w800,
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w800,
                       fontSize: 15, color: _brand)),
             ),
             Container(
@@ -501,7 +502,7 @@ class _LoanTile extends StatelessWidget {
                 border: Border.all(color: c.withOpacity(.3)),
               ),
               child: Text(label,
-                  style: TextStyle(color: c, fontSize: 11,
+                  style: AppFonts.banglaBody(color: c, fontSize: 11,
                       fontWeight: FontWeight.w800)),
             ),
           ]),
@@ -528,7 +529,7 @@ class _LoanTile extends StatelessWidget {
             Text(purpose,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey.shade500)),
           ],
 
           // Withdraw button
@@ -565,7 +566,7 @@ class _InfoPill extends StatelessWidget {
       Icon(icon, size: 13, color: Colors.grey.shade500),
       const SizedBox(width: 4),
       Text(text,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600,
+          style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey.shade600,
               fontWeight: FontWeight.w600)),
     ]);
   }
@@ -604,7 +605,7 @@ class _TypeCard extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.w700,
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w700,
                       fontSize: 13, color: _brand),
                   overflow: TextOverflow.ellipsis),
             ),
@@ -633,7 +634,7 @@ class _SheetField extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label,
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade500,
+            style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey.shade500,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         child,
@@ -708,14 +709,14 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
     if (success) {
       widget.messenger.showSnackBar(
         SnackBar(
-          content: const Row(
+          content: Row(
             children: [
               Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Your loan request has been submitted and is now under review.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -774,9 +775,9 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
                   color: _brand, size: 20),
             ),
             const SizedBox(width: 10),
-            const Expanded(
+            Expanded(
               child: Text('New Loan Request',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800,
+                  style: AppFonts.banglaBody(fontSize: 17, fontWeight: FontWeight.w800,
                       color: _brand)),
             ),
             IconButton(
@@ -794,10 +795,10 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
                 value: _selType,
                 isExpanded: true,
                 dropdownColor: Colors.white,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1A1A2E),
-                    fontSize: 14),
+              style: AppFonts.banglaBody(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                  fontSize: 14),
                 items: ['Personal', 'Medical', 'Education', 'Business', 'Advance', 'Other']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
@@ -815,7 +816,7 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
               controller: widget.amtCtl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration.collapsed(hintText: 'e.g. 50000'),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 10),
@@ -826,7 +827,7 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
               controller: widget.mnCtl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration.collapsed(hintText: 'e.g. 12'),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 10),
@@ -838,7 +839,7 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
               maxLines: 2,
               decoration: const InputDecoration.collapsed(
                   hintText: 'Briefly explain the purpose'),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 20),
@@ -858,8 +859,8 @@ class _LoanApplySheetState extends State<_LoanApplySheet> {
                       width: 20, height: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
-                  : const Text('Submit Request',
-                      style: TextStyle(
+                  : Text('Submit Request',
+                      style: AppFonts.banglaBody(
                           fontWeight: FontWeight.w700, fontSize: 15,
                           color: Colors.white)),
             ),

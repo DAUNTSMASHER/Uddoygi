@@ -42,7 +42,6 @@ class PostSettingsSheet extends StatefulWidget {
 }
 
 class _PostSettingsSheetState extends State<PostSettingsSheet> {
-  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   PostVisibility _vis = PostVisibility.anyone;
@@ -54,9 +53,6 @@ class _PostSettingsSheetState extends State<PostSettingsSheet> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _vis = widget.initial;
     _resolvedEmail =
         widget.userEmail ?? FirebaseAuth.instance.currentUser?.email ?? '';
@@ -264,7 +260,6 @@ class _PostSettingsSheetState extends State<PostSettingsSheet> {
     required String subtitle,
     required IconData icon,
   }) {
-    final selected = _vis == value;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => setState(() => _vis = value),

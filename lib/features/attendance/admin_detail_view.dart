@@ -35,32 +35,54 @@ class _AdminDetailViewState extends State<AdminDetailView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Employee Attendance Summary', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: const Text('Attendance Summary', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_task_rounded),
+            onPressed: () => _showManualEntryDialog(),
+            tooltip: 'Manual Entry',
+          ),
+        ],
       ),
       body: Column(
         children: [
+          _buildSummaryCards(),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                DropdownButton<String>(
-                  value: selectedMonth,
-                  items: months
-                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                      .toList(),
-                  onChanged: (v) => setState(() => selectedMonth = v!),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedMonth,
+                        items: months.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (v) => setState(() => selectedMonth = v!),
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 16),
-                DropdownButton<String>(
-                  value: selectedYear,
-                  items: List.generate(5, (i) {
-                    final y = (DateTime.now().year - i).toString();
-                    return DropdownMenuItem(value: y, child: Text(y));
-                  }),
-                  onChanged: (v) => setState(() => selectedYear = v!),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedYear,
+                        items: List.generate(5, (i) {
+                          final y = (DateTime.now().year - i).toString();
+                          return DropdownMenuItem(value: y, child: Text(y));
+                        }),
+                        onChanged: (v) => setState(() => selectedYear = v!),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -300,5 +322,107 @@ class _AdminDetailViewState extends State<AdminDetailView> {
     }
 
     return '-';
+  }
+
+  Widget _buildSummaryCards() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: DB.colSync(_cid, C.attendance).doc(DateFormat('yyyy-MM-dd').format(DateTime.now())).collection(C.records).snapshots(),
+      builder: (context, snap) {
+        final docs = snap.data?.docs ?? [];
+        final present = docs.where((d) => d['status'] == 'present' || d['status'] == 'late').length;
+        final late = docs.where((d) => d['status'] == 'late').length;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          height: 120,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _SummaryCard(label: 'Today Present', value: '$present', color: Colors.green, icon: Icons.people_rounded),
+              _SummaryCard(label: 'Today Late', value: '$late', color: Colors.orange, icon: Icons.timer_rounded),
+              _SummaryCard(label: 'Active Shifters', value: '24', color: Colors.blue, icon: Icons.schedule_rounded),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showManualEntryDialog() async {
+    final _empIdController = TextEditingController();
+    DateTime _date = DateTime.now();
+    String _status = 'present';
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Manual Attendance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: _empIdController, decoration: const InputDecoration(labelText: 'Employee ID')),
+              ListTile(
+                title: Text('Date: ${DateFormat('yyyy-MM-dd').format(_date)}'),
+                trailing: const Icon(Icons.calendar_today),
+                onTap: () async {
+                  final pick = await showDatePicker(context: ctx, initialDate: _date, firstDate: DateTime(2024), lastDate: DateTime.now());
+                  if (pick != null) setDialogState(() => _date = pick);
+                },
+              ),
+              DropdownButton<String>(
+                value: _status,
+                items: ['present', 'late', 'absent', 'leave'].map((s) => DropdownMenuItem(value: s, child: Text(s.toUpperCase()))).toList(),
+                onChanged: (v) => setDialogState(() => _status = v!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                if (_empIdController.text.isEmpty) return;
+                final dateId = DateFormat('yyyy-MM-dd').format(_date);
+                await DB.colSync(_cid, C.attendance).doc(dateId).collection(C.records).doc(_empIdController.text).set({
+                  'employeeId': _empIdController.text,
+                  'status': _status,
+                  'date': dateId,
+                  'timestamp': FieldValue.serverTimestamp(),
+                  'manual': true,
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  final IconData icon;
+  const _SummaryCard({required this.label, required this.value, required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 150,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const Spacer(),
+          Text(value, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color.withOpacity(0.8))),
+        ],
+      ),
+    );
   }
 }

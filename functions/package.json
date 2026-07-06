@@ -3,7 +3,7 @@
   "description": "Firebase Cloud Functions for Uddyogi ERP AI Chatbot & Monthly Strategic Reports using Storage",
   "main": "index.js",
   "engines": {
-    "node": "18"
+    "node": "20"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",

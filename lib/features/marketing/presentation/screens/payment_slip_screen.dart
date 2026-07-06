@@ -27,11 +27,7 @@ const Color _shadow  = Color(0x08000000);
 const double _radiusSm  = 10.0;
 const double _radiusMd  = 12.0;
 const double _radiusLg  = 14.0;
-const double _spaceXs = 6.0;
-const double _spaceSm = 10.0;
 const double _spaceMd = 14.0;
-const double _spaceLg = 18.0;
-const double _spaceXl = 24.0;
 
 // ── Supported currencies ──────────────────────────────────────────────────────
 const _currencies = ['BDT', 'USD', 'EUR', 'GBP', 'AED', 'SGD', 'CNY', 'JPY'];
@@ -1161,48 +1157,6 @@ class _InfoChip extends StatelessWidget {
 // HELPER WIDGETS (unchanged from original)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _StepBar extends StatelessWidget {
-  final int current;
-  const _StepBar({required this.current});
-
-  @override
-  Widget build(BuildContext context) {
-    final steps = ['Upload Slip', 'Review & Verify', 'Done'];
-    return Row(children: steps.asMap().entries.map((e) {
-      final active = e.key == current;
-      final done   = e.key < current;
-      final color  = done ? _success : (active ? _brand : Colors.black26);
-      return Expanded(child: Column(children: [
-        Row(children: [
-          if (e.key > 0)
-            Expanded(child: Container(height: 2,
-                color: done ? _success : Colors.black12)),
-          Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Center(
-              child: done
-                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
-                  : Text('${e.key + 1}',
-                      style: TextStyle(
-                          color: active ? Colors.white : Colors.black45,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-            ),
-          ),
-          if (e.key < steps.length - 1)
-            Expanded(child: Container(height: 2,
-                color: done ? _success : Colors.black12)),
-        ]),
-        const SizedBox(height: 4),
-        Text(e.value,
-            style: TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-      ]));
-    }).toList());
-  }
-}
-
 class _SectionCard extends StatelessWidget {
   final IconData icon;
   final String   title;
@@ -1239,32 +1193,20 @@ class _SectionCard extends StatelessWidget {
       );
 }
 
-// ── AI badge shown next to the Amount label ───────────────────────────────────
-class _AiBadge extends StatelessWidget {
+class _InvoicePill extends StatelessWidget {
+  final IconData icon;
   final String label;
-  final bool corrected;
-  const _AiBadge({required this.label, this.corrected = false});
+  final Color color;
+  const _InvoicePill({required this.icon, required this.label, required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    final color = corrected ? _success : _info;
-    final icon  = corrected ? Icons.check_circle_rounded : Icons.auto_awesome_rounded;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 10, color: color),
         const SizedBox(width: 3),
         Text(label,
             style: TextStyle(
                 fontSize: 9, fontWeight: FontWeight.w700, color: color)),
-      ]),
-    );
-  }
+      ]);
 }
 
 class _UploadBtn extends StatelessWidget {

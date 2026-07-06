@@ -28,7 +28,6 @@ class TaskAssignmentScreen extends StatefulWidget {
 }
 
 class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
-  String _cid = '';
   int _tab = 0;
 
   String get _title {
@@ -42,9 +41,7 @@ class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
+
   }
 
 
@@ -89,14 +86,20 @@ class _TaskAssignmentScreenState extends State<TaskAssignmentScreen> {
               _MyWorkPage(),
             ],
           ),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: _tab,
-            onTap: (i) => setState(() => _tab = i),
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.space_dashboard), label: 'Dashboard'),
-              BottomNavigationBarItem(icon: Icon(Icons.assignment_add), label: 'Assign'),
-              BottomNavigationBarItem(icon: Icon(Icons.task_alt), label: 'My Work'),
-            ],
+          bottomNavigationBar: SizedBox(
+            height: 40,
+            child: BottomNavigationBar(
+              currentIndex: _tab,
+              onTap: (i) => setState(() => _tab = i),
+              iconSize: 16,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 9),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 9),
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.space_dashboard), label: 'Dashboard'),
+                BottomNavigationBarItem(icon: Icon(Icons.assignment_add), label: 'Assign'),
+                BottomNavigationBarItem(icon: Icon(Icons.task_alt), label: 'My Work'),
+              ],
+            ),
           ),
         ),
       ),

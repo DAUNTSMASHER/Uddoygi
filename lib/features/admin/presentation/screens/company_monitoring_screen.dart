@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/widgets/u_card.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -42,7 +42,7 @@ class CompanyMonitoringScreen extends StatelessWidget {
                     children: [
                       Text(
                         'Company Pulse',
-                        style: GoogleFonts.outfit(
+                        style: AppFonts.banglaBody(
                           color: Colors.white,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
@@ -51,7 +51,7 @@ class CompanyMonitoringScreen extends StatelessWidget {
                       ),
                       Text(
                         'Real-time operations monitoring',
-                        style: GoogleFonts.outfit(
+                        style: AppFonts.banglaBody(
                           color: Colors.white70,
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
@@ -158,7 +158,7 @@ class CompanyMonitoringScreen extends StatelessWidget {
                 children: [
                   Text(
                     'Recent Activity',
-                    style: GoogleFonts.outfit(
+                    style: AppFonts.banglaBody(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: Colors.black87,
@@ -167,7 +167,7 @@ class CompanyMonitoringScreen extends StatelessWidget {
                   const Spacer(),
                   Text(
                     'View All',
-                    style: TextStyle(
+                    style: AppFonts.banglaBody(
                       fontSize: 12,
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w600,
@@ -218,20 +218,20 @@ class CompanyMonitoringScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     d['title'] ?? 'Activity',
-                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                    style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 14),
                                   ),
                                   Text(
                                     d['body'] ?? '',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                    style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey),
                                   ),
                                 ],
                               ),
                             ),
                             Text(
                               _formatTime(d['timestamp']),
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey),
                             ),
                           ],
                         ),
@@ -253,7 +253,7 @@ class CompanyMonitoringScreen extends StatelessWidget {
     return DB.colSync(companyId, C.invoices).snapshots().map((s) {
       double total = 0;
       for (final d in s.docs) {
-        total += (d.data() as Map<String, dynamic>)['grandTotal'] ?? 0;
+        total += (d.data()['grandTotal'] ?? 0);
       }
       return '৳${(total / 1000).toStringAsFixed(1)}K';
     });
@@ -308,7 +308,7 @@ class _HeroStatCard extends StatelessWidget {
             builder: (context, snapshot) {
               return Text(
                 snapshot.data ?? '...',
-                style: GoogleFonts.outfit(
+                style: AppFonts.banglaBody(
                   color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
@@ -318,7 +318,7 @@ class _HeroStatCard extends StatelessWidget {
           ),
           Text(
             label,
-            style: GoogleFonts.outfit(
+            style: AppFonts.banglaBody(
               color: Colors.white70,
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -365,7 +365,7 @@ class _MonitoringModule extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: Colors.black87,

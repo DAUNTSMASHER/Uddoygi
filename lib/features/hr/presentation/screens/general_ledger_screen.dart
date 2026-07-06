@@ -4,17 +4,16 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 final _money      = UddoygiDesign.moneyFormat;
 final _dateFmt    = DateFormat('d MMM yyyy');
-final _timeFmt    = DateFormat('h:mm a');
 
 num _toNum(dynamic v) {
   if (v == null) return 0;
@@ -156,7 +155,7 @@ class _GeneralLedgerCreditsScreenState extends State<GeneralLedgerScreen> with S
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: Text('General Ledger', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
+        title: Text('General Ledger', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabs,
@@ -164,7 +163,7 @@ class _GeneralLedgerCreditsScreenState extends State<GeneralLedgerScreen> with S
           unselectedLabelColor: Colors.white.withOpacity(0.6),
           indicatorColor: Colors.white,
           indicatorWeight: 3,
-          labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 13),
+          labelStyle: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 13),
           tabs: const [Tab(text: 'Current Entries'), Tab(text: 'History')],
         ),
       ),
@@ -173,7 +172,7 @@ class _GeneralLedgerCreditsScreenState extends State<GeneralLedgerScreen> with S
         backgroundColor: UddoygiDesign.hrBrandGreen,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text('Add Entry', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: Colors.white)),
+        label: Text('Add Entry', style: AppFonts.banglaHeading(fontWeight: FontWeight.w700, color: Colors.white)),
       ),
       body: TabBarView(
         controller: _tabs,
@@ -234,9 +233,9 @@ class _AllCreditsTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('TOTAL CREDITS THIS PERIOD', style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                      Text('TOTAL CREDITS THIS PERIOD', style: AppFonts.banglaHeading(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
                       const SizedBox(height: 8),
-                      Text('৳ ${_money.format(totalAll)}', style: GoogleFonts.outfit(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                      Text('৳ ${_money.format(totalAll)}', style: AppFonts.banglaData(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                       const SizedBox(height: 16),
                       Row(
                         children: [
@@ -276,9 +275,9 @@ class _StatChip extends StatelessWidget {
     children: [
       Icon(icon, size: 14, color: Colors.white70),
       const SizedBox(width: 6),
-      Text(value, style: GoogleFonts.outfit(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+      Text(value, style: AppFonts.banglaHeading(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
       const SizedBox(width: 4),
-      Text(label, style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600)),
+      Text(label, style: AppFonts.banglaBody(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600)),
     ],
   );
 }
@@ -312,17 +311,17 @@ class _CreditCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(entry.description, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(entry.description, style: AppFonts.banglaHeading(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E0040)), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 2),
-                Text('${entry.account} • ${_dateFmt.format(entry.date)}', style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[400])),
+                Text('${entry.account} • ${_dateFmt.format(entry.date)}', style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[400])),
               ],
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('+৳${_money.format(entry.amount)}', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF065F46))),
-              Text(isSlip ? 'PAYMENT SLIP' : 'MANUAL ENTRY', style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.grey[300])),
+              Text('+৳${_money.format(entry.amount)}', style: AppFonts.banglaData(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF065F46))),
+              Text(isSlip ? 'PAYMENT SLIP' : 'MANUAL ENTRY', style: AppFonts.banglaHeading(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.grey[300])),
             ],
           ),
         ],
@@ -373,7 +372,7 @@ class _MonthHistoryTile extends StatelessWidget {
           ),
           child: const Icon(Icons.calendar_month_rounded, color: UddoygiDesign.hrBrandGreen, size: 18),
         ),
-        title: Text(label, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800)),
+        title: Text(label, style: AppFonts.banglaHeading(fontSize: 14, fontWeight: FontWeight.w800)),
         trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
         onTap: () {}, // Future: Monthly Detail View
       ),
@@ -392,7 +391,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 60),
           Icon(Icons.account_balance_rounded, size: 64, color: Colors.grey[200]),
           const SizedBox(height: 16),
-          Text('No ledger entries found', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.grey[400])),
+          Text('No ledger entries found', style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.grey[400])),
         ],
       ),
     );
@@ -420,7 +419,7 @@ class _AddCreditSheetState extends State<_AddCreditSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Add Manual Credit', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040))),
+          Text('Add Manual Credit', style: AppFonts.banglaHeading(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1E0040))),
           const SizedBox(height: 20),
           _Field(controller: _amountCtl, label: 'Credit Amount (BDT)', icon: Icons.attach_money_rounded, keyboard: TextInputType.number),
           const SizedBox(height: 12),
@@ -431,8 +430,8 @@ class _AddCreditSheetState extends State<_AddCreditSheet> {
             decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
             child: DropdownButtonFormField<String>(
               value: _account,
-              decoration: InputDecoration(border: Border.none, labelText: 'Target Account', labelStyle: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w700), prefixIcon: const Icon(Icons.account_tree_outlined, size: 18)),
-              items: ['Sales Revenue', 'Other Income', 'Cash', 'Bank', 'Owner\'s Equity'].map((e) => DropdownMenuItem(value: e, child: Text(e, style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600)))).toList(),
+              decoration: InputDecoration(border: InputBorder.none, labelText: 'Target Account', labelStyle: AppFonts.banglaHeading(fontSize: 11, fontWeight: FontWeight.w700), prefixIcon: Icon(Icons.account_tree_outlined, size: 18)),
+              items: ['Sales Revenue', 'Other Income', 'Cash', 'Bank', 'Owner\'s Equity'].map((e) => DropdownMenuItem(value: e, child: Text(e, style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600)))).toList(),
               onChanged: (v) => setState(() => _account = v!),
             ),
           ),
@@ -448,7 +447,7 @@ class _AddCreditSheetState extends State<_AddCreditSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusM)),
                 elevation: 0,
               ),
-              child: _saving ? const CircularProgressIndicator(color: Colors.white) : Text('SAVE CREDIT ENTRY', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1)),
+              child: _saving ? CircularProgressIndicator(color: Colors.white) : Text('SAVE CREDIT ENTRY', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1)),
             ),
           ),
         ],
@@ -477,10 +476,10 @@ class _Field extends StatelessWidget {
   Widget build(BuildContext context) => TextField(
     controller: controller,
     keyboardType: keyboard,
-    style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600),
+    style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600),
     decoration: InputDecoration(
       labelText: label,
-      labelStyle: GoogleFonts.plusJakartaSans(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w600),
+      labelStyle: AppFonts.banglaBody(color: Colors.grey[500], fontSize: 13, fontWeight: FontWeight.w600),
       prefixIcon: Icon(icon, size: 20, color: UddoygiDesign.hrBrandGreen),
       filled: true,
       fillColor: const Color(0xFFF8FAFC),

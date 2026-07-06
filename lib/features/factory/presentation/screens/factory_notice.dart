@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // widgets generated earlier
 import 'package:uddoygi/features/marketing/presentation/widgets/notice_1.dart'; // NoticeComposerBar (displayName + photoUrl)
@@ -232,9 +233,9 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
         backgroundColor: _brandBlue,     // blue background
         foregroundColor: Colors.white,   // makes title & icons white
         elevation: 0,
-        title: const Text(
+        title: Text(
           'নোটিশ',
-          style: TextStyle(fontWeight: FontWeight.w800),
+          style: AppFonts.banglaBody(fontWeight: FontWeight.w800),
         ),
         actions: [
           IconButton(
@@ -243,6 +244,12 @@ class _FactoryNoticeScreenState extends State<FactoryNoticeScreen> {
             icon: const Icon(Icons.tune_rounded),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _startCompose,
+        backgroundColor: _brandBlue,
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: Text('Add Notice', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
 
       // Bind profiles once, then build the rest using that map (real photos & names)
@@ -464,7 +471,7 @@ class _NoticeCard extends StatelessWidget {
                   child: authorPhoto.isEmpty
                       ? Text(
                     _initials(displayAuthor),
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                     ),
@@ -477,7 +484,7 @@ class _NoticeCard extends StatelessWidget {
                     title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                    style: AppFonts.banglaBody(fontWeight: FontWeight.w800, fontSize: 16),
                   ),
                 ),
                 _DeptChip(label: department),
@@ -498,17 +505,17 @@ class _NoticeCard extends StatelessWidget {
                   'প্রকাশক: $displayAuthor',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                  style: AppFonts.banglaBody(color: Colors.black54, fontWeight: FontWeight.w600),
                 ),
                 Text(
                   DateFormat('MMM d, yyyy • h:mm a').format(time),
-                  style: const TextStyle(color: Colors.black45),
+                  style: AppFonts.banglaBody(color: Colors.black45),
                 ),
                 if ((authorProfile?.role ?? '').isNotEmpty)
                   Text(
                     '• ${authorProfile!.role}',
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.black45),
+                  style: AppFonts.banglaBody(color: Colors.black45),
                   ),
               ],
             ),
@@ -516,7 +523,7 @@ class _NoticeCard extends StatelessWidget {
             if (files.isNotEmpty) ...[
               const SizedBox(height: 10),
               const Divider(height: 20),
-              const Text('সংযুক্তি', style: TextStyle(fontWeight: FontWeight.w800)),
+Text('সংযুক্তি', style: AppFonts.banglaBody(fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
               ...files.map((m) {
                 final name = (m['name']?.toString() ?? 'file');
@@ -587,7 +594,7 @@ class _DeptChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: const Color(0xFFD5DBE7)),
       ),
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      child: Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -653,9 +660,9 @@ class _CompactCommentsState extends State<_CompactComments> {
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: const Color(0xFFD5DBE7)),
                       ),
-                      child: const Text(
+                      child: Text(
                         'মন্তব্য লিখুন…',
-                        style: TextStyle(color: Color(0xFF98A2B3), fontWeight: FontWeight.w600),
+                        style: AppFonts.banglaBody(color: Color(0xFF98A2B3), fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),

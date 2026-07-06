@@ -1,27 +1,18 @@
-// lib/features/marketing/presentation/screens/order_progress_screen.dart
-// Agent-scoped, realtime order progress with summary board, filters, and rich details.
-
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
-/* ---------- Inline Marketing palette (no external theme import) ---------- */
-const Color _brandBlue   = Color(0xFF0D47A1); // dark
-const Color _blueMid     = Color(0xFF1D5DF1); // accent
-const Color _surface     = Color(0xFFF6F8FF); // near-white
-const Color _cardBorder  = Color(0x1A0D47A1); // 10% blue
-const Color _shadowLite  = Color(0x14000000); // subtle shadow
-
-const LinearGradient _headerGradient = LinearGradient(
-  colors: [_brandBlue, _blueMid],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-);
+const Color _primary = Color(0xFF0D47A1);
+const Color _bg = Color(0xFFF4F6F9);
+const Color _border = Color(0xFFE2E8F0);
+const Color _text = Color(0xFF0F172A);
+const Color _muted = Color(0xFF64748B);
 
 class OrderProgressScreen extends StatefulWidget {
-  const OrderProgressScreen({super.key});
+  const OrderProgressScreen({Key? key}) : super(key: key);
 
   @override
   State<OrderProgressScreen> createState() => _OrderProgressScreenState();
@@ -29,13 +20,15 @@ class OrderProgressScreen extends StatefulWidget {
 
 class _OrderProgressScreenState extends State<OrderProgressScreen> {
   String _cid = '';
-  Map<String, dynamic>? _session;
-  String _search = '';
-  String _statusFilter = 'all';
-  bool _sortDesc = true;
+  String _searchQuery = '';
+  String _statusFilter = 'All';
 
-  final List<String> _statusOptions = const [
-    'all', 'pending', 'processing', 'factory', 'qc', 'packed', 'shipped', 'delivered', 'cancelled'
+  final List<String> _filters = ['All', 'In Production', 'Ready for Delivery', 'Shipped'];
+
+  // Factory Stages for progress calculation
+  final List<String> _factoryStages = [
+    'Accepted', 'Base is Done', 'Hair is Ready', 'Knotting Started',
+    'Knotting Completed', 'Styling / Finishing', 'QC Check', 'Submit to Head Office'
   ];
 
   @override
@@ -44,734 +37,383 @@ class _OrderProgressScreenState extends State<OrderProgressScreen> {
     LocalStorageService.getSavedCompanyId().then((id) {
       if (mounted) setState(() => _cid = id ?? '');
     });
-    _loadSession();
   }
 
-  Future<void> _loadSession() async {
-    final s = await LocalStorageService.getSession();
-    if (!mounted) return;
-    setState(() => _session = s);
+  String _niceDate(dynamic d) {
+    if (d == null) return 'N/A';
+    if (d is Timestamp) return DateFormat('MMM dd, yyyy').format(d.toDate());
+    if (d is DateTime) return DateFormat('MMM dd, yyyy').format(d);
+    return 'N/A';
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> _ordersStream() {
-    if (_session == null || _session!['email'] == null) {
-      return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
-    }
-    // NOTE: where('agentEmail') + optional where('status') + orderBy('timestamp')
-    // may require a composite index. Firestore will suggest it if missing.
-    Query<Map<String, dynamic>> q = DB.colSync(_cid, C.invoices)
-        .where('agentEmail', isEqualTo: _session!['email'])
-        .orderBy('timestamp', descending: true);
-
-    if (_statusFilter != 'all') {
-      q = q.where('status', isEqualTo: _statusFilter);
-    }
-    return q.snapshots();
+  double _calcProgress(String stage, String status) {
+    if (status == 'Shipped' || status == 'Completed') return 1.0;
+    int idx = _factoryStages.indexOf(stage);
+    if (idx == -1) return 0.1;
+    return ((idx + 1) / _factoryStages.length).clamp(0.0, 1.0);
   }
 
-  String _fmtDate(dynamic ts) {
-    if (ts is Timestamp) return DateFormat('yyyy-MM-dd').format(ts.toDate());
-    if (ts is DateTime)  return DateFormat('yyyy-MM-dd').format(ts);
-    return '—';
-  }
+  void _openCourierForm(String docId, Map<String, dynamic> data) {
+    final trackingCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    String courier = 'FedEx';
+    DateTime shipDate = DateTime.now();
 
-  DateTime _toDate(dynamic ts) {
-    if (ts is Timestamp) return ts.toDate();
-    if (ts is DateTime) return ts;
-    return DateTime.fromMillisecondsSinceEpoch(0);
-  }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                left: 24, right: 24, top: 24
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Assign Courier & Complete Order', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Text('WO #${data['workOrderNo']} • Inv #${data['relatedInvoiceNo']}', style: GoogleFonts.inter(color: _muted)),
+                  const SizedBox(height: 24),
+                  
+                  DropdownButtonFormField<String>(
+                    value: courier,
+                    decoration: InputDecoration(labelText: 'Courier Company', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                    items: ['FedEx', 'DHL', 'UPS', 'USPS', 'Local Courier'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    onChanged: (v) => setLocal(() => courier = v!),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  TextField(
+                    controller: trackingCtrl,
+                    decoration: InputDecoration(labelText: 'Tracking Number', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                  ),
+                  const SizedBox(height: 16),
 
-  String _bdt(num? n) {
-    final f = NumberFormat.currency(locale: 'bn_BD', symbol: '৳', decimalDigits: 0);
-    return f.format(n ?? 0);
-  }
+                  InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(context: ctx, initialDate: shipDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                      if (d != null) setLocal(() => shipDate = d);
+                    },
+                    child: InputDecorator(
+                      decoration: InputDecoration(labelText: 'Shipping Date', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                      child: Text(_niceDate(shipDate)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
-  int _pieces(Map<String, dynamic> data) {
-    final items = (data['items'] as List?) ?? const [];
-    int sum = 0;
-    for (final it in items) {
-      final q = (it is Map && it['qty'] is num) ? (it['qty'] as num).toInt() : 0;
-      sum += q;
-    }
-    return sum;
-  }
+                  TextField(
+                    controller: noteCtrl,
+                    decoration: InputDecoration(labelText: 'Customer Notification Note (Optional)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 24),
 
-  Color _statusColor(String s) {
-    switch (s.toLowerCase()) {
-      case 'delivered': return Colors.green;
-      case 'shipped':   return Colors.blue;
-      case 'packed':    return Colors.teal;
-      case 'qc':        return Colors.deepPurple;
-      case 'factory':   return Colors.indigo;
-      case 'processing':return Colors.orange;
-      case 'pending':   return Colors.amber[800]!;
-      case 'cancelled': return Colors.red;
-      default:          return Colors.grey;
-    }
-  }
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.local_shipping),
+                      label: const Text('Provide Tracking & Complete'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primary, foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
+                      ),
+                      onPressed: () async {
+                        if (trackingCtrl.text.isEmpty) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Tracking number is required.')));
+                          return;
+                        }
 
-  Widget _statusChip(String status) {
-    final c = _statusColor(status);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: c.withOpacity(.12),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: c.withOpacity(.35)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 11),
-      ),
+                        final batch = FirebaseFirestore.instance.batch();
+                        final woRef = DB.colSync(_cid, C.workOrders).doc(docId);
+                        
+                        batch.update(woRef, {
+                          'status': 'Shipped',
+                          'courier': courier,
+                          'trackingNumber': trackingCtrl.text.trim(),
+                          'shippingDate': Timestamp.fromDate(shipDate),
+                          'shippingNote': noteCtrl.text.trim(),
+                          'shippedAt': FieldValue.serverTimestamp(),
+                        });
+
+                        // Attempt to update original invoice
+                        final invNo = data['relatedInvoiceNo'];
+                        if (invNo != null && invNo.toString().isNotEmpty) {
+                          final invQ = await DB.colSync(_cid, C.invoices).where('invoiceNo', isEqualTo: invNo).limit(1).get();
+                          if (invQ.docs.isNotEmpty) {
+                            batch.update(invQ.docs.first.reference, {'status': 'Shipped', 'trackingNumber': trackingCtrl.text.trim()});
+                          }
+                        }
+
+                        await batch.commit();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Order Marked as Shipped!')));
+                      },
+                    ),
+                  )
+                ],
+              ),
+            );
+          }
+        );
+      }
     );
-  }
-
-  bool _matchesSearch(Map<String, dynamic> data) {
-    final q = _search.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    bool has(Object? v) => v != null && v.toString().toLowerCase().contains(q);
-    return has(data['customerName']) ||
-        has(data['country']) ||
-        has(data['note']) ||
-        has(data['status']) ||
-        has(data['invoiceNo']) ||
-        has(data['docId']);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _surface,
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text('My Order Progress', style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: _brandBlue,
-        foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: _sortDesc ? 'Newest first' : 'Oldest first',
-            icon: const Icon(Icons.sort),
-            onPressed: () => setState(() => _sortDesc = !_sortDesc),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Filter status',
-            icon: const Icon(Icons.filter_alt),
-            onSelected: (v) => setState(() => _statusFilter = v),
-            itemBuilder: (context) => _statusOptions
-                .map((e) => PopupMenuItem(value: e, child: Text(e.toUpperCase())))
-                .toList(),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(58),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-            child: TextField(
-              onChanged: (v) => setState(() => _search = v),
-              decoration: InputDecoration(
-                hintText: 'Search by customer, country, note, status…',
-                prefixIcon: const Icon(Icons.search, color: _brandBlue),
-                hintStyle: const TextStyle(color: _brandBlue),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: _cardBorder),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: _cardBorder),
-                ),
-                focusedBorder: const OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(14)),
-                  borderSide: BorderSide(color: _brandBlue, width: 1.4),
-                ),
-              ),
-            ),
-          ),
-        ),
+        backgroundColor: _primary,
+        foregroundColor: Colors.white,
+        title: Text('Order Progress', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
       ),
-      body: _session == null
-          ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _ordersStream(),
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final docs = snap.data!.docs;
-
-          // Summary counts by status (before search)
-          final counts = <String, int>{
-            'pending': 0, 'processing': 0, 'factory': 0, 'qc': 0, 'packed': 0,
-            'shipped': 0, 'delivered': 0, 'cancelled': 0
-          };
-          for (final d in docs) {
-            final st = (d.data()['status'] ?? 'pending').toString().toLowerCase();
-            if (counts.containsKey(st)) counts[st] = counts[st]! + 1;
-          }
-
-          // Apply search + sort
-          final filtered = docs.where((d) {
-            final m = d.data();
-            m['docId'] = d.id;
-            return _matchesSearch(m);
-          }).toList()
-            ..sort((a, b) {
-              final A = _toDate(a.data()['timestamp']);
-              final B = _toDate(b.data()['timestamp']);
-              return _sortDesc ? B.compareTo(A) : A.compareTo(B);
-            });
-
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            itemCount: filtered.length + 1,
-            itemBuilder: (context, i) {
-              if (i == 0) {
-                // Overview board on top
-                return Column(
-                  children: [
-                    _overviewBoard(total: docs.length, counts: counts),
-                    const SizedBox(height: 14),
-                    _quickChips(), // quick status chips row
-                    const SizedBox(height: 12),
-                  ],
-                );
+      body: Column(
+        children: [
+          // Top Metrics
+          StreamBuilder<QuerySnapshot>(
+            stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.workOrders).snapshots(),
+            builder: (context, snapshot) {
+              int inProd = 0, ready = 0, shipped = 0;
+              if (snapshot.hasData) {
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final st = data['status'];
+                  if (st == 'In Production') inProd++;
+                  if (st == 'Completed') ready++;
+                  if (st == 'Shipped') shipped++;
+                }
               }
 
-              final doc  = filtered[i - 1];
-              final data = doc.data();
-              final date = _toDate(data['timestamp']);
-              final status = (data['status'] ?? 'pending').toString();
-              final name = (data['customerName'] ?? 'Unknown').toString();
-              final country = (data['country'] ?? '').toString();
-              final grand = (data['grandTotal'] is num) ? (data['grandTotal'] as num) : null;
-              final pcs = _pieces(data);
-              final invoiceNo = (data['invoiceNo'] ?? doc.id).toString();
-
               return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: const BorderSide(color: _cardBorder).toBorder(),
-                  boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 8, offset: Offset(0, 3))],
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => OrderDetailsScreen(orderId: doc.id, data: data),
-                      ),
-                    );
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Gradient header
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: const BoxDecoration(
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-                          gradient: _headerGradient,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                            _statusChip(status),
-                          ],
-                        ),
-                      ),
-
-                      // Body
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                        child: Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            _metaChip(Icons.tag, 'Invoice: $invoiceNo'),
-                            if (country.isNotEmpty) _metaChip(Icons.public, country),
-                            _metaChip(Icons.inventory, 'Pieces: $pcs'),
-                            _metaChip(Icons.payments, _bdt(grand)),
-                            _metaChip(Icons.schedule, _fmtDate(date)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                height: 100,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _metricCard('In Production', '$inProd', Icons.precision_manufacturing, Colors.purple),
+                    _metricCard('Ready for Delivery', '$ready', Icons.inventory_2, Colors.orange),
+                    _metricCard('Shipped / Done', '$shipped', Icons.local_shipping, Colors.green),
+                  ],
                 ),
               );
             },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _overviewBoard({required int total, required Map<String, int> counts}) {
-    // Gradient header board + white stat tiles (2 x N)
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-      decoration: BoxDecoration(
-        gradient: _headerGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 14, offset: Offset(0, 6))],
-      ),
-      child: LayoutBuilder(builder: (context, c) {
-        final w = c.maxWidth;
-        final spacing = 12.0;
-        final cardW = (w - spacing) / 2; // two columns on phones
-        Widget tile(String label, String value, IconData icon) => SizedBox(
-          width: cardW,
-          child: _squareStat(label, value, icon),
-        );
-
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            tile('Total Orders', '$total', Icons.list_alt),
-            tile('Pending', '${counts['pending']}', Icons.timelapse),
-            tile('Processing', '${counts['processing']}', Icons.settings_suggest),
-            tile('Factory', '${counts['factory']}', Icons.factory),
-            tile('QC', '${counts['qc']}', Icons.fact_check),
-            tile('Packed', '${counts['packed']}', Icons.inventory_2),
-            tile('Shipped', '${counts['shipped']}', Icons.local_shipping),
-            tile('Delivered', '${counts['delivered']}', Icons.verified),
-            tile('Cancelled', '${counts['cancelled']}', Icons.cancel),
-          ],
-        );
-      }),
-    );
-  }
-
-  Widget _squareStat(String label, String value, IconData icon) {
-    return Container(
-      height: 100,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const BorderSide(color: _cardBorder).toBorder(),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 10, offset: Offset(0, 4))],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
+          ),
+          
+          // Filters
           Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(color: _brandBlue.withOpacity(.10), shape: BoxShape.circle),
-            child: const Icon(Icons.assessment, color: _brandBlue, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _brandBlue,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 22,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _brandBlue,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _quickChips() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _statusOptions.map((s) {
-        final sel = _statusFilter == s;
-        return InkWell(
-          onTap: () => setState(() => _statusFilter = s),
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: sel ? Colors.white.withOpacity(.22) : Colors.white.withOpacity(.15),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white30),
-            ),
-            child: Text(
-              s.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 11,
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _filters.map((f) {
+                  final isSel = _statusFilter == f;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(f),
+                      selected: isSel,
+                      selectedColor: _primary,
+                      labelStyle: TextStyle(color: isSel ? Colors.white : _text, fontWeight: isSel ? FontWeight.w700 : FontWeight.w500),
+                      onSelected: (v) {
+                        if (v) setState(() => _statusFilter = f);
+                      },
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ),
-        );
-      }).toList(),
-    );
-  }
 
-  Widget _metaChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: const BorderSide(color: _cardBorder).toBorder(),
-        boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 6, offset: Offset(0, 2))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: _brandBlue),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _brandBlue,
+          // Search
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Search WO#, Invoice#, or Customer',
+                prefixIcon: const Icon(Icons.search),
+                filled: true, fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _border)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _border)),
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
             ),
           ),
+
+          // List
+          Expanded(child: _buildList()),
         ],
       ),
     );
   }
-}
 
-/* ======================= Details Screen ======================= */
-
-class OrderDetailsScreen extends StatelessWidget {
-  final String orderId;
-  final Map<String, dynamic> data;
-
-  const OrderDetailsScreen({super.key, required this.orderId, required this.data});
-
-  String _fmtDate(dynamic ts) {
-    if (ts is Timestamp) return DateFormat('yyyy-MM-dd').format(ts.toDate());
-    if (ts is DateTime)  return DateFormat('yyyy-MM-dd').format(ts);
-    return '—';
-  }
-
-  DateTime _toDate(dynamic ts) {
-    if (ts is Timestamp) return ts.toDate();
-    if (ts is DateTime) return ts;
-    return DateTime.fromMillisecondsSinceEpoch(0);
-  }
-
-  String _bdt(num? n) {
-    final f = NumberFormat.currency(locale: 'bn_BD', symbol: '৳', decimalDigits: 0);
-    return f.format(n ?? 0);
-  }
-
-  int _pieces() {
-    final items = (data['items'] as List?) ?? const [];
-    int sum = 0;
-    for (final it in items) {
-      final q = (it is Map && it['qty'] is num) ? (it['qty'] as num).toInt() : 0;
-      sum += q;
-    }
-    return sum;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = (data['items'] as List?) ?? const [];
-    final date  = data['timestamp'];
-    final status= (data['status'] ?? 'Unknown').toString();
-    final country = (data['country'] ?? 'Not specified').toString();
-    final note    = (data['note'] ?? '').toString();
-    final grand   = (data['grandTotal'] is num) ? (data['grandTotal'] as num) : null;
-    final ship    = (data['shippingCost'] is num) ? (data['shippingCost'] as num) : null;
-    final tax     = (data['tax'] is num) ? (data['tax'] as num) : null;
-    final invoiceNo = (data['invoiceNo'] ?? orderId).toString();
-
-    return Scaffold(
-      backgroundColor: _surface,
-      appBar: AppBar(
-        title: const Text('Order Details', style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: _brandBlue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+  Widget _metricCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      width: 140,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Top panel
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: _headerGradient,
-              boxShadow: const [BoxShadow(color: _shadowLite, blurRadius: 6, offset: Offset(0, 2))],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _kv('Invoice', invoiceNo, white: true, bold: true),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+          Icon(icon, color: color, size: 24),
+          const Spacer(),
+          Text(value, style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, color: _text)),
+          Text(title, style: GoogleFonts.inter(color: _muted, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _cid.isEmpty ? const Stream.empty() : DB.colSync(_cid, C.workOrders)
+          .where('status', whereIn: ['Accepted by Factory', 'In Production', 'Completed', 'Shipped'])
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        
+        var docs = snapshot.data?.docs ?? [];
+
+        // Apply Status Filter (local)
+        if (_statusFilter != 'All') {
+          docs = docs.where((d) {
+            final st = (d.data() as Map)['status'];
+            if (_statusFilter == 'In Production') return st == 'In Production' || st == 'Accepted by Factory';
+            if (_statusFilter == 'Ready for Delivery') return st == 'Completed';
+            if (_statusFilter == 'Shipped') return st == 'Shipped';
+            return true;
+          }).toList();
+        }
+
+        // Apply Search Filter (local)
+        if (_searchQuery.isNotEmpty) {
+          docs = docs.where((d) {
+            final m = d.data() as Map<String, dynamic>;
+            final str = '${m['workOrderNo']} ${m['relatedInvoiceNo']} ${m['buyerName']}'.toLowerCase();
+            return str.contains(_searchQuery);
+          }).toList();
+        }
+
+        if (docs.isEmpty) return const Center(child: Text('No orders found matching criteria.'));
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final doc = docs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final st = data['status'];
+            final currentStage = data['currentStage'] ?? 'Unknown';
+            final isReady = st == 'Completed';
+            final isShipped = st == 'Shipped';
+            
+            return Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: isReady ? Colors.orange : _border, width: isReady ? 2 : 1)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _chip(Icons.schedule, _fmtDate(date), white: true),
-                    _chip(Icons.public, country, white: true),
-                    _chip(Icons.inventory, 'Pieces: ${_pieces()}', white: true),
-                    _chip(Icons.payments, _bdt(grand), white: true),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('WO #${data['workOrderNo']}', style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 16)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isReady ? Colors.orange.withOpacity(0.1) : (isShipped ? Colors.green.withOpacity(0.1) : Colors.purple.withOpacity(0.1)),
+                            borderRadius: BorderRadius.circular(8)
+                          ),
+                          child: Text(
+                            isReady ? 'Ready for Delivery' : (isShipped ? 'Shipped' : 'In Factory'),
+                            style: GoogleFonts.inter(
+                              color: isReady ? Colors.orange : (isShipped ? Colors.green : Colors.purple),
+                              fontWeight: FontWeight.w700, fontSize: 11
+                            )
+                          ),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Customer: ${data['buyerName']} (Inv #${data['relatedInvoiceNo']})', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: _primary)),
+                    const SizedBox(height: 12),
+
+                    if (!isShipped) ...[
+                      // Progress Bar
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Factory Progress: $currentStage', style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+                          Text('${(_calcProgress(currentStage, st) * 100).toInt()}%', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: _calcProgress(currentStage, st),
+                          minHeight: 6,
+                          backgroundColor: _border,
+                          color: isReady ? Colors.orange : Colors.purple,
+                        ),
+                      ),
+                    ] else ...[
+                      // Shipping details
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: Colors.green.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.local_shipping, color: Colors.green, size: 20),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${data['courier']} • Trk# ${data['trackingNumber']}', style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13)),
+                                Text('Shipped: ${_niceDate(data['shippingDate'])}', style: GoogleFonts.inter(color: _muted, fontSize: 11)),
+                              ],
+                            )
+                          ],
+                        ),
+                      )
+                    ],
+
+                    if (isReady) ...[
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.airport_shuttle),
+                          label: const Text('Add Courier & Ship'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange, foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                          ),
+                          onPressed: () => _openCourierForm(doc.id, data),
+                        ),
+                      )
+                    ]
                   ],
                 ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-          _kv('Customer', (data['customerName'] ?? 'N/A').toString()),
-          _kv('Status', status, color: _statusColor(status), bold: true),
-          if (note.isNotEmpty) _kv('Note', note),
-
-          const SizedBox(height: 16),
-          const Text(
-            'Items',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _brandBlue),
-          ),
-          const SizedBox(height: 8),
-
-          // Items list
-          ...items.map((it) {
-            final m = (it is Map) ? it : <String, dynamic>{};
-            final model = (m['model'] ?? '').toString();
-            final color = (m['color'] ?? '').toString();
-            final size  = (m['size']  ?? '').toString();
-            final qty   = (m['qty'] is num) ? (m['qty'] as num).toInt() : 0;
-            final total = (m['total'] is num) ? (m['total'] as num) : null;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: const BorderSide(color: _cardBorder).toBorder(),
-              ),
-              child: ListTile(
-                title: Text(
-                  model.isEmpty ? 'Item' : model,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: _brandBlue),
-                ),
-                subtitle: Text(
-                  'Color: ${color.isEmpty ? '-' : color}  •  Size: ${size.isEmpty ? '-' : size}  •  Qty: $qty',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Text(_bdt(total), style: const TextStyle(fontWeight: FontWeight.w800)),
               ),
             );
-          }),
-
-          const Divider(height: 28, color: _cardBorder),
-
-          // Totals
-          _kv('Shipping Cost', _bdt(ship)),
-          _kv('Tax', _bdt(tax)),
-          _kv('Grand Total', _bdt(grand), bold: true, color: Colors.green.shade700),
-
-          const SizedBox(height: 18),
-
-          // Optional tracking history
-          _trackingHistory(data),
-        ],
-      ),
+          },
+        );
+      },
     );
   }
-
-  Widget _kv(String k, String v, {bool bold = false, Color? color, bool white = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Text(
-            '$k: ',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: white ? Colors.white : _brandBlue,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              v,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-                color: white ? Colors.white : (color ?? Colors.black87),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(IconData icon, String text, {bool white = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: white ? Colors.white.withOpacity(.18) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: white ? Colors.white30 : _cardBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: white ? Colors.white : _brandBlue),
-          const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: white ? Colors.white : _brandBlue,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _trackingHistory(Map<String, dynamic> data) {
-    final history = (data['trackingHistory'] as List?) ?? const [];
-    if (history.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: const BorderSide(color: _cardBorder).toBorder(),
-        ),
-        child: const Text(
-          'No tracking updates yet. You will see factory/QC/packing/shipping events here if available.',
-          style: TextStyle(fontSize: 12),
-        ),
-      );
-    }
-
-    final sorted = [...history]..sort((a, b) {
-      DateTime A = DateTime.fromMillisecondsSinceEpoch(0);
-      DateTime B = DateTime.fromMillisecondsSinceEpoch(0);
-      if (a is Map) A = _toDate(a['at']);
-      if (b is Map) B = _toDate(b['at']);
-      return B.compareTo(A);
-    });
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Tracking History',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _brandBlue),
-        ),
-        const SizedBox(height: 8),
-        ...sorted.map((e) {
-          final m = (e is Map) ? e : <String, dynamic>{};
-          final st = (m['status'] ?? '').toString();
-          final note = (m['note'] ?? '').toString();
-          final at = _fmtDate(m['at']);
-          final icon = _trackingIcon(st);
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: const BorderSide(color: _cardBorder).toBorder(),
-            ),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: _statusColor(st).withOpacity(.12),
-                child: Icon(icon, color: _statusColor(st)),
-              ),
-              title: Text(
-                st.isEmpty ? 'Update' : st.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(
-                note.isEmpty ? at : '$note\n$at',
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              isThreeLine: note.isNotEmpty,
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  IconData _trackingIcon(String s) {
-    switch (s.toLowerCase()) {
-      case 'factory':    return Icons.factory;
-      case 'qc':         return Icons.fact_check;
-      case 'packed':     return Icons.inventory_2;
-      case 'shipped':    return Icons.local_shipping;
-      case 'delivered':  return Icons.verified;
-      case 'processing': return Icons.settings_suggest;
-      case 'pending':    return Icons.timelapse;
-      case 'cancelled':  return Icons.cancel;
-      default:           return Icons.timeline;
-    }
-  }
-
-  Color _statusColor(String s) {
-    switch (s.toLowerCase()) {
-      case 'delivered': return Colors.green;
-      case 'shipped':   return Colors.blue;
-      case 'packed':    return Colors.teal;
-      case 'qc':        return Colors.deepPurple;
-      case 'factory':   return Colors.indigo;
-      case 'processing':return Colors.orange;
-      case 'pending':   return Colors.amber[800]!;
-      case 'cancelled': return Colors.red;
-      default:          return Colors.grey;
-    }
-  }
-}
-
-/* -------- helper to use BorderSide inside BoxDecoration -------- */
-extension on BorderSide {
-  BoxBorder toBorder() => Border.fromBorderSide(this);
 }

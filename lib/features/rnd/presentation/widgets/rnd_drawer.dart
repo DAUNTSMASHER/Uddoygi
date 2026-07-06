@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uddoygi/profile.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/common/notification.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── R&D Colour Palette ──────────────────────────────────────
 const Color _rndPrimary = Color(0xFF5B21B6); // Deep Violet
@@ -97,16 +98,16 @@ class _RndDrawerState extends State<RndDrawer> {
                 backgroundImage: (photoUrl != null && photoUrl!.isNotEmpty)
                     ? NetworkImage(photoUrl!) : null,
                 child: (photoUrl == null || photoUrl!.isEmpty)
-                    ? Text(initials, style: const TextStyle(
-                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700))
+                    ? Text(initials, style: AppFonts.englishSystem(
+                        color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold))
                     : null,
               ),
               const SizedBox(height: 12),
               Text(displayName,
-                  style: const TextStyle(color: Colors.white, fontSize: 16,
-                      fontWeight: FontWeight.w700)),
+                  style: AppFonts.banglaHeading(color: Colors.white, fontSize: 16,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text(email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(email ?? '', style: AppFonts.englishTech(color: Colors.white70, fontSize: 12)),
               const SizedBox(height: 12),
               GestureDetector(
                 onTap: () {
@@ -122,10 +123,10 @@ class _RndDrawerState extends State<RndDrawer> {
                     color: Colors.white24,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.person_outline, size: 14, color: Colors.white),
-                    SizedBox(width: 6),
-                    Text('View Profile', style: TextStyle(color: Colors.white,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.person_outline, size: 14, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text('প্রোফাইল দেখুন', style: AppFonts.banglaBody(color: Colors.white,
                         fontSize: 12, fontWeight: FontWeight.w600)),
                   ]),
                 ),
@@ -136,38 +137,38 @@ class _RndDrawerState extends State<RndDrawer> {
           // ── Nav items ──
           Expanded(
             child: ListView(padding: EdgeInsets.zero, children: [
-              _section('GENERAL'),
-              _tile(context, Icons.dashboard_rounded,      'Dashboard',       '/rnd/dashboard'),
-              _tile(context, Icons.science_rounded,        'My Projects',     '/rnd/projects'),
-              _tile(context, Icons.edit_note_rounded,      'Daily Updates',   '/rnd/updates'),
-              _tile(context, Icons.flag_rounded,           'Milestones',      '/rnd/milestones'),
+              _section('সাধারণ (General)'),
+              _tile(context, Icons.dashboard_rounded,      'ড্যাশবোর্ড (Dashboard)',       '/rnd/dashboard'),
+              _tile(context, Icons.science_rounded,        'আমার প্রজেক্ট (Projects)',     '/rnd/projects'),
+              _tile(context, Icons.edit_note_rounded,      'দৈনিক আপডেট (Daily Updates)',   '/rnd/updates'),
+              _tile(context, Icons.flag_rounded,           'মাইলস্টোন (Milestones)',      '/rnd/milestones'),
 
-              _section('REQUESTS'),
-              _tile(context, Icons.inbox_rounded,          'Project Inbox',   '/rnd/inbox'),
+              _section('অনুরোধ (Requests)'),
+              _tile(context, Icons.inbox_rounded,          'প্রজেক্ট ইনবক্স (Inbox)',   '/rnd/inbox'),
 
-              _section('COMMUNICATION'),
-              _tile(context, Icons.announcement_rounded,   'Notices',         '/rnd/notices'),
-              _tile(context, Icons.message_rounded,        'Messages',        '/common/messages',
+              _section('যোগাযোগ (Communication)'),
+              _tile(context, Icons.announcement_rounded,   'নোটিশ (Notices)',         '/rnd/notices'),
+              _tile(context, Icons.message_rounded,        'বার্তা (Messages)',        '/common/messages',
                   badgeQuery: DB.colSync(_cid, C.messages)
                       .where('to', isEqualTo: email ?? '')
                       .where('read', isEqualTo: false)),
-              _tile(context, Icons.notifications_rounded,  'Notifications',   null,
+              _tile(context, Icons.notifications_rounded,  'নোটিফিকেশন (Notifications)',   null,
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const NotificationPage()));
                   }),
 
-              _section('PERSONAL'),
-              _tile(context, Icons.how_to_reg_rounded,     'Attendance',      '/rnd/attendance'),
-              _tile(context, Icons.payments_rounded,       'Salary',          '/common/salary'),
-              _tile(context, Icons.account_balance_rounded,'Loan Request',    '/rnd/loan'),
+              _section('ব্যক্তিগত (Personal)'),
+              _tile(context, Icons.how_to_reg_rounded,     'উপস্থিতি (Attendance)',      '/rnd/attendance'),
+              _tile(context, Icons.payments_rounded,       'বেতন (Salary)',          '/common/salary'),
+              _tile(context, Icons.account_balance_rounded,'ঋণ আবেদন (Loan Request)',    '/rnd/loan'),
 
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-                title: const Text('Logout',
-                    style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                title: Text('লগআউট (Logout)',
+                    style: AppFonts.banglaBody(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14)),
                 onTap: () async {
                   Navigator.pop(context);
                   await LocalStorageService.performLogout();
@@ -186,8 +187,8 @@ class _RndDrawerState extends State<RndDrawer> {
   Widget _section(String label) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
     child: Text(label,
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-            color: _rndPrimary.withOpacity(0.5), letterSpacing: 1.2)),
+        style: AppFonts.banglaHeading(fontSize: 11, fontWeight: FontWeight.bold,
+            color: _rndPrimary.withOpacity(0.5), letterSpacing: 1.1)),
   );
 
   Widget _tile(BuildContext context, IconData icon, String title, String? route,
@@ -245,7 +246,7 @@ class _DrawerTileState extends State<_DrawerTile> {
         child: Icon(widget.icon, size: 18, color: _rndPrimary),
       ),
       title: Text(widget.title,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600)),
       trailing: _count > 0
           ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -253,8 +254,8 @@ class _DrawerTileState extends State<_DrawerTile> {
           color: _rndMagenta,
           borderRadius: BorderRadius.circular(99),
         ),
-        child: Text('$_count',
-            style: const TextStyle(color: Colors.white, fontSize: 11,
+        child: Text(('$_count').toBanglaDigits,
+            style: AppFonts.banglaData(color: Colors.white, fontSize: 11,
                 fontWeight: FontWeight.w700)),
             )
           : const Icon(Icons.chevron_right_rounded, color: Colors.black26),

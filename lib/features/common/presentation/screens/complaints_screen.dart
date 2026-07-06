@@ -108,16 +108,20 @@ class _ComplaintScreenState extends State<ComplaintScreen> {
       // ⬇️ NO TOP APP BAR HERE (prevents the duplicate header)
       body: pages[_index],
       bottomNavigationBar: SafeArea(
-        child: BottomNavigationBar(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: _brandBlue,
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white70,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-          items: items,
+        child: SizedBox(
+          height: 40,
+          child: BottomNavigationBar(
+            currentIndex: _index,
+            onTap: (i) => setState(() => _index = i),
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: _brandBlue,
+            selectedItemColor: Colors.white,
+            unselectedItemColor: Colors.white70,
+            iconSize: 16,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 9),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 9),
+            items: items,
+          ),
         ),
       ),
     );

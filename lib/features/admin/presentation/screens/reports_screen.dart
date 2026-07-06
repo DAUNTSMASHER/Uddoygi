@@ -12,6 +12,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ─────────────────────────────────────────────────────────────
 // DESIGN TOKENS
@@ -25,12 +26,10 @@ class _T {
   static const primaryFg   = Colors.white;
   static const secondary   = Color(0xFFEEF2FF);
   static const secondaryFg = Color(0xFF3B2766);
-  static const muted       = Color(0xFFF3F4F6);
   static const mutedFg     = Color(0xFF6B7280);
   static const success     = Color(0xFF1FA807);
   static const successFg   = Colors.white;
   static const accent      = Color(0xFF7C5CFF);
-  static const accentFg    = Colors.white;
   static const destructive = Color(0xFFFF3838);
   static const destructiveFg = Colors.white;
   static const warning     = Color(0xFFF5E90A);
@@ -168,7 +167,6 @@ class _ReportData {
 // ─────────────────────────────────────────────────────────────
 Future<_ReportData> _loadData(_Period period) async {
   final _cid = await LocalStorageService.getSavedCompanyId() ?? '';
-  final db   = DB.firestore;
   final now  = DateTime.now();
   final rng  = period.range(now);
   final from = rng.start;
@@ -548,7 +546,6 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  String _cid = '';
   static const _company = 'Wig Bangladesh';
 
   _Period     _period  = _Period.month;
@@ -558,9 +555,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _load();
   }
 
@@ -635,8 +629,8 @@ class _DashHeader extends StatelessWidget {
         children: [
           _CircleBtn(icon: Icons.arrow_back_rounded, onTap: onBack),
           const Spacer(),
-          const Text('Report',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600,
+          Text('Report',
+              style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w600,
                   color: _T.fg)),
           const Spacer(),
           Container(
@@ -649,7 +643,7 @@ class _DashHeader extends StatelessWidget {
               const Icon(Icons.business_rounded, size: 14, color: _T.secondaryFg),
               const SizedBox(width: 6),
               Text(company,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                  style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w600,
                       color: _T.secondaryFg)),
             ]),
           ),
@@ -663,7 +657,7 @@ class _DashHeader extends StatelessWidget {
 class _PeriodSelector extends StatelessWidget {
   final _Period selected;
   final ValueChanged<_Period> onChanged;
-  const _PeriodSelector({super.key, required this.selected, required this.onChanged});
+  const _PeriodSelector({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -697,7 +691,7 @@ class _PeriodSelector extends StatelessWidget {
                         ),
                         child: Text(p.label,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: AppFonts.banglaBody(
                             fontSize: 13,
                             fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                             color: active ? _T.fg : _T.mutedFg,
@@ -788,12 +782,12 @@ class _HeroCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Financial Summary',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
-                        color: Colors.white)),
+              Text('Financial Summary',
+                  style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w600,
+                      color: Colors.white)),
                 const SizedBox(height: 4),
                 Text('Updated just now',
-                    style: TextStyle(fontSize: 12,
+                    style: AppFonts.banglaBody(fontSize: 12,
                         color: Colors.white.withOpacity(0.8))),
               ]),
               // Mini sparkline
@@ -827,10 +821,10 @@ class _HeroStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: TextStyle(fontSize: 13,
+      Text(label, style: AppFonts.banglaBody(fontSize: 13,
           color: Colors.white.withOpacity(0.85))),
       const SizedBox(height: 6),
-      Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700,
+      Text(value, style: AppFonts.banglaData(fontSize: 22, fontWeight: FontWeight.w700,
           color: Colors.white)),
       const SizedBox(height: 6),
       Container(
@@ -930,12 +924,12 @@ class _QuickKpiCard extends StatelessWidget {
         Icon(kpi.icon, size: 20, color: _T.primary),
         const SizedBox(height: 6),
         Text(kpi.value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+            style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w700,
                 color: _T.fg),
             maxLines: 1, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 2),
         Text(kpi.label,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500,
+            style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w500,
                 color: _T.mutedFg)),
       ]),
     );
@@ -985,7 +979,7 @@ class _CategorySectionState extends State<_CategorySection> {
                       borderRadius: BorderRadius.circular(_T.rXl),
                     ),
                     child: Text(labels[c]!,
-                        style: TextStyle(
+                        style: AppFonts.banglaBody(
                     fontSize: 14,
                           fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                           color: active ? _T.primaryFg : _T.secondaryFg,
@@ -1131,12 +1125,12 @@ class _GridCardWidget extends StatelessWidget {
           ),
           const Spacer(),
           Text(card.label,
-              style: const TextStyle(fontSize: 13, color: _T.mutedFg,
+              style: AppFonts.banglaBody(fontSize: 13, color: _T.mutedFg,
                   fontWeight: FontWeight.w500),
               maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
           Text(card.value,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700,
+              style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w700,
                   color: _T.fg),
               maxLines: 1, overflow: TextOverflow.ellipsis),
         ],
@@ -1198,7 +1192,7 @@ class _ActionBtn extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Text(label,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg)),
+            style: AppFonts.banglaBody(fontSize: 15, fontWeight: FontWeight.w600, color: fg)),
       ),
     );
   }
@@ -1220,7 +1214,6 @@ class _FullReportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
     return Scaffold(
       backgroundColor: _T.bg,
       body: SafeArea(
@@ -1235,9 +1228,9 @@ class _FullReportScreen extends StatelessWidget {
                 _CircleBtn(icon: Icons.arrow_back_rounded,
                     onTap: () => Navigator.pop(context)),
                 const Spacer(),
-                const Text('Full Report',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600,
-                        color: _T.fg)),
+              Text('Full Report',
+                  style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w600,
+                      color: _T.fg)),
                 const Spacer(),
                 _CircleBtn(
                   icon: Icons.share_rounded,
@@ -1265,12 +1258,12 @@ class _FullReportScreen extends StatelessWidget {
                             _T.card, _T.mutedFg, border: true),
                       ]),
                       Text('Updated just now',
-                          style: const TextStyle(fontSize: 11, color: _T.mutedFg)),
+                          style: AppFonts.banglaBody(fontSize: 11, color: _T.mutedFg)),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  const Text('Executive Full Report',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
+                  Text('Executive Full Report',
+                      style: AppFonts.banglaData(fontSize: 20, fontWeight: FontWeight.w700,
                           color: _T.fg)),
                   const SizedBox(height: 24),
 
@@ -1341,8 +1334,8 @@ class _FullReportScreen extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => _PdfPreviewScreen(
                       data: data, period: period, company: company))),
                   icon: const Icon(Icons.cloud_download_rounded, size: 20),
-                  label: const Text('Download PDF Document',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  label: Text('Download PDF Document',
+                      style: AppFonts.banglaBody(fontSize: 15, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _T.primary, foregroundColor: _T.primaryFg,
                     shape: RoundedRectangleBorder(
@@ -1379,7 +1372,7 @@ class _Badge extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 12, color: fg),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+        Text(label, style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w600,
             color: fg)),
       ]),
     );
@@ -1414,14 +1407,14 @@ class _InsightCard extends StatelessWidget {
         Row(children: [
           Icon(icon, size: 18, color: _T.primary),
           const SizedBox(width: 8),
-          Text(title, style: const TextStyle(fontSize: 14,
+          Text(title, style: AppFonts.banglaBody(fontSize: 14,
               fontWeight: FontWeight.w600, color: _T.fg)),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: badgeColor,
                 borderRadius: BorderRadius.circular(_T.rSm)),
-            child: Text(badge, style: TextStyle(fontSize: 11,
+            child: Text(badge, style: AppFonts.banglaBody(fontSize: 11,
                 fontWeight: FontWeight.w600, color: badgeFg)),
           ),
         ]),
@@ -1435,7 +1428,7 @@ class _InsightCard extends StatelessWidget {
                   decoration: BoxDecoration(color: b.dot, shape: BoxShape.circle)),
             ),
             Expanded(child: Text(b.text,
-                style: const TextStyle(fontSize: 13, color: _T.mutedFg))),
+                style: AppFonts.banglaBody(fontSize: 13, color: _T.mutedFg))),
           ]),
         )),
       ]),
@@ -1463,10 +1456,10 @@ class _SectionCard extends StatelessWidget {
         Row(children: [
           Icon(icon, size: 18, color: _T.primary),
           const SizedBox(width: 8),
-          Text(title, style: const TextStyle(fontSize: 14,
+          Text(title, style: AppFonts.banglaBody(fontSize: 14,
               fontWeight: FontWeight.w600, color: _T.fg)),
           const Spacer(),
-          Text(subtitle, style: const TextStyle(fontSize: 11, color: _T.mutedFg)),
+          Text(subtitle, style: AppFonts.banglaBody(fontSize: 11, color: _T.mutedFg)),
         ]),
         const SizedBox(height: 10),
         child,
@@ -1486,8 +1479,8 @@ class _TrendRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: _T.mutedFg)),
-          Text(value, style: const TextStyle(fontSize: 13,
+          Text(label, style: AppFonts.banglaBody(fontSize: 12, color: _T.mutedFg)),
+          Text(value, style: AppFonts.banglaBody(fontSize: 13,
               fontWeight: FontWeight.w600, color: _T.fg)),
         ]),
             Container(
@@ -1502,7 +1495,7 @@ class _TrendRow extends StatelessWidget {
                 color: positive ? _T.successFg : _T.destructiveFg),
             const SizedBox(width: 2),
             Text(positive ? 'Growth' : 'Decline',
-                style: TextStyle(fontSize: 11,
+                style: AppFonts.banglaBody(fontSize: 11,
                     color: positive ? _T.successFg : _T.destructiveFg)),
           ]),
         ),
@@ -1521,11 +1514,11 @@ class _FocusAreas extends StatelessWidget {
       Row(children: [
         const Icon(Icons.track_changes_rounded, size: 18, color: _T.primary),
         const SizedBox(width: 8),
-        const Text('Key Focus Areas',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _T.fg)),
+        Text('Key Focus Areas',
+            style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600, color: _T.fg)),
         const Spacer(),
-        const Text('Finance · Ops · HR · Sales',
-            style: TextStyle(fontSize: 11, color: _T.mutedFg)),
+        Text('Finance · Ops · HR · Sales',
+            style: AppFonts.banglaBody(fontSize: 11, color: _T.mutedFg)),
       ]),
       const SizedBox(height: 12),
       _FocusCard(
@@ -1602,7 +1595,7 @@ class _FocusCard extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Text(title, style: const TextStyle(fontSize: 13,
+            Text(title, style: AppFonts.banglaBody(fontSize: 13,
                 fontWeight: FontWeight.w600, color: _T.fg)),
             const Spacer(),
             Container(
@@ -1612,18 +1605,18 @@ class _FocusCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(_T.rSm),
               ),
               child: Text(status,
-                  style: TextStyle(fontSize: 11,
+                  style: AppFonts.banglaBody(fontSize: 11,
                       color: statusOk ? _T.successFg : _T.warningFg)),
             ),
           ]),
           const SizedBox(height: 4),
-          Text(body, style: const TextStyle(fontSize: 12, color: _T.mutedFg)),
+          Text(body, style: AppFonts.banglaBody(fontSize: 12, color: _T.mutedFg)),
                 const SizedBox(height: 2),
           RichText(text: TextSpan(
-            style: const TextStyle(fontSize: 12, color: _T.mutedFg),
+            style: AppFonts.banglaBody(fontSize: 12, color: _T.mutedFg),
             children: [
-              const TextSpan(text: 'Suggestion: ',
-                  style: TextStyle(fontWeight: FontWeight.w500, color: _T.fg)),
+              TextSpan(text: 'Suggestion: ',
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w500, color: _T.fg)),
               TextSpan(text: suggestion),
             ],
           )),
@@ -1650,18 +1643,18 @@ class _RisksCard extends StatelessWidget {
         Row(children: [
           const Icon(Icons.warning_amber_rounded, size: 18, color: _T.warning),
           const SizedBox(width: 8),
-          const Text('Risks & Opportunities',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _T.fg)),
+          Text('Risks & Opportunities',
+              style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600, color: _T.fg)),
         ]),
         const SizedBox(height: 10),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.trending_down_rounded, size: 14, color: _T.warning),
                     const SizedBox(width: 6),
           Expanded(child: RichText(text: TextSpan(
-            style: const TextStyle(fontSize: 12, color: _T.mutedFg),
+            style: AppFonts.banglaBody(fontSize: 12, color: _T.mutedFg),
             children: [
-              const TextSpan(text: 'Risk: ',
-                  style: TextStyle(fontWeight: FontWeight.w500, color: _T.fg)),
+              TextSpan(text: 'Risk: ',
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w500, color: _T.fg)),
               TextSpan(text: data.stock < 100
                   ? 'Low stock levels and active loans could impact delivery if demand spikes.'
                   : 'Monitor loan obligations and ensure stock replenishment stays on schedule.'),
@@ -1673,10 +1666,10 @@ class _RisksCard extends StatelessWidget {
           const Icon(Icons.trending_up_rounded, size: 14, color: _T.success),
           const SizedBox(width: 6),
           Expanded(child: RichText(text: TextSpan(
-            style: const TextStyle(fontSize: 12, color: _T.mutedFg),
+            style: AppFonts.banglaBody(fontSize: 12, color: _T.mutedFg),
             children: [
-              const TextSpan(text: 'Opportunity: ',
-                  style: TextStyle(fontWeight: FontWeight.w500, color: _T.fg)),
+              TextSpan(text: 'Opportunity: ',
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w500, color: _T.fg)),
               TextSpan(text: data.profit >= 0
                   ? 'Strong profit and client growth create room to accelerate investments in Operations and Sales.'
                   : 'Focus on converting existing leads and optimising campaign ROI to return to profitability.'),
@@ -1781,9 +1774,9 @@ class _PdfPreviewScreenState extends State<_PdfPreviewScreen> {
                 _CircleBtn(icon: Icons.arrow_back_rounded,
                     onTap: () => Navigator.pop(context)),
                 const Spacer(),
-                const Text('Document Preview',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600,
-                        color: _T.fg)),
+              Text('Document Preview',
+                  style: AppFonts.banglaBody(fontSize: 16, fontWeight: FontWeight.w600,
+                      color: _T.fg)),
                 const Spacer(),
                 const SizedBox(width: 36),
               ]),

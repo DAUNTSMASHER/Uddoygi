@@ -50,7 +50,7 @@ class _DocumentUploadPageState extends State<DocumentUploadPage> {
   void initState() {
     super.initState();
     _googleSignIn.onCurrentUserChanged.listen((acct) => _currentUser = acct);
-    _googleSignIn.signInSilently().then((acct) => _currentUser = acct).catchError((_) {});
+    _googleSignIn.signInSilently().then((acct) => _currentUser = acct).catchError((_) => _currentUser = null);
   }
 
   Future<auth.AuthClient> _getAuthClient() async {

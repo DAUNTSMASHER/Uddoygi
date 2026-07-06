@@ -245,6 +245,7 @@ class _RndDashboardState extends State<RndDashboard> {
 
     return SafeArea(
       child: Container(
+        height: 40,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [rndBrandDk, rndBrand],

@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const _brandGreen = Color(0xFF065F46);
@@ -42,7 +42,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
-        title: Text('Attendance Log', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20)),
+        title: Text('Attendance Log', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 20)),
         actions: [
           IconButton(icon: const Icon(Icons.calendar_month_rounded, color: _brandGreen), onPressed: _pickDate),
         ],
@@ -95,7 +95,7 @@ class _HeaderSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(DateFormat('EEEE, d MMMM').format(date).toUpperCase(), style: GoogleFonts.plusJakartaSans(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+          Text(DateFormat('EEEE, d MMMM').format(date).toUpperCase(), style: AppFonts.banglaHeading(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           StreamBuilder<QuerySnapshot>(
             stream: colRef.snapshots(),
@@ -127,8 +127,8 @@ class _SummaryStat extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.grey)),
-      Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+      Text(label, style: AppFonts.banglaHeading(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.grey)),
+      Text(value, style: AppFonts.banglaData(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
     ],
   );
 }
@@ -157,7 +157,7 @@ class _FilterTabs extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(color: active ? _brandGreen : Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: active ? _brandGreen : Colors.grey.withOpacity(0.1))),
               alignment: Alignment.center,
-              child: Text(items[i].toUpperCase(), style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w800, color: active ? Colors.white : Colors.grey[600])),
+              child: Text(items[i].toUpperCase(), style: AppFonts.banglaHeading(fontSize: 10, fontWeight: FontWeight.w800, color: active ? Colors.white : Colors.grey[600])),
             ),
           );
         },
@@ -185,18 +185,18 @@ class _AttendanceCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          CircleAvatar(backgroundColor: statusColor.withOpacity(0.1), child: Text(name[0], style: GoogleFonts.outfit(color: statusColor, fontWeight: FontWeight.w800))),
+          CircleAvatar(backgroundColor: statusColor.withOpacity(0.1), child: Text(name[0], style: AppFonts.banglaHeading(color: statusColor, fontWeight: FontWeight.w800))),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-                Text(d['department']?.toString().toUpperCase() ?? 'GENERAL', style: GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey[400])),
+                Text(name, style: AppFonts.banglaHeading(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                Text(d['department']?.toString().toUpperCase() ?? 'GENERAL', style: AppFonts.banglaHeading(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey[400])),
               ],
             ),
           ),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(status.toUpperCase(), style: GoogleFonts.outfit(color: statusColor, fontSize: 10, fontWeight: FontWeight.w800))),
+          Container(padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Text(status.toUpperCase(), style: AppFonts.banglaHeading(color: statusColor, fontSize: 10, fontWeight: FontWeight.w800))),
         ],
       ),
     );

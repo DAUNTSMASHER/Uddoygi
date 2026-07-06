@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:uddoygi/features/common/welfare_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
@@ -116,7 +116,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           title: Text(
             existing == null ? 'Publish Welfare Scheme' : 'Edit Scheme',
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: WC.text),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: WC.text),
           ),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -137,7 +137,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
                 value: category,
                 decoration: InputDecoration(
                   labelText: 'Category',
-                  labelStyle: GoogleFonts.ubuntu(color: WC.text2, fontWeight: FontWeight.w700),
+                  labelStyle: AppFonts.banglaBody(color: WC.text2, fontWeight: FontWeight.w700),
                   filled: true, fillColor: WC.bg,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: WC.border)),
@@ -147,7 +147,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
                 ),
                 items: categories.map((c) => DropdownMenuItem(
                   value: c,
-                  child: Text(c, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700)),
+                  child: Text(c, style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
                 )).toList(),
                 onChanged: (v) => setSt(() => category = v ?? category),
               ),
@@ -168,7 +168,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text('Notify all employees',
-                          style: GoogleFonts.ubuntu(
+                          style: AppFonts.banglaBody(
                               fontWeight: FontWeight.w800, color: WC.text, fontSize: 13)),
                     ),
                     Switch(
@@ -185,7 +185,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
             TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: Text('Cancel',
-                  style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: WC.text2)),
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: WC.text2)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -240,7 +240,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
                               ? 'Scheme published and employees notified!'
                               : 'Scheme published.'
                           : 'Scheme updated.',
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w700),
                     ),
                     backgroundColor: WC.green,
                     behavior: SnackBarBehavior.floating,
@@ -251,7 +251,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
                   ? const SizedBox(width: 18, height: 18,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : Text(existing == null ? 'Publish' : 'Update',
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
             ),
           ],
         ),
@@ -270,18 +270,18 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Delete Scheme?',
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
         content: Text('This will permanently remove the scheme.',
-            style: GoogleFonts.ubuntu(color: WC.text2, fontWeight: FontWeight.w700)),
+            style: AppFonts.banglaBody(color: WC.text2, fontWeight: FontWeight.w700)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false),
               child: Text('Cancel',
-                  style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: WC.text2))),
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: WC.text2))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: WC.red,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Delete', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
+            child: Text('Delete', style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -298,18 +298,18 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text('Rejection Reason',
-              style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
           content: _Field(controller: noteC, label: 'Reason',
               hint: 'Optional note for the employee', maxLines: 2),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false),
                 child: Text('Cancel',
-                    style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: WC.text2))),
+                    style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: WC.text2))),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: WC.red,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
               onPressed: () { note = noteC.text.trim(); Navigator.pop(ctx, true); },
-              child: Text('Reject', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
+              child: Text('Reject', style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
             ),
           ],
         ),
@@ -351,7 +351,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Request $decision',
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
         backgroundColor: decision == 'Approved' ? WC.green : WC.red,
         behavior: SnackBarBehavior.floating,
       ));
@@ -365,7 +365,7 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
       appBar: AppBar(
         elevation: 0,
         title: Text('Welfare Management',
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: Colors.white)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: Colors.white)),
         foregroundColor: Colors.white,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -380,8 +380,8 @@ class _WelfareSchemeScreenState extends State<WelfareSchemeScreen>
           controller: _tab,
           indicatorColor: Colors.white,
           indicatorWeight: 3,
-          labelStyle: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 13),
-          unselectedLabelStyle: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 13),
+          unselectedLabelStyle: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 13),
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
           tabs: const [Tab(text: 'Schemes'), Tab(text: 'Requests')],
@@ -535,7 +535,7 @@ class _SchemeCard extends StatelessWidget {
                 border: Border.all(color: catColor.withOpacity(.4)),
               ),
               child: Text(category,
-                  style: GoogleFonts.ubuntu(
+                  style: AppFonts.banglaBody(
                       fontSize: 11, fontWeight: FontWeight.w900, color: Colors.white)),
             ),
             const SizedBox(width: 8),
@@ -548,14 +548,14 @@ class _SchemeCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text('NEW',
-                    style: GoogleFonts.ubuntu(
+                    style: AppFonts.banglaBody(
                         fontSize: 9, fontWeight: FontWeight.w900,
                         color: Colors.white, letterSpacing: .5)),
               ),
             Expanded(
               child: Text(title,
                   maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.ubuntu(
+                  style: AppFonts.banglaBody(
                       fontWeight: FontWeight.w900, color: Colors.white, fontSize: 15)),
             ),
             if (!active)
@@ -566,7 +566,7 @@ class _SchemeCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text('Inactive',
-                    style: GoogleFonts.ubuntu(
+                    style: AppFonts.banglaBody(
                         fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white70)),
               ),
             PopupMenuButton<String>(
@@ -598,7 +598,7 @@ class _SchemeCard extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(desc,
-                style: GoogleFonts.ubuntu(
+                style: AppFonts.banglaBody(
                     color: WC.text, fontWeight: FontWeight.w600, fontSize: 13),
                 maxLines: 3, overflow: TextOverflow.ellipsis),
             if (eligibility.isNotEmpty) ...[
@@ -608,7 +608,7 @@ class _SchemeCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text('Eligibility: $eligibility',
-                      style: GoogleFonts.ubuntu(
+                      style: AppFonts.banglaBody(
                           fontSize: 12, fontWeight: FontWeight.w700, color: WC.text2),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
@@ -627,7 +627,7 @@ class _SchemeCard extends StatelessWidget {
                   icon: Icons.person_rounded, color: WC.p2),
               const Spacer(),
               Text(date,
-                  style: GoogleFonts.ubuntu(
+                  style: AppFonts.banglaBody(
                       fontSize: 11, fontWeight: FontWeight.w700, color: WC.text2)),
             ]),
           ]),
@@ -667,12 +667,12 @@ class _RequestsTab extends StatelessWidget {
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
                 label: Text(f,
-                    style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, fontSize: 12)),
+                    style: AppFonts.banglaBody(fontWeight: FontWeight.w800, fontSize: 12)),
                 selected: filter == f,
                 onSelected: (_) => onFilterChanged(f),
                 selectedColor: WC.p2,
                 checkmarkColor: Colors.white,
-                labelStyle: GoogleFonts.ubuntu(
+                labelStyle: AppFonts.banglaBody(
                   fontWeight: FontWeight.w800, fontSize: 12,
                   color: filter == f ? Colors.white : WC.text2,
                 ),
@@ -788,11 +788,11 @@ class _RequestCard extends StatelessWidget {
                       Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(employeeName,
-                    style: GoogleFonts.ubuntu(
+                    style: AppFonts.banglaBody(
                         fontWeight: FontWeight.w900, color: WC.text),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
                 Text('$department  ·  $employeeEmail',
-                    style: GoogleFonts.ubuntu(
+                    style: AppFonts.banglaBody(
                         fontSize: 11, fontWeight: FontWeight.w700, color: WC.text2),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
               ]),
@@ -809,7 +809,7 @@ class _RequestCard extends StatelessWidget {
                 Icon(_statusIcon(status), size: 12, color: statusColor),
                 const SizedBox(width: 4),
                 Text(status,
-                    style: GoogleFonts.ubuntu(
+                    style: AppFonts.banglaBody(
                         fontSize: 11, fontWeight: FontWeight.w900, color: statusColor)),
               ]),
             ),
@@ -820,12 +820,12 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 10),
 
           Text(schemeTitle,
-              style: GoogleFonts.ubuntu(
+              style: AppFonts.banglaBody(
                   fontWeight: FontWeight.w900, color: WC.p2, fontSize: 13)),
           if (reason.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(reason,
-                style: GoogleFonts.ubuntu(
+                style: AppFonts.banglaBody(
                     fontSize: 12, fontWeight: FontWeight.w600, color: WC.text),
                 maxLines: 3, overflow: TextOverflow.ellipsis),
           ],
@@ -841,7 +841,7 @@ class _RequestCard extends StatelessWidget {
             ],
             const Spacer(),
             Text(submittedAt,
-                style: GoogleFonts.ubuntu(
+                style: AppFonts.banglaBody(
                     fontSize: 11, fontWeight: FontWeight.w700, color: WC.text2)),
           ]),
 
@@ -867,7 +867,7 @@ class _RequestCard extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.close_rounded, size: 16),
                   label: Text(isAdmin ? 'Reject' : 'Decline',
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 13)),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 13)),
                   onPressed: () => onDecision(doc, isAdmin ? 'Rejected' : 'Declined'),
                 ),
               ),
@@ -882,7 +882,7 @@ class _RequestCard extends StatelessWidget {
                   icon: Icon(isAdmin ? Icons.check_rounded : Icons.verified_rounded,
                       size: 16),
                   label: Text(isAdmin ? 'Approve' : 'Verify & Forward',
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 13)),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 13)),
                   onPressed: () =>
                       onDecision(doc, isAdmin ? 'Approved' : 'Pending Admin'),
                 ),
@@ -922,7 +922,7 @@ class _Avatar extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(_initials,
-          style: GoogleFonts.ubuntu(
+          style: AppFonts.banglaBody(
               color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
     );
   }
@@ -947,7 +947,7 @@ class _InfoChip extends StatelessWidget {
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
         Text(label,
-            style: GoogleFonts.ubuntu(
+            style: AppFonts.banglaBody(
                 fontSize: 11, fontWeight: FontWeight.w800, color: color)),
       ]),
     );
@@ -975,11 +975,11 @@ class _NoteBox extends StatelessWidget {
         Expanded(
           child: RichText(
             text: TextSpan(
-              style: GoogleFonts.ubuntu(
+              style: AppFonts.banglaBody(
                   fontSize: 12, fontWeight: FontWeight.w700, color: WC.text),
               children: [
                 TextSpan(text: '$label: ',
-                    style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+                    style: AppFonts.banglaBody(color: color, fontWeight: FontWeight.w900)),
                 TextSpan(text: note),
               ],
             ),
@@ -1001,7 +1001,7 @@ class _PopItem extends StatelessWidget {
     return Row(children: [
       Icon(icon, size: 18, color: color),
       const SizedBox(width: 10),
-      Text(label, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: color)),
+      Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w800, color: color)),
     ]);
   }
 }
@@ -1023,12 +1023,12 @@ class _Field extends StatelessWidget {
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: WC.text),
+      style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: WC.text),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        labelStyle: GoogleFonts.ubuntu(color: WC.text2, fontWeight: FontWeight.w700),
-        hintStyle: GoogleFonts.ubuntu(
+        labelStyle: AppFonts.banglaBody(color: WC.text2, fontWeight: FontWeight.w700),
+        hintStyle: AppFonts.banglaBody(
             color: WC.text2.withOpacity(.6), fontWeight: FontWeight.w600),
         filled: true, fillColor: WC.bg,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
@@ -1056,7 +1056,7 @@ class _Empty extends StatelessWidget {
         const SizedBox(height: 12),
         Text(message,
             textAlign: TextAlign.center,
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: WC.text2)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: WC.text2)),
       ]),
     );
   }

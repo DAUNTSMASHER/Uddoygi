@@ -1,27 +1,16 @@
-// lib/core/utils/finance_utils.dart
-//
-// Centralized Financial Math Utilities.
-// Standardizes rounding, precision, and multi-currency conversions
-// to avoid common floating-point errors in JavaScript/Dart.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import 'dart:math';
 import 'package:intl/intl.dart';
 
 class FinanceUtils {
   FinanceUtils._();
 
-  /// Standard precision for financial calculations (2 decimal places)
   static const int defaultPrecision = 2;
 
-  /// Rounds a double to a specific precision to avoid 0.9999999999999 errors.
-  /// Example: round(0.1 + 0.2) -> 0.3
   static double round(double value, [int precision = defaultPrecision]) {
     final mod = pow(10, precision).toDouble();
     return (value * mod).round() / mod;
   }
 
-  /// Safely converts dynamic Firestore values to rounded doubles.
   static double toDouble(dynamic v, [int precision = defaultPrecision]) {
     if (v == null) return 0.0;
     double val = 0.0;
@@ -33,18 +22,45 @@ class FinanceUtils {
     return round(val, precision);
   }
 
-  /// Calculates a sum of doubles with precision guarding at each step.
   static double sum(Iterable<double> values) {
     return values.fold(0.0, (prev, element) => round(prev + element));
   }
 
-  /// Formats currency for UI with locale-aware symbols.
   static String format(double amount, {String symbol = '৳'}) {
     final fmt = NumberFormat.currency(
       locale: 'en_IN',
       symbol: symbol,
-      decimalDigits: 0, // ERPs often use whole numbers for BDT
+      decimalDigits: 0,
     );
     return fmt.format(round(amount));
+  }
+
+  static double grossMargin(double revenue, double costOfGoodsSold) {
+    if (revenue <= 0) return 0.0;
+    return round(((revenue - costOfGoodsSold) / revenue) * 100);
+  }
+
+  static double netProfitMargin(double revenue, double totalCosts) {
+    if (revenue <= 0) return 0.0;
+    return round(((revenue - totalCosts) / revenue) * 100);
+  }
+
+  static double costPlusPrice(double cost, double marginPercent) {
+    return round(cost / (1 - (marginPercent / 100)));
+  }
+
+  static double sellingPriceFromCost(double cost, double markupPercent) {
+    return round(cost * (1 + markupPercent / 100));
+  }
+
+  static double contributionMargin(double sellingPrice, double variableCost) {
+    if (sellingPrice <= 0) return 0.0;
+    return round(((sellingPrice - variableCost) / sellingPrice) * 100);
+  }
+
+  static double breakEvenUnits(double fixedCosts, double sellingPrice, double variableCostPerUnit) {
+    final contribution = sellingPrice - variableCostPerUnit;
+    if (contribution <= 0) return double.infinity;
+    return (fixedCosts / contribution).ceilToDouble();
   }
 }

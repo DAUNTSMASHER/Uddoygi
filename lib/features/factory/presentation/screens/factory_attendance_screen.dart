@@ -6,6 +6,7 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/features/attendance/admin_detail_view.dart';
 import 'package:uddoygi/features/attendance/user_attendance_view.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 class FactoryAttendanceScreen extends StatelessWidget {
   const FactoryAttendanceScreen({super.key});
@@ -39,7 +40,7 @@ class FactoryAttendanceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('কারখানার উপস্থিতি', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text('কারখানার উপস্থিতি', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: const Color(0xFF40062D),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -111,7 +112,7 @@ class _AttendanceOptionCard extends StatelessWidget {
                 maxLines: 2,
                 minFontSize: 11,
                 stepGranularity: 0.5,
-                style: TextStyle(
+                style: AppFonts.banglaBody(
                   fontSize: 16,
                   color: color,
                   fontWeight: FontWeight.bold,

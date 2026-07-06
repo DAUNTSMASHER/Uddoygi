@@ -3,10 +3,10 @@ import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/core/design_system.dart';
 import 'package:uddoygi/widgets/u_card.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 import 'budget_table.dart';
 
@@ -89,7 +89,7 @@ class _BudgetPageState extends State<BudgetPage> {
         backgroundColor: const Color(0xFF065F46),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: Text('Budget Planner', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: Text('Budget Planner', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 18)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
@@ -161,11 +161,11 @@ class _BudgetPageState extends State<BudgetPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_periodNowDisplay.toUpperCase(), style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                    Text(_periodNowDisplay.toUpperCase(), style: AppFonts.banglaHeading(color: Colors.white.withOpacity(0.7), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
                     const SizedBox(height: 8),
-                    Text(nowDoc == null ? 'No budget yet' : '৳ ${_money.format(nowTotal)}', style: GoogleFonts.outfit(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                    Text(nowDoc == null ? 'No budget yet' : '৳ ${_money.format(nowTotal)}', style: AppFonts.banglaData(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
                     const SizedBox(height: 4),
-                    Text('Total budget need this month', style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w500)),
+                    Text('Total budget need this month', style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 24),
                     Row(
                       children: [
@@ -188,7 +188,7 @@ class _BudgetPageState extends State<BudgetPage> {
                     nav.push(MaterialPageRoute(builder: (_) => BudgetTablePage(cid: _cid, budgetDoc: ref)));
                   },
                   icon: const Icon(Icons.grid_on_rounded, size: 20),
-                  label: Text(nowDoc == null ? 'Create Budget for $_periodNowDisplay' : 'Open Budget Table', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 15)),
+                  label: Text(nowDoc == null ? 'Create Budget for $_periodNowDisplay' : 'Open Budget Table', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 15)),
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF065F46), foregroundColor: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(UddoygiDesign.radiusM))),
                 ),
               ),
@@ -197,9 +197,9 @@ class _BudgetPageState extends State<BudgetPage> {
                 children: [
                   Container(width: 4, height: 16, decoration: BoxDecoration(color: const Color(0xFF065F46), borderRadius: UddoygiDesign.borderFull)),
                   const SizedBox(width: 10),
-                  Text('Budget History', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040))),
+                  Text('Budget History', style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E0040))),
                   const Spacer(),
-                  Text('${docs.length} months', style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[400], fontWeight: FontWeight.w700)),
+                  Text('${docs.length} months', style: AppFonts.banglaHeading(fontSize: 12, color: Colors.grey[400], fontWeight: FontWeight.w700)),
                 ],
               ),
               const SizedBox(height: UddoygiDesign.space16),
@@ -210,9 +210,9 @@ class _BudgetPageState extends State<BudgetPage> {
                     children: [
                       Icon(Icons.grid_off_rounded, size: 48, color: Colors.grey[200]),
                       const SizedBox(height: 16),
-                      Text('No budgets yet', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.grey[400])),
+                      Text('No budgets yet', style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.grey[400])),
                       const SizedBox(height: 4),
-                      Text('Tap the button above to start your first budget', textAlign: TextAlign.center, style: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey[400])),
+                      Text('Tap the button above to start your first budget', textAlign: TextAlign.center, style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[400])),
                     ],
                   ),
                 )
@@ -227,7 +227,7 @@ class _BudgetPageState extends State<BudgetPage> {
                     itemCount: (m['items'] as List?)?.length ?? 0,
                     targetCount: (m['salesTargets'] as List?)?.length ?? 0,
                     createdAt: (m['createdAt'] as Timestamp?)?.toDate(),
-                    locked: (m['editableUntil'] as Timestamp?)?.toDate() != null && DateTime.now().isAfter((m['editableUntil'] as Timestamp!).toDate()),
+                    locked: (m['editableUntil'] as Timestamp?)?.toDate() != null && DateTime.now().isAfter((m['editableUntil'] as Timestamp).toDate()),
                     isThisMonth: key == _periodNowKey,
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetTablePage(cid: _cid, budgetDoc: d.reference))),
                   ).animate().fadeIn(delay: 100.ms * docs.indexOf(d)).slideY(begin: 0.1, end: 0);
@@ -252,9 +252,9 @@ class _HeroStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: GoogleFonts.outfit(color: color, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+          Text(value, style: AppFonts.banglaData(color: color, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
           const SizedBox(height: 2),
-          Text(label, style: GoogleFonts.plusJakartaSans(color: Colors.white.withOpacity(0.6), fontSize: 10, fontWeight: FontWeight.w600)),
+          Text(label, style: AppFonts.banglaBody(color: Colors.white.withOpacity(0.6), fontSize: 10, fontWeight: FontWeight.w600)),
         ],
       ),
     ),
@@ -293,8 +293,8 @@ class _MonthCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(label, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF1E0040))),
-                      if (isThisMonth) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: const Color(0xFF065F46).withOpacity(0.1), borderRadius: UddoygiDesign.borderFull), child: Text('NOW', style: GoogleFonts.plusJakartaSans(fontSize: 9, fontWeight: FontWeight.w900, color: const Color(0xFF065F46))))],
+                      Text(label, style: AppFonts.banglaHeading(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1E0040))),
+                      if (isThisMonth) ...[SizedBox(width: 8), Container(padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Color(0xFF065F46).withOpacity(0.1), borderRadius: UddoygiDesign.borderFull), child: Text('NOW', style: AppFonts.banglaHeading(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF065F46))))],
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -311,8 +311,8 @@ class _MonthCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('৳ ${_money.format(total)}', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w900, color: const Color(0xFF065F46))),
-                Text('min ৳ ${_money.format(minTotal)}', style: GoogleFonts.plusJakartaSans(fontSize: 10, color: Colors.grey[400], fontWeight: FontWeight.w600)),
+                Text('৳ ${_money.format(total)}', style: AppFonts.banglaData(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF065F46))),
+                Text('min ৳ ${_money.format(minTotal)}', style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey[400], fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(width: 8),
@@ -333,7 +333,7 @@ class _InfoIcon extends StatelessWidget {
     children: [
       Icon(icon, size: 12, color: Colors.grey[400]),
       const SizedBox(width: 4),
-      Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+      Text(label, style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
     ],
   );
 }

@@ -18,7 +18,6 @@ class AdsManagerMobile extends StatefulWidget {
 }
 
 class _AdsManagerMobileState extends State<AdsManagerMobile> {
-  String _cid = '';
   int _index = 0;
 
   @override
@@ -57,6 +56,7 @@ class _AdsManagerMobileState extends State<AdsManagerMobile> {
         // Blue NavigationBar with white labels/icons
         bottomNavigationBar: NavigationBarTheme(
           data: NavigationBarThemeData(
+            height: 40,
             backgroundColor: _brandBlue,
             indicatorColor: Colors.white24,
             labelTextStyle: MaterialStateProperty.resolveWith<TextStyle?>(
@@ -146,7 +146,7 @@ class _DashboardScreenState extends State<_DashboardScreen> {
         final kpisRaw = (data['kpis'] as List? ?? []);
         final List<Map<String, dynamic>> kpis = kpisRaw
             .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e as Map))
+            .map((e) => Map<String, dynamic>.from(e))
             .toList();
 
         num score = 0;
@@ -183,7 +183,7 @@ class _DashboardScreenState extends State<_DashboardScreen> {
         if (target != null && key != null) {
           final actual = (totals[key] is num) ? totals[key] as num : 0;
           eligible++;
-          if (actual >= target!) achieved++;
+          if (actual >= target) achieved++;
         }
       }
 
@@ -387,7 +387,7 @@ class _PerformanceScreenState extends State<_PerformanceScreen> {
             final kpisRaw = (c['kpis'] as List? ?? []);
             final kpis = kpisRaw
                 .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e as Map))
+                .map((e) => Map<String, dynamic>.from(e))
                 .toList();
 
             return Container(
@@ -664,7 +664,6 @@ class _NewCampaignPage extends StatefulWidget {
 }
 
 class _NewCampaignPageState extends State<_NewCampaignPage> {
-  String _cid = '';
   final _formKey = GlobalKey<FormState>();
   final _nameCtl  = TextEditingController();
   final _titleCtl = TextEditingController();
@@ -682,9 +681,6 @@ class _NewCampaignPageState extends State<_NewCampaignPage> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _applyKpiPreset('Marketing');
   }
 
@@ -1090,7 +1086,7 @@ class _CampaignDetailPage extends StatelessWidget {
           final kpisRaw = (c['kpis'] as List? ?? []);
           final kpis = kpisRaw
               .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e as Map))
+              .map((e) => Map<String, dynamic>.from(e))
               .toList();
 
           return ListView(

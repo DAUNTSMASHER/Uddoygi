@@ -190,7 +190,6 @@ class _AddCustomerFormState extends State<AddCustomerForm> {
   @override
   Widget build(BuildContext context) {
     final titleStyle = GoogleFonts.ubuntu(fontSize: 18, fontWeight: FontWeight.w800);
-    final labelStyle = GoogleFonts.ubuntu(fontWeight: FontWeight.w600);
     final helperStyle = GoogleFonts.ubuntu(fontSize: 12, color: Colors.grey[600]);
 
     return SingleChildScrollView(

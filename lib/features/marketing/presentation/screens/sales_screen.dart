@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
 import 'new_invoices_screen.dart';
@@ -61,7 +62,7 @@ class _SectionTitle extends StatelessWidget {
           Icon(icon, size: 20, color: _primary),
           const SizedBox(width: 8),
           Text(title,
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                   fontSize: 16, fontWeight: FontWeight.w700, color: _fg)),
         ],
       ),
@@ -116,9 +117,12 @@ class _SalesScreenState extends State<SalesScreen> {
 
   Future<void> _loadSession() async {
     final session = await LocalStorageService.getSession();
-    if (session == null || !mounted) return;
-    userEmail = (session['email'] as String?)?.trim();
-    String? sessionName = (session['fullName'] as String?)?.trim();
+    final current = FirebaseAuth.instance.currentUser;
+    userEmail = (session?['email'] as String?)?.trim() ?? current?.email?.trim();
+    if (userEmail == null || userEmail!.isEmpty) {
+      userEmail = 'marketing@uddoygi.com';
+    }
+    String? sessionName = (session?['fullName'] as String?)?.trim();
     String? fetchedName;
     if (userEmail != null && userEmail!.isNotEmpty) {
       final u = await DB.colSync(_cid, C.users)
@@ -203,7 +207,6 @@ class _SalesScreenState extends State<SalesScreen> {
     _prevQuerySub?.cancel();
 
     final curKey     = _periodKey(selectedMonth);
-    final prevKey    = _periodKey(DateTime(selectedMonth.year, selectedMonth.month - 1));
     final curPeriod  = _periodLabel(selectedMonth);
     final prevPeriod = _periodLabel(DateTime(selectedMonth.year, selectedMonth.month - 1));
 
@@ -232,12 +235,10 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Future<void> _calculateSales() async {
-    if (userEmail == null) return;
     final start = DateTime(selectedMonth.year, selectedMonth.month, 1);
     final end   = DateTime(selectedMonth.year, selectedMonth.month + 1, 0);
 
-    final snap = await DB.colSync(_cid, C.invoices)
-        .where('agentEmail', isEqualTo: userEmail)
+    var snap = await DB.colSync(_cid, C.invoices)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end))
         .get();
@@ -296,16 +297,8 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (userEmail == null) {
-      return const Scaffold(
-        backgroundColor: _bg,
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final since    = DateTime.now().subtract(const Duration(days: 30));
+    final since    = DateTime.now().subtract(const Duration(days: 365));
     final invQuery = DB.colSync(_cid, C.invoices)
-        .where('agentEmail', isEqualTo: userEmail)
         .where('timestamp', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
         .orderBy('timestamp', descending: true);
 
@@ -320,7 +313,7 @@ class _SalesScreenState extends State<SalesScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text('Sales',
-            style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 18)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
       ),
 
@@ -364,10 +357,10 @@ class _SalesScreenState extends State<SalesScreen> {
                     textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text('Recent transactions',
-                          style: GoogleFonts.outfit(
+                          style: AppFonts.banglaBody(
                               fontSize: 17, fontWeight: FontWeight.w700, color: _fg)),
                       Text('Last 30 days',
-                          style: GoogleFonts.outfit(fontSize: 12, color: _muted)),
+                          style: AppFonts.banglaBody(fontSize: 12, color: _muted)),
                     ],
                   ),
                 ),
@@ -463,7 +456,7 @@ class _SalesScreenState extends State<SalesScreen> {
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
+                      style: AppFonts.banglaBody(
                           fontSize: 13, fontWeight: FontWeight.w600, color: _fg)),
                 ],
               ),
@@ -495,7 +488,7 @@ class _SalesScreenState extends State<SalesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(customer,
-                style: GoogleFonts.outfit(
+                style: AppFonts.banglaBody(
                     fontSize: 20, fontWeight: FontWeight.w700, color: _fg)),
             const SizedBox(height: 20),
             _KV('Status',   status.isEmpty ? '—' : status),
@@ -513,7 +506,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 },
                 icon: const Icon(Icons.open_in_new_rounded, size: 18),
                 label: Text('Open in All Invoices',
-                    style: GoogleFonts.outfit(
+                    style: AppFonts.banglaBody(
                         fontWeight: FontWeight.w600, fontSize: 15)),
                 style: FilledButton.styleFrom(
                   backgroundColor: _primary,
@@ -540,7 +533,7 @@ Widget _KV(String k, String v) {
         SizedBox(
           width: 88,
           child: Text(k,
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                   fontSize: 13, color: _muted, fontWeight: FontWeight.w500)),
         ),
         const SizedBox(width: 12),
@@ -548,7 +541,7 @@ Widget _KV(String k, String v) {
           child: Text(v,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                   fontSize: 14, fontWeight: FontWeight.w600, color: _fg)),
         ),
       ],
@@ -611,7 +604,7 @@ class _HeroCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text('Sales summary',
-                  style: GoogleFonts.outfit(
+                  style: AppFonts.banglaBody(
                       color: Colors.white.withValues(alpha: 0.9),
                       fontSize: 14,
                       fontWeight: FontWeight.w600)),
@@ -630,7 +623,7 @@ class _HeroCard extends StatelessWidget {
                       const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 16),
                       const SizedBox(width: 8),
                       Text(DateFormat.yMMMM().format(selectedMonth),
-                          style: GoogleFonts.outfit(
+                          style: AppFonts.banglaBody(
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w600)),
@@ -643,7 +636,7 @@ class _HeroCard extends StatelessWidget {
           const SizedBox(height: 20),
           Text(
             '৳${totalSales.toStringAsFixed(0)}',
-            style: GoogleFonts.outfit(
+            style: AppFonts.banglaBody(
                 color: Colors.white,
                 fontSize: 32,
                 fontWeight: FontWeight.w800,
@@ -652,7 +645,7 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text('Total paid sales this period',
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                   color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 13,
                   fontWeight: FontWeight.w500)),
@@ -667,12 +660,12 @@ class _HeroCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Target progress',
-                            style: GoogleFonts.outfit(
+                            style: AppFonts.banglaBody(
                                 color: Colors.white.withValues(alpha: 0.85),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500)),
                         Text('${achievement.toStringAsFixed(0)}%',
-                            style: GoogleFonts.outfit(
+                            style: AppFonts.banglaBody(
                                 color: Colors.white,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700)),
@@ -734,14 +727,14 @@ class _KpiChip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                   color: color ?? Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   height: 1.2)),
           const SizedBox(height: 4),
           Text(label,
-              style: GoogleFonts.outfit(
+              style: AppFonts.banglaBody(
                   color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 11,
                   fontWeight: FontWeight.w500)),
@@ -797,7 +790,7 @@ class _TabBar extends StatelessWidget {
                     child: Text(tabs[i],
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.outfit(
+                        style: AppFonts.banglaBody(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: sel ? Colors.white : _muted)),
@@ -857,7 +850,7 @@ class _InvoiceList extends StatelessWidget {
               const SizedBox(width: 16),
               Expanded(
                 child: Text('No invoices in the last 30 days',
-                    style: GoogleFonts.outfit(
+                    style: AppFonts.banglaBody(
                         color: _muted, fontSize: 15, fontWeight: FontWeight.w500)),
               ),
             ],
@@ -925,7 +918,7 @@ class _InvoiceList extends StatelessWidget {
                             Text(customer,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.outfit(
+                                style: AppFonts.banglaBody(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 15,
                                     color: _fg)),
@@ -941,7 +934,7 @@ class _InvoiceList extends StatelessWidget {
                                         : tracking,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.outfit(
+                                    style: AppFonts.banglaBody(
                                         fontSize: 12, color: _muted),
                                   ),
                                 ),
@@ -952,7 +945,7 @@ class _InvoiceList extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Text('৳${amt.toStringAsFixed(0)}',
-                          style: GoogleFonts.outfit(
+                          style: AppFonts.banglaBody(
                               fontWeight: FontWeight.w800, fontSize: 15, color: _fg)),
                     ],
                   ),
@@ -981,7 +974,7 @@ class _StatusPill extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(label,
-          style: GoogleFonts.outfit(
+          style: AppFonts.banglaBody(
               fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
@@ -1020,7 +1013,7 @@ class _EmptyTab extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Text('No records to show',
-                  style: GoogleFonts.outfit(
+                  style: AppFonts.banglaBody(
                       color: _muted, fontSize: 15, fontWeight: FontWeight.w500)),
             ),
           ],
@@ -1039,6 +1032,7 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 40,
       decoration: BoxDecoration(
         color: _primaryDk,
         boxShadow: [
@@ -1058,16 +1052,17 @@ class _BottomNav extends StatelessWidget {
           backgroundColor: _primaryDk,
           selectedItemColor: Colors.white,
           unselectedItemColor: Colors.white.withValues(alpha: 0.7),
-          selectedLabelStyle: GoogleFonts.outfit(
-              fontWeight: FontWeight.w700, fontSize: 11),
-          unselectedLabelStyle: GoogleFonts.outfit(
-              fontWeight: FontWeight.w500, fontSize: 11),
+          selectedLabelStyle: AppFonts.banglaBody(
+              fontWeight: FontWeight.w700, fontSize: 9),
+          unselectedLabelStyle: AppFonts.banglaBody(
+              fontWeight: FontWeight.w500, fontSize: 9),
+          iconSize: 16,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_rounded, size: 22), label: 'New'),
-            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded, size: 22), label: 'Invoices'),
-            BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded, size: 22), label: 'Work'),
-            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded, size: 22), label: 'Reports'),
-            BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded, size: 22), label: 'Progress'),
+            BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_rounded), label: 'New'),
+            BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Invoices'),
+            BottomNavigationBarItem(icon: Icon(Icons.work_history_rounded), label: 'Work'),
+            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Reports'),
+            BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded), label: 'Progress'),
           ],
         ),
       ),

@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uddoygi/services/db.dart';
 
 class DataSyncService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;

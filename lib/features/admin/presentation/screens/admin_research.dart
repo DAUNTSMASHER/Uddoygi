@@ -7,7 +7,7 @@ import 'package:uddoygi/services/db.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
@@ -19,7 +19,6 @@ class _C {
   static const p1 = Color(0xFF1A0533);
   static const p2 = Color(0xFF4C1D95);
   static const p3 = Color(0xFF7C3AED);
-  static const p4 = Color(0xFFA78BFA);
   static const bg = Color(0xFFF5F3FF);
   static const card = Colors.white;
   static const text = Color(0xFF0F172A);
@@ -103,7 +102,6 @@ enum _Tab { overview, projects, updates, leaderboard }
 
 class _AdminResearchScreenState extends State<AdminResearchScreen>
     with SingleTickerProviderStateMixin {
-  String _cid = '';
   late final TabController _tab;
   String _adminName = 'Admin';
   String _adminEmail = '';
@@ -114,9 +112,6 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     _tab = TabController(length: 4, vsync: this);
     _loadSession();
   }
@@ -179,7 +174,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
                     Expanded(
                       child: Text(
                         existing == null ? 'Assign New Project' : 'Edit Project',
-                        style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 16, color: _C.text),
+                        style: AppFonts.banglaHeading(fontWeight: FontWeight.w900, fontSize: 16, color: _C.text),
                       ),
                     ),
                     IconButton(
@@ -233,7 +228,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
 
                 // Progress slider
                 Text('Progress: $progress%',
-                    style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: _C.text2, fontSize: 13)),
+                    style: AppFonts.banglaBody(fontWeight: FontWeight.w800, color: _C.text2, fontSize: 13)),
                 Slider(
                   value: progress.toDouble(),
                   min: 0, max: 100, divisions: 20,
@@ -249,7 +244,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text('Cancel', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text2)),
+                      child: Text('Cancel', style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: _C.text2)),
                     ),
                     const SizedBox(width: 8),
                     FilledButton.icon(
@@ -261,7 +256,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
                       icon: Icon(existing == null ? Icons.add_rounded : Icons.save_rounded, size: 16),
                       label: Text(
                         existing == null ? 'Assign Project' : 'Save Changes',
-                        style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900),
+                        style: AppFonts.banglaBody(fontWeight: FontWeight.w900),
                       ),
                       onPressed: () async {
                         final title = titleC.text.trim();
@@ -327,7 +322,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           title: Text(
             existing == null ? 'Assign Score' : 'Update Score',
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: _C.text),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: _C.text),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -361,7 +356,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text2)),
+              child: Text('Cancel', style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: _C.text2)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -389,7 +384,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
               },
               child: Text(
                 existing == null ? 'Assign Score' : 'Update',
-                style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900),
+                style: AppFonts.banglaBody(fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -405,7 +400,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
       appBar: AppBar(
         elevation: 0,
         title: Text('R&D Research Wing',
-            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: Colors.white)),
+            style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: Colors.white)),
         foregroundColor: Colors.white,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
@@ -434,8 +429,8 @@ class _AdminResearchScreenState extends State<AdminResearchScreen>
           indicatorWeight: 3,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          labelStyle: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 13),
-          unselectedLabelStyle: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 13),
+          unselectedLabelStyle: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 13),
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
           tabs: const [
@@ -610,8 +605,8 @@ class _KpiTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 22, color: _C.text)),
-                Text(label, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, fontSize: 11, color: _C.text2),
+                Text(value, style: AppFonts.banglaData(fontWeight: FontWeight.w900, fontSize: 22, color: _C.text)),
+                Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 11, color: _C.text2),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
@@ -647,10 +642,10 @@ class _AvgProgressCard extends StatelessWidget {
               const Icon(Icons.bar_chart_rounded, color: Colors.white70, size: 18),
               const SizedBox(width: 8),
               Text('Overall R&D Progress',
-                  style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 14)),
+                  style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 14)),
               const Spacer(),
               Text('${avgProgress.toStringAsFixed(1)}%',
-                  style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 22)),
+                  style: AppFonts.banglaData(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 22)),
             ],
           ),
           const SizedBox(height: 12),
@@ -665,7 +660,7 @@ class _AvgProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text('Average across all projects',
-              style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, fontSize: 11, color: Colors.white60)),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w700, fontSize: 11, color: Colors.white60)),
         ],
       ),
     );
@@ -696,7 +691,7 @@ class _StatusBreakdown extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Project Status Breakdown',
-              style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: _C.text, fontSize: 13)),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: _C.text, fontSize: 13)),
           const SizedBox(height: 12),
           ...statuses.where((s) => (counts[s] ?? 0) > 0).map((s) {
             final count = counts[s]!;
@@ -712,10 +707,10 @@ class _StatusBreakdown extends StatelessWidget {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(s,
-                            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, fontSize: 12, color: _C.text)),
+                            style: AppFonts.banglaBody(fontWeight: FontWeight.w800, fontSize: 12, color: _C.text)),
                       ),
                       Text('$count',
-                          style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 12, color: _statusColor(s))),
+                          style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 12, color: _statusColor(s))),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -772,12 +767,12 @@ class _ProjectsTab extends StatelessWidget {
               children: _filters.map((f) => Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
-                  label: Text(f, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, fontSize: 12)),
+                  label: Text(f, style: AppFonts.banglaBody(fontWeight: FontWeight.w800, fontSize: 12)),
                   selected: filter == f,
                   onSelected: (_) => onFilterChanged(f),
                   selectedColor: _C.p2,
                   checkmarkColor: Colors.white,
-                  labelStyle: GoogleFonts.ubuntu(
+                  labelStyle: AppFonts.banglaBody(
                     fontWeight: FontWeight.w800, fontSize: 12,
                     color: filter == f ? Colors.white : _C.text2,
                   ),
@@ -890,12 +885,12 @@ class _ProjectCard extends StatelessWidget {
                     border: Border.all(color: priorityC.withOpacity(.3)),
                   ),
                   child: Text(priority,
-                      style: GoogleFonts.ubuntu(fontSize: 10, fontWeight: FontWeight.w900, color: priorityC)),
+                      style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w900, color: priorityC)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(title,
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 14, color: _C.text),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 14, color: _C.text),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
                 // Status badge
@@ -911,7 +906,7 @@ class _ProjectCard extends StatelessWidget {
                       Icon(_statusIcon(status), size: 11, color: statusC),
                       const SizedBox(width: 4),
                       Text(status,
-                          style: GoogleFonts.ubuntu(fontSize: 10, fontWeight: FontWeight.w900, color: statusC)),
+                          style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w900, color: statusC)),
                     ],
                   ),
                 ),
@@ -942,7 +937,7 @@ class _ProjectCard extends StatelessWidget {
               children: [
                 if (desc.isNotEmpty)
                   Text(desc,
-                      style: GoogleFonts.ubuntu(fontSize: 13, fontWeight: FontWeight.w600, color: _C.text),
+                      style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w600, color: _C.text),
                       maxLines: 2, overflow: TextOverflow.ellipsis),
 
                 if (objectives.isNotEmpty) ...[
@@ -954,7 +949,7 @@ class _ProjectCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text('Objectives: $objectives',
-                            style: GoogleFonts.ubuntu(fontSize: 12, fontWeight: FontWeight.w700, color: _C.text2),
+                            style: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w700, color: _C.text2),
                             maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
                     ],
@@ -974,9 +969,9 @@ class _ProjectCard extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Progress',
-                                  style: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w800, color: _C.text2)),
+                                  style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w800, color: _C.text2)),
                               Text('$progress%',
-                                  style: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w900, color: _C.p3)),
+                                  style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w900, color: _C.p3)),
                             ],
                           ),
                           const SizedBox(height: 5),
@@ -1054,81 +1049,6 @@ class _UpdatesTabState extends State<_UpdatesTab> {
     if (mounted) setState(() => _projectTitles = ['All', ...titles]);
   }
 
-  // Admin can post an update on behalf of the team / add a note
-  void _showPostUpdateDialog() {
-    final contentC = TextEditingController();
-    final memberC = TextEditingController();
-    String projectTitle = _projectTitles.length > 1 ? _projectTitles[1] : 'General';
-    String updateType = 'Progress';
-    final types = ['Progress', 'Blocker', 'Milestone', 'Note', 'Review'];
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSt) => AlertDialog(
-          backgroundColor: _C.card,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          title: Text('Post Update', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: _C.text)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 4),
-                _Field(controller: memberC, label: 'Member Name (optional)', hint: 'Leave blank for team update'),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: _projectTitles.contains(projectTitle) ? projectTitle : _projectTitles.first,
-                  decoration: _dropDeco('Project'),
-                  items: _projectTitles.map((t) => DropdownMenuItem(value: t, child: Text(t, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700)))).toList(),
-                  onChanged: (v) => setSt(() => projectTitle = v ?? projectTitle),
-                ),
-                const SizedBox(height: 10),
-                _DropdownField<String>(
-                  label: 'Update Type',
-                  value: updateType,
-                  items: types,
-                  onChanged: (v) => setSt(() => updateType = v ?? updateType),
-                ),
-                const SizedBox(height: 10),
-                _Field(controller: contentC, label: 'Update Details', hint: 'What was done today?', maxLines: 4),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text2)),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: _C.p2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () async {
-                final content = contentC.text.trim();
-                if (content.isEmpty) return;
-                await DB.firestore.collection(_updatesCol).add({
-                  'content': content,
-                  'projectTitle': projectTitle == 'All' ? 'General' : projectTitle,
-                  'updateType': updateType,
-                  'postedBy': widget.adminName,
-                  'postedByEmail': widget.adminEmail,
-                  'memberName': memberC.text.trim(),
-                  'timestamp': FieldValue.serverTimestamp(),
-                });
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: Text('Post', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _deleteUpdate(DocumentSnapshot doc) async {
     final ok = await _confirmDialog(context, 'Delete Update?', 'This update will be permanently removed.');
     if (ok == true) await doc.reference.delete();
@@ -1151,12 +1071,12 @@ class _UpdatesTabState extends State<_UpdatesTab> {
                     children: _projectTitles.map((t) => Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: FilterChip(
-                        label: Text(t, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, fontSize: 11)),
+                        label: Text(t, style: AppFonts.banglaBody(fontWeight: FontWeight.w800, fontSize: 11)),
                         selected: _filterProject == t,
                         onSelected: (_) => setState(() => _filterProject = t),
                         selectedColor: _C.p2,
                         checkmarkColor: Colors.white,
-                        labelStyle: GoogleFonts.ubuntu(
+                        labelStyle: AppFonts.banglaBody(
                           fontWeight: FontWeight.w800, fontSize: 11,
                           color: _filterProject == t ? Colors.white : _C.text2,
                         ),
@@ -1275,14 +1195,14 @@ class _UpdateCard extends StatelessWidget {
                       Icon(_typeIcon(updateType), size: 11, color: typeC),
                       const SizedBox(width: 4),
                       Text(updateType,
-                          style: GoogleFonts.ubuntu(fontSize: 10, fontWeight: FontWeight.w900, color: typeC)),
+                          style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w900, color: typeC)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(projectTitle,
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 12, color: _C.p2),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 12, color: _C.p2),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
                 if (showActions && onDelete != null)
@@ -1296,7 +1216,7 @@ class _UpdateCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(content,
-                style: GoogleFonts.ubuntu(fontSize: 13, fontWeight: FontWeight.w600, color: _C.text)),
+                style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w600, color: _C.text)),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -1307,7 +1227,7 @@ class _UpdateCard extends StatelessWidget {
                 _InfoChip(label: postedBy, icon: Icons.edit_rounded, color: _C.teal),
                 const Spacer(),
                 Text(timestamp,
-                    style: GoogleFonts.ubuntu(fontSize: 10, fontWeight: FontWeight.w700, color: _C.text2)),
+                    style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w700, color: _C.text2)),
               ],
             ),
           ],
@@ -1440,7 +1360,7 @@ class _Podium extends StatelessWidget {
       child: Column(
         children: [
           Text('Top Performers',
-              style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16)),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16)),
           const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -1462,14 +1382,14 @@ class _Podium extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(_initials(m.name),
-                          style: GoogleFonts.ubuntu(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+                          style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
                     ),
                     const SizedBox(height: 4),
                     Text(m.name.split(' ').first,
-                        style: GoogleFonts.ubuntu(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
+                        style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 11),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     Text('${m.average.toStringAsFixed(1)}',
-                        style: GoogleFonts.ubuntu(color: c, fontWeight: FontWeight.w900, fontSize: 15)),
+                        style: AppFonts.banglaBody(color: c, fontWeight: FontWeight.w900, fontSize: 15)),
                     const SizedBox(height: 4),
                     Container(
                       height: heights[i],
@@ -1480,7 +1400,7 @@ class _Podium extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text('#${i + 1}',
-                          style: GoogleFonts.ubuntu(color: c, fontWeight: FontWeight.w900, fontSize: 16)),
+                          style: AppFonts.banglaBody(color: c, fontWeight: FontWeight.w900, fontSize: 16)),
                     ),
                   ],
                 ),
@@ -1543,7 +1463,7 @@ class _MemberScoreCard extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Text('#$rank',
-                      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 11, color: _rankColor)),
+                      style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 11, color: _rankColor)),
                 ),
                 const SizedBox(width: 10),
                 _Avatar(name: member.name),
@@ -1553,10 +1473,10 @@ class _MemberScoreCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(member.name,
-                          style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, color: _C.text),
+                          style: AppFonts.banglaBody(fontWeight: FontWeight.w900, color: _C.text),
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       Text(member.email,
-                          style: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w700, color: _C.text2),
+                          style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: _C.text2),
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                     ],
                   ),
@@ -1575,8 +1495,8 @@ class _MemberScoreCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(avg.toStringAsFixed(1),
-                          style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 14, color: scoreColor)),
-                      Text('avg', style: GoogleFonts.ubuntu(fontSize: 8, fontWeight: FontWeight.w800, color: _C.text2)),
+                          style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 14, color: scoreColor)),
+                      Text('avg', style: AppFonts.banglaBody(fontSize: 8, fontWeight: FontWeight.w800, color: _C.text2)),
                     ],
                   ),
                 ),
@@ -1631,19 +1551,19 @@ class _MemberScoreCard extends StatelessWidget {
                           border: Border.all(color: sc.withOpacity(.3)),
                         ),
                         child: Text('$score',
-                            style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 12, color: sc)),
+                            style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 12, color: sc)),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '$category${note.isNotEmpty ? '  ·  $note' : ''}',
-                          style: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w700, color: _C.text2),
+                          style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: _C.text2),
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(date,
-                          style: GoogleFonts.ubuntu(fontSize: 10, fontWeight: FontWeight.w700, color: _C.text2)),
+                          style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.w700, color: _C.text2)),
                       const SizedBox(width: 4),
                       GestureDetector(
                         onTap: () => onEditScore(d),
@@ -1682,7 +1602,7 @@ class _Avatar extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Text(_initials(name),
-          style: GoogleFonts.ubuntu(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+          style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
     );
   }
 }
@@ -1707,7 +1627,7 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
-          Text(label, style: GoogleFonts.ubuntu(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
+          Text(label, style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w800, color: color)),
         ],
       ),
     );
@@ -1721,7 +1641,7 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(label,
-        style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900, fontSize: 13, color: _C.text2, letterSpacing: .4));
+        style: AppFonts.banglaBody(fontWeight: FontWeight.w900, fontSize: 13, color: _C.text2, letterSpacing: .4));
   }
 }
 
@@ -1737,7 +1657,7 @@ class _PopItem extends StatelessWidget {
       children: [
         Icon(icon, size: 18, color: color),
         const SizedBox(width: 10),
-        Text(label, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w800, color: color)),
+        Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w800, color: color)),
       ],
     );
   }
@@ -1764,9 +1684,9 @@ class _Field extends StatelessWidget {
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text),
+      style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: _C.text),
       decoration: _dropDeco(label).copyWith(hintText: hint,
-          hintStyle: GoogleFonts.ubuntu(color: _C.text2.withOpacity(.6), fontWeight: FontWeight.w600)),
+          hintStyle: AppFonts.banglaBody(color: _C.text2.withOpacity(.6), fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -1791,7 +1711,7 @@ class _DropdownField<T> extends StatelessWidget {
       decoration: _dropDeco(label),
       items: items.map((i) => DropdownMenuItem<T>(
         value: i,
-        child: Text(i.toString(), style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700)),
+        child: Text(i.toString(), style: AppFonts.banglaBody(fontWeight: FontWeight.w700)),
       )).toList(),
       onChanged: onChanged,
     );
@@ -1800,7 +1720,7 @@ class _DropdownField<T> extends StatelessWidget {
 
 InputDecoration _dropDeco(String label) => InputDecoration(
   labelText: label,
-  labelStyle: GoogleFonts.ubuntu(color: _C.text2, fontWeight: FontWeight.w700),
+  labelStyle: AppFonts.banglaBody(color: _C.text2, fontWeight: FontWeight.w700),
   filled: true,
   fillColor: _C.bg,
   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _C.border)),
@@ -1822,7 +1742,7 @@ class _EmptyCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _C.border),
       ),
-      child: Text(message, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text2)),
+      child: Text(message, style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: _C.text2)),
     );
   }
 }
@@ -1842,7 +1762,7 @@ class _Empty extends StatelessWidget {
           const SizedBox(height: 12),
           Text(message,
               textAlign: TextAlign.center,
-              style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text2)),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: _C.text2)),
         ],
       ),
     );
@@ -1888,12 +1808,12 @@ Future<bool?> _confirmDialog(BuildContext context, String title, String message)
     context: context,
     builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(title, style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
-      content: Text(message, style: GoogleFonts.ubuntu(color: _C.text2, fontWeight: FontWeight.w700)),
+      title: Text(title, style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
+      content: Text(message, style: AppFonts.banglaBody(color: _C.text2, fontWeight: FontWeight.w700)),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
-          child: Text('Cancel', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w700, color: _C.text2)),
+          child: Text('Cancel', style: AppFonts.banglaBody(fontWeight: FontWeight.w700, color: _C.text2)),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
@@ -1901,7 +1821,7 @@ Future<bool?> _confirmDialog(BuildContext context, String title, String message)
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
           onPressed: () => Navigator.pop(ctx, true),
-          child: Text('Confirm', style: GoogleFonts.ubuntu(fontWeight: FontWeight.w900)),
+          child: Text('Confirm', style: AppFonts.banglaBody(fontWeight: FontWeight.w900)),
         ),
       ],
     ),

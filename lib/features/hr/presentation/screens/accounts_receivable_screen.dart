@@ -15,6 +15,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const Color _brand    = Color(0xFF065F46); // HR Green
@@ -299,8 +300,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
         ),
         backgroundColor: Colors.transparent,
-        title: const Text('Expenses',
-            style: TextStyle(
+        title: Text('Expenses',
+            style: AppFonts.banglaHeading(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 18)),
@@ -322,8 +323,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         backgroundColor: _brand,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Expense',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        label: Text('Add Expense',
+            style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
         onPressed: () => _openExpenseDialog(context),
       ),
 
@@ -410,15 +411,15 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Total Expenses',
-                                  style: TextStyle(
+                              Text('Total Expenses',
+                                  style: AppFonts.banglaBody(
                                       color: Colors.white70,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600)),
                               const SizedBox(height: 4),
                               Text(
                                 '৳ ${_money.format(total)}',
-                                style: const TextStyle(
+                                style: AppFonts.banglaData(
                                     color: Colors.white,
                                     fontSize: 26,
                                     fontWeight: FontWeight.w900,
@@ -427,7 +428,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 _periodLabel(),
-                                style: TextStyle(
+                                style: AppFonts.banglaBody(
                                     color: Colors.white
                                         .withValues(alpha: 0.6),
                                     fontSize: 11),
@@ -439,12 +440,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text('${filtered.length}',
-                                style: const TextStyle(
+                                style: AppFonts.banglaData(
                                     color: Colors.white,
                                     fontSize: 28,
                                     fontWeight: FontWeight.w900)),
-                            const Text('entries',
-                                style: TextStyle(
+                            Text('entries',
+                                style: AppFonts.banglaBody(
                                     color: Colors.white70, fontSize: 11)),
                             const SizedBox(height: 8),
                             // PDF download button
@@ -463,14 +464,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                       color: Colors.white
                                           .withValues(alpha: 0.4)),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.picture_as_pdf_rounded,
+                                    const Icon(Icons.picture_as_pdf_rounded,
                                         color: Colors.white, size: 14),
-                                    SizedBox(width: 5),
+                                    const SizedBox(width: 5),
                                     Text('PDF',
-                                        style: TextStyle(
+                                        style: AppFonts.banglaHeading(
                                             color: Colors.white,
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700)),
@@ -576,8 +577,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Choose Period',
-                style: TextStyle(
+            Text('Choose Period',
+                style: AppFonts.banglaHeading(
                     fontSize: 17, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             _PeriodOption(
@@ -699,13 +700,13 @@ class _ExpenseTile extends StatelessWidget {
           color: _red,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.delete_rounded, color: Colors.white, size: 26),
-            SizedBox(height: 4),
+            const Icon(Icons.delete_rounded, color: Colors.white, size: 26),
+            const SizedBox(height: 4),
             Text('Delete',
-                style: TextStyle(
+                style: AppFonts.banglaHeading(
         color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w700)),
@@ -752,7 +753,7 @@ class _ExpenseTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(vendor,
-                          style: const TextStyle(
+                          style: AppFonts.banglaHeading(
                               fontSize: 14,
                               fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
@@ -770,7 +771,7 @@ class _ExpenseTile extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         'Due: ${dateFmt.format(due)}',
-                        style: TextStyle(
+                        style: AppFonts.banglaBody(
                             fontSize: 11,
                             color: isOverdue ? _red : Colors.black45),
                       ),
@@ -783,7 +784,7 @@ class _ExpenseTile extends StatelessWidget {
                   children: [
                     Text(
                       '৳ ${money.format(amt)}',
-                      style: TextStyle(
+                      style: AppFonts.banglaData(
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                           color: isOverdue ? _red : _brand),
@@ -813,7 +814,7 @@ class _ExpenseTile extends StatelessWidget {
                   notes,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: AppFonts.banglaBody(
                       fontSize: 11, color: Colors.black45),
                 ),
               ),
@@ -888,7 +889,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
           children: [
             Text(
               _isEdit ? 'Edit Expense' : 'New Expense',
-              style: const TextStyle(
+              style: AppFonts.banglaHeading(
                   fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 16),
@@ -969,7 +970,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                       Expanded(
                         child: Text(
                           DateFormat('d MMM yyyy').format(_dueDate),
-                          style: const TextStyle(
+                          style: AppFonts.banglaBody(
                               fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -1018,7 +1019,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                         : Icons.add_rounded),
                 label: Text(
                   _isEdit ? 'Save Changes' : 'Add Expense',
-                  style: const TextStyle(
+                  style: AppFonts.banglaHeading(
                       fontSize: 15, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -1092,8 +1093,8 @@ class ExpensesHistoryScreen extends StatelessWidget {
           ),
         ),
         backgroundColor: Colors.transparent,
-        title: const Text('Expense History',
-            style: TextStyle(
+        title: Text('Expense History',
+            style: AppFonts.banglaHeading(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 18)),
@@ -1196,11 +1197,11 @@ class _MonthTileState extends State<_MonthTile> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(widget.label,
-                          style: const TextStyle(
+                          style: AppFonts.banglaHeading(
                               fontSize: 14,
                               fontWeight: FontWeight.w800)),
                       Text('$count entries',
-                          style: const TextStyle(
+                          style: AppFonts.banglaBody(
                               fontSize: 12, color: Colors.black45)),
                     ],
                   ),
@@ -1209,7 +1210,7 @@ class _MonthTileState extends State<_MonthTile> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text('৳ ${money.format(total)}',
-                        style: const TextStyle(
+                        style: AppFonts.banglaData(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
                             color: _brand)),
@@ -1233,8 +1234,7 @@ class _MonthDetailPage extends StatefulWidget {
   final DateTime start, end;
   final String   label;
   const _MonthDetailPage(
-      {required this.start, required this.end, required this.label,
-      super.key});
+      {required this.start, required this.end, required this.label});
   @override
   State<_MonthDetailPage> createState() => _MonthDetailPageState();
 }
@@ -1274,7 +1274,7 @@ class _MonthDetailPageState extends State<_MonthDetailPage> {
         ),
         backgroundColor: Colors.transparent,
         title: Text(widget.label,
-            style: const TextStyle(
+            style: AppFonts.banglaHeading(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 17)),
@@ -1320,13 +1320,13 @@ class _MonthDetailPageState extends State<_MonthDetailPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(widget.label,
-                            style: const TextStyle(
+                            style: AppFonts.banglaBody(
                                 color: Colors.white70,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600)),
                         const SizedBox(height: 4),
                         Text('৳ ${_money.format(total)}',
-                            style: const TextStyle(
+                            style: AppFonts.banglaData(
                                 color: Colors.white,
                                 fontSize: 24,
                                 fontWeight: FontWeight.w900)),
@@ -1337,12 +1337,12 @@ class _MonthDetailPageState extends State<_MonthDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text('${docs.length}',
-                          style: const TextStyle(
+                          style: AppFonts.banglaData(
                               color: Colors.white,
                               fontSize: 26,
                               fontWeight: FontWeight.w900)),
-                      const Text('entries',
-                          style: TextStyle(
+                      Text('entries',
+                          style: AppFonts.banglaBody(
                               color: Colors.white70, fontSize: 11)),
                       const SizedBox(height: 8),
                       GestureDetector(
@@ -1360,19 +1360,19 @@ class _MonthDetailPageState extends State<_MonthDetailPage> {
                                 color: Colors.white
                                     .withValues(alpha: 0.4)),
                           ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.picture_as_pdf_rounded,
-                                  color: Colors.white, size: 14),
-                              SizedBox(width: 5),
-                              Text('PDF',
-                                  style: TextStyle(
-                        color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.picture_as_pdf_rounded,
+                                        color: Colors.white, size: 14),
+                                    const SizedBox(width: 5),
+                                    Text('PDF',
+                                        style: AppFonts.banglaHeading(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
                         ),
                       ),
                     ],
@@ -1631,7 +1631,7 @@ Future<void> _deleteExpenseWithSync({
         const SizedBox(width: 8),
         Text(
           isLinked ? 'Delete & Reverse Payroll' : 'Delete Expense',
-          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 16),
         ),
       ]),
       content: Column(
@@ -1639,7 +1639,7 @@ Future<void> _deleteExpenseWithSync({
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Delete "$name"?',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+              style: AppFonts.banglaBody(fontWeight: FontWeight.w600)),
           if (isLinked) ...[
             const SizedBox(height: 10),
             Container(
@@ -1652,21 +1652,21 @@ Future<void> _deleteExpenseWithSync({
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(children: [
-                    Icon(Icons.warning_amber_rounded,
+                  Row(children: [
+                    const Icon(Icons.warning_amber_rounded,
                         color: Color(0xFFD97706), size: 14),
-                    SizedBox(width: 6),
+                    const SizedBox(width: 6),
                     Text('Payroll Linked',
-                        style: TextStyle(
+                        style: AppFonts.banglaHeading(
                             fontWeight: FontWeight.w800,
                             fontSize: 12,
                             color: Color(0xFFD97706))),
                   ]),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     'This expense was created by a payroll disbursement. '
                     'Deleting it will automatically:',
-                    style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                    style: AppFonts.banglaBody(fontSize: 11, color: Color(0xFF92400E)),
                   ),
                   const SizedBox(height: 6),
                   for (final bullet in [
@@ -1677,7 +1677,7 @@ Future<void> _deleteExpenseWithSync({
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(bullet,
-                          style: const TextStyle(
+                          style: AppFonts.banglaBody(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF92400E))),
@@ -1687,8 +1687,8 @@ Future<void> _deleteExpenseWithSync({
             ),
           ] else ...[
             const SizedBox(height: 6),
-            const Text('This cannot be undone.',
-                style: TextStyle(color: Colors.black54, fontSize: 13)),
+            Text('This cannot be undone.',
+                style: AppFonts.banglaBody(color: Colors.black54, fontSize: 13)),
           ],
         ],
       ),
@@ -1788,7 +1788,7 @@ class _PeriodButton extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(label,
-                  style: const TextStyle(
+                  style: AppFonts.banglaHeading(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                       color: _brand)),
@@ -1816,13 +1816,13 @@ class _CategoryDropdown extends StatelessWidget {
           child: DropdownButton<String?>(
             value: value,
             isExpanded: true,
-            hint: const Text('All Categories',
-                style: TextStyle(
+            hint: Text('All Categories',
+                style: AppFonts.banglaBody(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: _brand)),
             icon: const Icon(Icons.arrow_drop_down_rounded, color: _brand),
-            style: const TextStyle(
+            style: AppFonts.banglaBody(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: _brand),
@@ -1862,7 +1862,7 @@ class _CatChip extends StatelessWidget {
                 color: selected ? color : Colors.black12),
           ),
           child: Text(label,
-              style: TextStyle(
+              style: AppFonts.banglaHeading(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: selected ? Colors.white : Colors.black54)),
@@ -1884,7 +1884,7 @@ class _PeriodOption extends StatelessWidget {
             side: const BorderSide(color: Colors.black12)),
         leading: Icon(icon, color: _brand),
         title: Text(label,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+            style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
         trailing: const Icon(Icons.chevron_right_rounded),
       );
 }
@@ -1901,13 +1901,13 @@ class _EmptyState extends StatelessWidget {
                 size: 64, color: _brand.withValues(alpha: 0.2)),
             const SizedBox(height: 16),
             Text(message,
-                style: const TextStyle(
+                style: AppFonts.banglaHeading(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Colors.black38)),
             const SizedBox(height: 6),
-            const Text('Tap + to add a new expense',
-                style: TextStyle(fontSize: 12, color: Colors.black26)),
+            Text('Tap + to add a new expense',
+                style: AppFonts.banglaBody(fontSize: 12, color: Colors.black26)),
           ],
         ),
       );
@@ -1925,7 +1925,7 @@ class _Chip extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(label,
-            style: TextStyle(
+            style: AppFonts.banglaHeading(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: color)),

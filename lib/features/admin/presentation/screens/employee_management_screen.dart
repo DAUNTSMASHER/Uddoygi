@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 
@@ -283,7 +283,7 @@ class _HeroHeader extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text('Employee Dashboard',
-                          style: GoogleFonts.spaceGrotesk(
+                          style: AppFonts.banglaData(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w700)),
@@ -312,7 +312,7 @@ class _HeroHeader extends StatelessWidget {
                     children: [
                       Text(
                         loading ? '—' : '$totalEmployees',
-                        style: GoogleFonts.spaceGrotesk(
+                        style: AppFonts.banglaData(
                             color: Colors.white,
                             fontSize: 56,
                             fontWeight: FontWeight.w800,
@@ -325,12 +325,12 @@ class _HeroHeader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('Total',
-                                style: GoogleFonts.spaceGrotesk(
+                                style: AppFonts.banglaData(
                                     color: Colors.white60,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500)),
                             Text('Employees',
-                                style: GoogleFonts.spaceGrotesk(
+                                style: AppFonts.banglaData(
                                     color: Colors.white,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700)),
@@ -353,7 +353,7 @@ class _HeroHeader extends StatelessWidget {
                           const SizedBox(width: 4),
                           Text(
                             loading ? '—' : '+$newThisMonth this month',
-                            style: GoogleFonts.spaceGrotesk(
+                            style: AppFonts.banglaData(
                                 color: Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600),
@@ -433,14 +433,14 @@ class _HeroChip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(value,
-                    style: GoogleFonts.spaceGrotesk(
+                    style: AppFonts.banglaData(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.w800)),
                 Text(label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.spaceGrotesk(
+                    style: AppFonts.banglaData(
                         color: Colors.white60,
                         fontSize: 10,
                         fontWeight: FontWeight.w500)),
@@ -471,7 +471,7 @@ class _DeptRow extends StatelessWidget {
         ),
         child: Center(
           child: Text('No employees yet',
-              style: GoogleFonts.spaceGrotesk(color: _sub, fontSize: 13)),
+              style: AppFonts.banglaData(color: _sub, fontSize: 13)),
         ),
       );
     }
@@ -532,13 +532,13 @@ class _DeptRow extends StatelessWidget {
                   ),
                   const SizedBox(width: 5),
                   Text('${e.key}  ',
-                      style: GoogleFonts.spaceGrotesk(
+                      style: AppFonts.banglaData(
                           fontSize: 11, fontWeight: FontWeight.w600, color: _ink)),
                   Text('${e.value}',
-                      style: GoogleFonts.spaceGrotesk(
+                      style: AppFonts.banglaData(
                           fontSize: 11, fontWeight: FontWeight.w800, color: color)),
                   Text('  $pct',
-                      style: GoogleFonts.spaceGrotesk(
+                      style: AppFonts.banglaData(
                           fontSize: 10, color: _sub)),
                 ]),
               );
@@ -616,7 +616,7 @@ class _ActionCard extends StatelessWidget {
               Text(title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.spaceGrotesk(
+                  style: AppFonts.banglaData(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: _ink)),
@@ -624,7 +624,7 @@ class _ActionCard extends StatelessWidget {
               Text(subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.spaceGrotesk(
+                  style: AppFonts.banglaData(
                       fontSize: 10.5,
                       color: _sub,
                       fontWeight: FontWeight.w500)),
@@ -655,7 +655,7 @@ class _SectionLabel extends StatelessWidget {
       ),
       const SizedBox(width: 8),
       Text(label,
-          style: GoogleFonts.spaceGrotesk(
+          style: AppFonts.banglaData(
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: _ink)),

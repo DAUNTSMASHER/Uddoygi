@@ -6,9 +6,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const Color _green    = Color(0xFF25BC5F);
@@ -198,7 +198,7 @@ class _EditPayrollScreenState extends State<EditPayrollScreen> {
             ),
             const SizedBox(height: 16),
             Text(isDeduction ? 'Add Deduction' : 'Add Earning',
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaHeading(
                     fontWeight: FontWeight.w700, fontSize: 16, color: _fg)),
             const SizedBox(height: 16),
             _SheetField(label: 'Label', hint: 'e.g. Overtime', ctl: labelCtl),
@@ -245,7 +245,7 @@ class _EditPayrollScreenState extends State<EditPayrollScreen> {
                   });
                 },
                 child: Text('Add',
-                    style: GoogleFonts.inter(
+                    style: AppFonts.banglaHeading(
                         fontWeight: FontWeight.w700, fontSize: 15)),
               ),
             ),
@@ -344,7 +344,7 @@ class _EditPayrollScreenState extends State<EditPayrollScreen> {
           foregroundColor: _fg,
           elevation: 0,
           title: Text('Edit Payroll',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+              style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
         ),
         body: const Center(child: CircularProgressIndicator(color: _green)),
       );
@@ -358,11 +358,11 @@ class _EditPayrollScreenState extends State<EditPayrollScreen> {
           foregroundColor: _fg,
           elevation: 0,
           title: Text('Edit Payroll',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+              style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
         ),
         body: Center(
           child: Text('Record not found.',
-              style: GoogleFonts.inter(color: _muted)),
+              style: AppFonts.banglaBody(color: _muted)),
         ),
       );
     }
@@ -386,13 +386,13 @@ class _EditPayrollScreenState extends State<EditPayrollScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text('Edit Payroll',
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaHeading(
                 fontWeight: FontWeight.w700, fontSize: 17, color: _fg)),
         actions: [
           TextButton(
             onPressed: _reset,
             child: Text('Reset',
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     color: _green,
                     fontWeight: FontWeight.w600,
                     fontSize: 14)),
@@ -460,7 +460,7 @@ class _EditPayrollScreenState extends State<EditPayrollScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Text('No deductions',
-                            style: GoogleFonts.inter(
+                            style: AppFonts.banglaBody(
                                 color: _muted, fontSize: 13)),
                       ),
                     const SizedBox(height: 4),
@@ -526,7 +526,7 @@ class _EmployeeHeader extends StatelessWidget {
                 child: Image.network(photo, fit: BoxFit.cover))
             : Center(
                 child: Text(initials,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.banglaHeading(
                         color: _greenDk,
                         fontWeight: FontWeight.w800,
                         fontSize: 22)),
@@ -534,11 +534,11 @@ class _EmployeeHeader extends StatelessWidget {
       ),
       const SizedBox(height: 10),
       Text(name,
-          style: GoogleFonts.inter(
+          style: AppFonts.banglaHeading(
               fontWeight: FontWeight.w800, fontSize: 18, color: _fg)),
       const SizedBox(height: 2),
       Text(dept.isNotEmpty ? dept : 'Employee',
-          style: GoogleFonts.inter(color: _muted, fontSize: 13)),
+          style: AppFonts.banglaBody(color: _muted, fontSize: 13)),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -562,7 +562,7 @@ class _EmployeeHeader extends StatelessWidget {
           ),
           const SizedBox(width: 5),
           Text(isActive ? 'Active' : 'Inactive',
-              style: GoogleFonts.inter(
+              style: AppFonts.banglaHeading(
                   color: isActive ? _green : _danger,
                   fontWeight: FontWeight.w700,
                   fontSize: 12)),
@@ -620,7 +620,7 @@ class _TotalCell extends StatelessWidget {
     return Expanded(
       child: Column(children: [
         Text(label,
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaHeading(
                 color: _muted,
                 fontSize: 9,
                 fontWeight: FontWeight.w700,
@@ -628,7 +628,7 @@ class _TotalCell extends StatelessWidget {
         const SizedBox(height: 4),
         FittedBox(
           child: Text(value,
-              style: GoogleFonts.inter(
+              style: AppFonts.banglaData(
                   fontWeight: FontWeight.w800,
                   fontSize: 16,
                   color: color)),
@@ -661,7 +661,7 @@ class _SectionCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Text(title,
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaHeading(
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                     color: _fg)),
@@ -707,13 +707,13 @@ class _EntryRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(entry.label,
-                  style: GoogleFonts.inter(
+                  style: AppFonts.banglaHeading(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                       color: _fg)),
               if (entry.subtitle.isNotEmpty)
                 Text(entry.subtitle,
-                    style: GoogleFonts.inter(
+                    style: AppFonts.banglaBody(
                         color: _muted, fontSize: 11)),
             ],
           ),
@@ -722,7 +722,7 @@ class _EntryRow extends StatelessWidget {
         // Amount prefix
         Text(
           isDeduction ? '-৳' : '৳',
-          style: GoogleFonts.inter(
+          style: AppFonts.banglaBody(
               color: isDeduction ? _danger : _muted,
               fontWeight: FontWeight.w600,
               fontSize: 14),
@@ -736,13 +736,13 @@ class _EntryRow extends StatelessWidget {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             textAlign: TextAlign.right,
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaHeading(
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
                 color: isDeduction ? _danger : _fg),
             decoration: InputDecoration(
               hintText: '0',
-              hintStyle: GoogleFonts.inter(color: _muted, fontSize: 14),
+              hintStyle: AppFonts.banglaBody(color: _muted, fontSize: 14),
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
@@ -778,7 +778,7 @@ class _AddRowButton extends StatelessWidget {
         Icon(Icons.add_circle_outline_rounded, size: 16, color: color),
         const SizedBox(width: 6),
         Text(label,
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaBody(
                 color: color,
                 fontWeight: FontWeight.w600,
                 fontSize: 13)),
@@ -805,7 +805,7 @@ class _SheetField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: GoogleFonts.inter(
+            style: AppFonts.banglaBody(
                 fontSize: 12, fontWeight: FontWeight.w600, color: _fg)),
         const SizedBox(height: 6),
         TextField(
@@ -813,10 +813,10 @@ class _SheetField extends StatelessWidget {
           keyboardType: numeric ? TextInputType.number : TextInputType.text,
           inputFormatters:
               numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
-          style: GoogleFonts.inter(fontSize: 14, color: _fg),
+          style: AppFonts.banglaBody(fontSize: 14, color: _fg),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(color: _muted, fontSize: 14),
+            hintStyle: AppFonts.banglaBody(color: _muted, fontSize: 14),
             filled: true,
             fillColor: _bg,
             contentPadding:
@@ -867,12 +867,12 @@ class _SaveBar extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Updated Net Pay',
-                  style: GoogleFonts.inter(
+                  style: AppFonts.banglaBody(
                       color: _muted,
                       fontSize: 13,
                       fontWeight: FontWeight.w500)),
               Text(money.format(netPay),
-                  style: GoogleFonts.inter(
+                  style: AppFonts.banglaData(
                       fontWeight: FontWeight.w800,
                       fontSize: 20,
                       color: _fg)),
@@ -896,7 +896,7 @@ class _SaveBar extends StatelessWidget {
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : Text('Save Payroll Record',
-                      style: GoogleFonts.inter(
+                      style: AppFonts.banglaHeading(
                           fontWeight: FontWeight.w700, fontSize: 15)),
             ),
           ),

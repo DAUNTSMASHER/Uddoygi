@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_generative_ai/google_generative_ai.dart' as genai;
 import 'package:uddoygi/services/ai_service.dart';
 import 'package:uddoygi/models/chat_message.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -14,14 +13,19 @@ class UAiAssistant extends StatefulWidget {
   State<UAiAssistant> createState() => _UAiAssistantState();
 }
 
-class _UAiAssistantState extends State<UAiAssistant> {
+class _UAiAssistantState extends State<UAiAssistant> with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
-  // Requirement: Conversation History
-  final List<genai.Content> _history = [];
+  final List<Map<String, dynamic>> _history = [];
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -37,7 +41,7 @@ class _UAiAssistantState extends State<UAiAssistant> {
 
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isLoading) return;
 
     setState(() {
       _messages.add(ChatMessage(content: text, isAi: false));
@@ -46,18 +50,25 @@ class _UAiAssistantState extends State<UAiAssistant> {
     });
     _scrollToBottom();
 
-    // Requirement: Use conversation history in AIService
-    final response = await AIService.chat(text, history: _history);
+    try {
+      final response = await AIService.chat(text, history: _history);
 
-    if (mounted) {
-      setState(() {
-        _messages.add(ChatMessage(content: response, isAi: true));
-        // Update history for next turn
-        _history.add(genai.Content.text(text));
-        _history.add(genai.Content.model([genai.TextPart(response)]));
-        _isLoading = false;
-      });
-      _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(content: response, isAi: true));
+          _history.add({'role': 'user', 'parts': [text]});
+          _history.add({'role': 'model', 'parts': [response]});
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(content: 'AI Assistant encountered an error. Please try again.', isAi: true));
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -103,7 +114,7 @@ class _UAiAssistantState extends State<UAiAssistant> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: const Color(0xFF7C3AED).withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: const Color(0xFF7C3AED).withValues(alpha: 0.1), shape: BoxShape.circle),
             child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7C3AED), size: 20),
           ),
           const SizedBox(width: 12),
@@ -111,7 +122,7 @@ class _UAiAssistantState extends State<UAiAssistant> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Uddoygi AI Assistant', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A))),
-              Text('Powered by Gemini 3.1 Flash', style: GoogleFonts.dmSans(fontSize: 11, color: Colors.green[600], fontWeight: FontWeight.bold)),
+              Text('Powered by Gemini 3 Flash', style: GoogleFonts.dmSans(fontSize: 11, color: Colors.green[600], fontWeight: FontWeight.bold)),
             ],
           ),
           const Spacer(),
@@ -152,7 +163,7 @@ class _UAiAssistantState extends State<UAiAssistant> {
           const SizedBox(height: 32),
           _buildQuickAction('How to improve sales this month?'),
           _buildQuickAction('Analyze my company database metrics'),
-          _buildQuickAction('Summarize today\'s attendance'),
+          _buildQuickAction("Summarize today's attendance"),
           _buildQuickAction('How to optimize factory load?'),
         ],
       ),
@@ -181,9 +192,16 @@ class _UAiAssistantState extends State<UAiAssistant> {
             decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(16)),
             child: Row(
               children: [
-                const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF7C3AED))),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: const Color(0xFF7C3AED),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Text('Uddoygi AI is typing...', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[600])),
+                Text('Uddoygi AI is analyzing your data...', style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[600])),
               ],
             ),
           ),
@@ -214,18 +232,19 @@ class _UAiAssistantState extends State<UAiAssistant> {
             ),
           ),
           const SizedBox(width: 12),
-          // Requirement: Purple Gradient Send Button
           GestureDetector(
-            onTap: _handleSend,
+            onTap: _isLoading ? null : _handleSend,
             child: Container(
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFC026D3)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                gradient: _isLoading
+                    ? const LinearGradient(colors: [Color(0xFF9CA3AF), Color(0xFFD1D5DB)])
+                    : const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFC026D3)], begin: Alignment.topLeft, end: Alignment.bottomRight),
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: const Color(0xFF7C3AED).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+                boxShadow: _isLoading ? null : [BoxShadow(color: const Color(0xFF7C3AED).withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
               ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 24),
+              child: Icon(_isLoading ? Icons.hourglass_empty_rounded : Icons.send_rounded, color: Colors.white, size: 24),
             ),
           ).animate().scale(delay: 200.ms),
         ],
@@ -251,7 +270,6 @@ class _ChatBubble extends StatelessWidget {
             Container(
               constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
               padding: const EdgeInsets.all(16),
-              // Requirement: Rounded chat bubbles
               decoration: BoxDecoration(
                 color: isAi ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
                 borderRadius: BorderRadius.only(
@@ -285,7 +303,7 @@ class _ChatBubble extends StatelessWidget {
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: content));
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 1)),
+                            const SnackBar(content: Text('Copied'), duration: Duration(seconds: 1)),
                           );
                         },
                       ),

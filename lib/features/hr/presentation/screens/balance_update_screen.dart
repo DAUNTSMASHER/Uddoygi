@@ -33,6 +33,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const Color _brand   = Color(0xFF065F46); // HR Green
@@ -125,8 +126,8 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
           ),
         ),
         backgroundColor: Colors.transparent,
-        title: const Text('Balance & Cash Flow',
-            style: TextStyle(
+        title: Text('Balance & Cash Flow',
+            style: AppFonts.banglaHeading(
                 color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -142,7 +143,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
           indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white60,
-          labelStyle: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w800, fontSize: 13),
+          labelStyle: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 13),
           tabs: const [
             Tab(text: 'Overview'),
             Tab(text: 'Credits'),
@@ -206,8 +207,8 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Choose Period',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            Text('Choose Period',
+                style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             _PeriodOption(icon: Icons.today, label: 'This Month', onTap: () {
                 setState(() {
@@ -266,7 +267,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
         .limit(100)
         .get();
 
-    final pd = profileSnap.data() as Map<String, dynamic>? ?? {};
+    final pd = profileSnap.data() ?? {};
     final cashIn  = _n(pd['cashIn']);
     final cashOut = _n(pd['cashOut']);
     final balance = cashIn - cashOut;
@@ -341,7 +342,7 @@ class _BalanceUpdateScreenState extends State<BalanceUpdateScreen>
               color: PdfColor.fromInt(0xFF065F46)),
           cellStyle: pw.TextStyle(font: pw.Font.times(), fontSize: 8),
           data: cashFlowSnap.docs.map((doc) {
-            final d    = doc.data() as Map<String, dynamic>;
+            final d    = doc.data();
             final date = d['createdAt'] is Timestamp
                 ? dateFmt.format((d['createdAt'] as Timestamp).toDate())
                 : '—';
@@ -493,8 +494,8 @@ class _OverviewTab extends StatelessWidget {
                           const Icon(Icons.account_balance_wallet_rounded,
                               color: Colors.white70, size: 18),
                           const SizedBox(width: 8),
-                          const Text('Current Balance',
-                              style: TextStyle(
+                          Text('Current Balance',
+                              style: AppFonts.banglaBody(
                                   color: Colors.white70,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600)),
@@ -508,7 +509,7 @@ class _OverviewTab extends StatelessWidget {
                             ),
                             child: Text(
                               isPos ? 'Positive' : 'Negative',
-                              style: const TextStyle(
+                              style: AppFonts.banglaHeading(
                                   color: Colors.white,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700),
@@ -518,7 +519,7 @@ class _OverviewTab extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(
                           'BDT ${money.format(balance)}',
-                          style: const TextStyle(
+                          style: AppFonts.banglaData(
                               color: Colors.white,
                               fontSize: 32,
                               fontWeight: FontWeight.w900,
@@ -527,7 +528,7 @@ class _OverviewTab extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           'Cash In − Cash Out',
-                          style: TextStyle(
+                          style: AppFonts.banglaBody(
                               color: Colors.white.withValues(alpha: 0.6),
                               fontSize: 11),
                         ),
@@ -707,7 +708,7 @@ class _TransactionsTabState extends State<_TransactionsTab> {
                         _filter == 'all'
                             ? 'No transactions yet'
                             : 'No ${_filter.replaceAll('_', ' ')} transactions',
-                        style: const TextStyle(
+                        style: AppFonts.banglaHeading(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                             color: Colors.black38),
@@ -826,14 +827,14 @@ class _CreditsTabState extends State<_CreditsTab> {
                 Icon(Icons.account_balance_wallet_rounded,
                     size: 64, color: _brand.withValues(alpha: 0.2)),
                 const SizedBox(height: 16),
-                const Text('No credits yet',
-                    style: TextStyle(
+                Text('No credits yet',
+                    style: AppFonts.banglaHeading(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: Colors.black38)),
                 const SizedBox(height: 6),
-                const Text('Approved payment slips will appear here',
-                    style: TextStyle(fontSize: 12, color: Colors.black26)),
+                Text('Approved payment slips will appear here',
+                    style: AppFonts.banglaBody(fontSize: 12, color: Colors.black26)),
               ],
         ),
       );
@@ -874,15 +875,15 @@ class _CreditsTabState extends State<_CreditsTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Total Credits (BDT)',
-                          style: TextStyle(
+                      Text('Total Credits (BDT)',
+                          style: AppFonts.banglaBody(
                               color: Colors.white70,
                               fontSize: 12,
                               fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Text(
                         '৳ ${widget.money.format(totalBdt)}',
-                        style: const TextStyle(
+                        style: AppFonts.banglaData(
                             color: Colors.white,
                             fontSize: 26,
                             fontWeight: FontWeight.w900,
@@ -895,12 +896,12 @@ class _CreditsTabState extends State<_CreditsTab> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text('${docs.length}',
-                        style: const TextStyle(
+                        style: AppFonts.banglaData(
                             color: Colors.white,
                             fontSize: 22,
                             fontWeight: FontWeight.w900)),
-                    const Text('entries',
-                        style: TextStyle(
+                    Text('entries',
+                        style: AppFonts.banglaBody(
                             color: Colors.white70, fontSize: 11)),
                   ],
                 ),
@@ -917,7 +918,7 @@ class _CreditsTabState extends State<_CreditsTab> {
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (_, i) {
                   final doc  = docs[i];
-                  final d    = doc.data() as Map<String, dynamic>;
+            final d    = doc.data() as Map<String, dynamic>;
                   final amt  = _n(d['amount']).toDouble();
                   final ccy  = (d['currency'] as String? ?? 'BDT').toUpperCase();
                   final bdtAmt = _bdtAmounts[doc.id];
@@ -1008,8 +1009,8 @@ class _CreditEntryCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    const Text('Cash In',
-                        style: TextStyle(
+                    Text('Cash In',
+                        style: AppFonts.banglaHeading(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: _cashIn)),
@@ -1022,8 +1023,8 @@ class _CreditEntryCard extends StatelessWidget {
                           color: _warn.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('HR edited',
-                            style: TextStyle(
+                        child: Text('HR edited',
+                            style: AppFonts.banglaHeading(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                                 color: _warn)),
@@ -1039,7 +1040,7 @@ class _CreditEntryCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text('$originalCcy→BDT',
-                            style: const TextStyle(
+                            style: AppFonts.banglaHeading(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                                 color: _neutral)),
@@ -1048,19 +1049,19 @@ class _CreditEntryCard extends StatelessWidget {
                   ]),
                   if (invoiceNo.isNotEmpty)
                     Text('Invoice #$invoiceNo',
-                        style: const TextStyle(
+                        style: AppFonts.banglaHeading(
                             fontSize: 11, fontWeight: FontWeight.w700)),
                   if (desc.isNotEmpty)
                     Text(desc,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: AppFonts.banglaBody(
                             fontSize: 11, color: Colors.black45)),
                   Text(
                     approvedBy.isNotEmpty
                         ? 'By $approvedBy  •  $date'
                         : date,
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                         fontSize: 10, color: Colors.black38),
                   ),
                 ],
@@ -1081,7 +1082,7 @@ class _CreditEntryCard extends StatelessWidget {
                 else if (displayBdt != null)
                   Text(
                     '৳ ${money.format(displayBdt)}',
-                    style: const TextStyle(
+                    style: AppFonts.banglaData(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
                         color: _cashIn),
@@ -1089,7 +1090,7 @@ class _CreditEntryCard extends StatelessWidget {
                 else
                   Text(
                     '$originalCcy ${money.format(originalAmt)}',
-                    style: const TextStyle(
+                    style: AppFonts.banglaData(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
                         color: _cashIn),
@@ -1098,7 +1099,7 @@ class _CreditEntryCard extends StatelessWidget {
                 if (isForeign && displayBdt != null)
                   Text(
                     '$originalCcy ${money.format(originalAmt)}',
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                         fontSize: 10, color: Colors.black38),
                   ),
               ],
@@ -1202,7 +1203,7 @@ class _AnalyticsTab extends StatelessWidget {
                       Expanded(
                     child: Text(
                           'Period: ${DateFormat('MMM yyyy').format(periodStart)}',
-                          style: const TextStyle(
+                          style: AppFonts.banglaHeading(
                               fontWeight: FontWeight.w700, fontSize: 13),
                         ),
                       ),
@@ -1315,13 +1316,13 @@ class _HeroSubStat extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: TextStyle(
+                    style: AppFonts.banglaBody(
                         color: Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(value,
-                    style: const TextStyle(
+                    style: AppFonts.banglaData(
                         color: Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.w800),
@@ -1374,13 +1375,13 @@ class _MiniStatCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
                 Text(label,
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                         fontSize: 11,
                         color: Colors.black45,
                         fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Text(value,
-                    style: TextStyle(
+                    style: AppFonts.banglaData(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
                         color: color),
@@ -1441,14 +1442,14 @@ class _LastSlipCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Invoice #$invoiceNo',
-                  style: const TextStyle(
+                  style: AppFonts.banglaHeading(
                       fontWeight: FontWeight.w800, fontSize: 13)),
               Text('$date  •  Approved by $approvedBy',
-                  style: const TextStyle(
+                  style: AppFonts.banglaBody(
                       fontSize: 11, color: Colors.black45)),
               if (edited)
-                const Text('Amount adjusted by HR',
-                    style: TextStyle(
+                Text('Amount adjusted by HR',
+                    style: AppFonts.banglaBody(
                         fontSize: 10, color: _warn,
                         fontWeight: FontWeight.w600)),
                         ],
@@ -1544,7 +1545,7 @@ class _CfTile extends StatelessWidget {
             children: [
               Row(children: [
                 Text(typeLabel,
-                    style: TextStyle(
+                    style: AppFonts.banglaHeading(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: tileColor)),
@@ -1557,8 +1558,8 @@ class _CfTile extends StatelessWidget {
                       color: _warn.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: const Text('HR edited',
-                        style: TextStyle(
+                    child: Text('HR edited',
+                        style: AppFonts.banglaHeading(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: _warn)),
@@ -1567,21 +1568,21 @@ class _CfTile extends StatelessWidget {
               ]),
               if (invoiceNo.isNotEmpty)
                 Text('Invoice #$invoiceNo',
-                    style: const TextStyle(
+                    style: AppFonts.banglaHeading(
                         fontSize: 11, fontWeight: FontWeight.w700)),
               if (desc.isNotEmpty)
                 Text(desc,
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                         fontSize: 11, color: Colors.black45),
                     maxLines: expanded ? 3 : 1,
                     overflow: TextOverflow.ellipsis),
               if (expanded && approvedBy.isNotEmpty)
                 Text('By $approvedBy  •  $date',
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                         fontSize: 10, color: Colors.black38)),
               if (!expanded)
                 Text(date,
-                    style: const TextStyle(
+                    style: AppFonts.banglaBody(
                         fontSize: 10, color: Colors.black38)),
             ],
           ),
@@ -1593,7 +1594,7 @@ class _CfTile extends StatelessWidget {
             Text(
               '${type == 'cash_in' ? '+' : type == 'reversal' ? '±' : '−'}'
               '$currency ${money.format(amount)}',
-              style: TextStyle(
+              style: AppFonts.banglaData(
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                   color: tileColor),
@@ -1628,7 +1629,7 @@ class _FilterChip extends StatelessWidget {
               color: isSelected ? _brand : Colors.black12),
         ),
         child: Text(label,
-            style: TextStyle(
+            style: AppFonts.banglaHeading(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: isSelected ? Colors.white : Colors.black54)),
@@ -1643,7 +1644,7 @@ class _SectionHeader extends StatelessWidget {
   const _SectionHeader(this.text);
   @override
   Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
+      style: AppFonts.banglaHeading(
           fontSize: 13,
           fontWeight: FontWeight.w800,
           color: Colors.black54,
@@ -1668,7 +1669,7 @@ class _ChartCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title,
-                style: const TextStyle(
+                style: AppFonts.banglaHeading(
                     fontWeight: FontWeight.w800, fontSize: 13)),
             const SizedBox(height: 12),
             AspectRatio(aspectRatio: 0.9, child: child),
@@ -1707,7 +1708,7 @@ class _PieCard extends StatelessWidget {
         radius: 80,
         title: pct >= 6 ? '${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}%' : '',
         titlePositionPercentageOffset: 0.58,
-        titleStyle: const TextStyle(
+        titleStyle: AppFonts.banglaBody(
             fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white),
       ));
     }
@@ -1740,7 +1741,7 @@ class _PieCard extends StatelessWidget {
                   '$label  •  ${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}%  (${money.format(v)})',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11),
+                  style: AppFonts.banglaBody(fontSize: 11),
                 ),
               ),
             ]),
@@ -1797,7 +1798,7 @@ class _BarCard extends StatelessWidget {
               else if (v >= 1e5) l = '${(v / 1e5).toStringAsFixed(1)}L';
               else if (v >= 1e3) l = '${(v / 1e3).toStringAsFixed(0)}k';
               else l = v.toStringAsFixed(0);
-              return Text(l, style: const TextStyle(fontSize: 10));
+              return Text(l, style: AppFonts.banglaBody(fontSize: 10));
             },
           ),
         ),
@@ -1821,7 +1822,7 @@ class _BarCard extends StatelessWidget {
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
-                      style: const TextStyle(
+                      style: AppFonts.banglaBody(
                           fontSize: 10, fontWeight: FontWeight.w600)),
                 ),
               );
@@ -1834,7 +1835,7 @@ class _BarCard extends StatelessWidget {
         touchTooltipData: BarTouchTooltipData(
           getTooltipItem: (group, _, rod, __) => BarTooltipItem(
             '${entries[group.x].key}\n${money.format(rod.toY)}',
-            const TextStyle(fontWeight: FontWeight.w700),
+            AppFonts.banglaBody(fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -1857,7 +1858,7 @@ class _PeriodOption extends StatelessWidget {
             side: const BorderSide(color: Colors.black12)),
         leading: Icon(icon, color: _brand),
         title:
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text(label, style: AppFonts.banglaHeading(fontWeight: FontWeight.w700)),
       trailing: const Icon(Icons.chevron_right),
     );
   }

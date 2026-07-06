@@ -80,6 +80,17 @@ class LocalStorageService {
 
   static Future<void> clearCompanyId() => setSessionField('companyId', '');
 
+  // ── Language preference ────────────────────────────────────────────────────
+  static Future<String?> getLanguage() async {
+    final session = await getSession();
+    final val = session?['language'];
+    if (val is String && (val == 'bn' || val == 'en')) return val;
+    return null;
+  }
+
+  static Future<void> setLanguage(String lang) =>
+      setSessionField('language', lang);
+
   // ── Centralised logout ────────────────────────────────────────────────────
   static Future<void> performLogout() async {
     AppRules.instance.clearSession();

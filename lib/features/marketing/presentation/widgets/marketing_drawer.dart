@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/profile.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 const Color _darkBlue = Color(0xFF0D47A1);
 
@@ -63,8 +64,8 @@ class _MarketingDrawerState extends State<MarketingDrawer> {
                       child: photoUrl.isEmpty
                           ? Text(
                         name.isNotEmpty ? name[0] : '?',
-                        style: const TextStyle(
-                            fontSize: 36, color: _darkBlue),
+                        style: AppFonts.englishSystem(
+                            fontSize: 36, color: _darkBlue, fontWeight: FontWeight.bold),
                       )
                           : null,
                     ),
@@ -76,9 +77,9 @@ class _MarketingDrawerState extends State<MarketingDrawer> {
                         children: [
                           Text(
                             name,
-                            style: const TextStyle(
+                            style: AppFonts.banglaHeading(
                               color: Colors.white,
-                              fontSize: 20, // larger text
+                              fontSize: 18, // larger text
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -99,11 +100,11 @@ class _MarketingDrawerState extends State<MarketingDrawer> {
                                 ),
                               );
                             },
-                            child: const Text(
-                              'View Profile',
-                              style: TextStyle(
+                            child: Text(
+                              'প্রোফাইল দেখুন',
+                              style: AppFonts.banglaBody(
                                 color: Colors.white70,
-                                fontSize: 14,
+                                fontSize: 13,
                               ),
                             ),
                           ),
@@ -126,30 +127,34 @@ class _MarketingDrawerState extends State<MarketingDrawer> {
                   ],
                 ),
               ),
-              _drawerItem(context, 'Dashboard', Icons.dashboard_outlined,
+              _drawerItem(context, 'ড্যাশবোর্ড (Dashboard)', Icons.dashboard_outlined,
                   '/marketing/dashboard'),
-              _drawerItem(context, 'Clients', Icons.people_alt_outlined,
+              _drawerItem(context, 'ক্লায়েন্ট তালিকা (Clients)', Icons.people_alt_outlined,
                   '/marketing/clients'),
-              _drawerItem(context, 'Sales & Invoices',
+              _drawerItem(context, 'বিক্রয় ও ইনভয়েস (Sales)',
                   Icons.receipt_long_outlined, '/marketing/sales'),
-              _drawerItem(context, 'Task Assignment', Icons.task_outlined,
+              _drawerItem(context, 'ইনভয়েস তালিকা (All Invoices)',
+                  Icons.receipt_outlined, '/marketing/sales/all'),
+              _drawerItem(context, 'নতুন ইনভয়েস (New Invoice)',
+                  Icons.add_circle_outline_rounded, '/marketing/sales/new'),
+              _drawerItem(context, 'টাস্ক ও দায়িত্ব (Tasks)', Icons.task_outlined,
                   '/marketing/task_assignment'),
-              _drawerItem(context, 'Campaigns', Icons.campaign_outlined,
+              _drawerItem(context, 'ক্যাম্পেইন (Campaigns)', Icons.campaign_outlined,
                   '/marketing/campaign'),
-              _drawerItem(context, 'Orders', Icons.shopping_bag_outlined,
+              _drawerItem(context, 'অর্ডারসমূহ (Orders)', Icons.shopping_bag_outlined,
                   '/marketing/orders'),
-              _drawerItem(context, 'Loan Requests',
+              _drawerItem(context, 'ঋণ আবেদন (Loans)',
                   Icons.request_page_outlined, '/marketing/loan_request'),
               const Divider(),
-              _drawerItem(context, 'My Salary & Payslips',
+              _drawerItem(context, 'বেতন ও পে-স্লিপ (Salary)',
                   Icons.payments_outlined, '/common/salary'),
-              _drawerItem(context, 'My Incentives',
+              _drawerItem(context, 'ইনসেনটিভ (Incentives)',
                   Icons.star_outline_rounded, '/marketing/renumeration'),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text('Logout',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                title: Text('লগআউট (Logout)',
+                    style: AppFonts.banglaBody(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
                 onTap: () async {
                   Navigator.pop(context);
                   await LocalStorageService.performLogout();
@@ -169,7 +174,7 @@ class _MarketingDrawerState extends State<MarketingDrawer> {
       String route) {
     return ListTile(
       leading: Icon(icon, color: _darkBlue),
-      title: Text(title, style: const TextStyle(fontSize: 16)),
+      title: Text(title, style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600)),
       onTap: () {
         Navigator.pop(context);
         Navigator.pushReplacementNamed(context, route);

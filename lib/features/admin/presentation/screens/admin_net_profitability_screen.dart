@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:uddoygi/core/design_system.dart';
+import 'package:uddoygi/widgets/u_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:uddoygi/services/db.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -15,7 +16,6 @@ class AdminNetProfitabilityScreen extends StatefulWidget {
 }
 
 class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScreen> {
-  String _cid = '';
   double _totalRevenue = 0;
   double _laborCosts = 0;
   double _productionCosts = 0;
@@ -31,7 +31,6 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
   Future<void> _loadData() async {
     final id = await LocalStorageService.getSavedCompanyId();
     if (id == null) return;
-    _cid = id;
 
     // Aggregate Data
     final results = await Future.wait([
@@ -75,12 +74,11 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
 
     final netProfit = _totalRevenue - (_laborCosts + _productionCosts + _marketingSpend);
     final profitMargin = _totalRevenue > 0 ? (netProfit / _totalRevenue) * 100 : 0.0;
-    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: UddoygiDesign.surface,
       appBar: AppBar(
-        title: Text('Net Profitability', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: Text('Net Profitability', style: AppFonts.banglaHeading(fontWeight: FontWeight.w800, fontSize: 18)),
         backgroundColor: const Color(0xFF1E0040), // _heroPurple
         foregroundColor: Colors.white,
         elevation: 0,
@@ -93,7 +91,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
           children: [
             _buildProfitHero(netProfit, profitMargin),
             const SizedBox(height: UddoygiDesign.space32),
-            Text('Profit & Loss Breakdown', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+            Text('Profit & Loss Breakdown', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
             const SizedBox(height: UddoygiDesign.space16),
             _buildStatCard('Total Revenue', _totalRevenue, Colors.green, Icons.trending_up_rounded),
             _buildStatCard('Labor Costs', _laborCosts, Colors.orange, Icons.people_rounded),
@@ -131,7 +129,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
         children: [
           Text(
             'ESTIMATED NET PROFIT',
-            style: GoogleFonts.plusJakartaSans(
+            style: AppFonts.banglaBody(
               color: Colors.white.withOpacity(0.6),
               fontSize: 11,
               fontWeight: FontWeight.w800,
@@ -141,7 +139,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
           const SizedBox(height: UddoygiDesign.space12),
           Text(
             '৳${NumberFormat('#,##,###').format(netProfit)}',
-            style: GoogleFonts.outfit(
+            style: AppFonts.banglaBody(
               color: Colors.white,
               fontSize: 40,
               fontWeight: FontWeight.w900,
@@ -162,7 +160,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
                 const SizedBox(width: 6),
                 Text(
                   '${margin.toStringAsFixed(1)}% Margin',
-                  style: GoogleFonts.outfit(
+            style: AppFonts.banglaData(
                     color: Colors.greenAccent,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -194,7 +192,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
           Expanded(
             child: Text(
               label,
-              style: GoogleFonts.plusJakartaSans(
+              style: AppFonts.banglaBody(
                 fontWeight: FontWeight.w700,
                 color: Colors.grey[800],
                 fontSize: 14,
@@ -203,7 +201,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
           ),
           Text(
             '৳${NumberFormat('#,##,###').format(value)}',
-            style: GoogleFonts.outfit(
+            style: AppFonts.banglaBody(
               fontWeight: FontWeight.w800,
               fontSize: 17,
               color: const Color(0xFF1E0040),
@@ -222,7 +220,7 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
         children: [
           Text(
             'Cost Allocation',
-            style: GoogleFonts.outfit(
+            style: AppFonts.banglaBody(
               fontWeight: FontWeight.w800,
               fontSize: 16,
               color: const Color(0xFF1E0040),
@@ -241,28 +239,28 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
                     color: Colors.orange,
                     title: 'Labor',
                     radius: 50,
-                    titleStyle: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                    titleStyle: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
                   ),
                   PieChartSectionData(
                     value: _productionCosts,
                     color: Colors.blue,
                     title: 'Prod',
                     radius: 50,
-                    titleStyle: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                    titleStyle: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
                   ),
                   PieChartSectionData(
                     value: _marketingSpend,
                     color: Colors.purple,
                     title: 'Mark',
                     radius: 50,
-                    titleStyle: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
+                    titleStyle: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
                   ),
                   PieChartSectionData(
                     value: _totalRevenue - (_laborCosts + _productionCosts + _marketingSpend),
                     color: Colors.green,
                     title: 'Profit',
                     radius: 60,
-                    titleStyle: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
+                    titleStyle: AppFonts.banglaBody(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
                   ),
                 ],
               ),
@@ -294,10 +292,8 @@ class _AdminNetProfitabilityScreenState extends State<AdminNetProfitabilityScree
       children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[600])),
+        Text(label, style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey[600])),
       ],
     );
   }
-}
-
 }

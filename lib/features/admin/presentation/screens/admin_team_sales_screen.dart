@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 class AdminTeamSalesScreen extends StatefulWidget {
@@ -35,7 +34,7 @@ class _AdminTeamSalesScreenState extends State<AdminTeamSalesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Team Performance', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text('Team Performance', style: AppFonts.banglaBody(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -108,8 +107,8 @@ class _AdminTeamSalesScreenState extends State<AdminTeamSalesScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(value, overflow: TextOverflow.ellipsis, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
-              Text(label, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+              Text(value, overflow: TextOverflow.ellipsis, style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+              Text(label, style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -121,21 +120,21 @@ class _AdminTeamSalesScreenState extends State<AdminTeamSalesScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Sales & Meeting Leaderboard', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Sales & Meeting Leaderboard', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[100]!)),
           child: Column(
             children: performance.map((p) => ListTile(
-              leading: CircleAvatar(backgroundColor: Colors.indigo[50], child: Text(p.name[0], style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold))),
-              title: Text(p.name, style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-              subtitle: Text('${p.meetingCount} Meetings logged', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+              leading: CircleAvatar(backgroundColor: Colors.indigo[50], child: Text(p.name[0], style: AppFonts.banglaBody(color: Colors.indigo, fontWeight: FontWeight.bold))),
+              title: Text(p.name, style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
+              subtitle: Text('${p.meetingCount} Meetings logged', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey)),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('৳${p.salesAmount.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, color: Colors.indigo)),
-                  Text('${p.orderCount} Orders', style: GoogleFonts.outfit(fontSize: 10, color: Colors.grey[500])),
+                  Text('৳${p.salesAmount.toStringAsFixed(0)}', style: AppFonts.banglaData(fontWeight: FontWeight.w900, color: Colors.indigo)),
+                  Text('${p.orderCount} Orders', style: AppFonts.banglaBody(fontSize: 10, color: Colors.grey[500])),
                 ],
               ),
             )).toList(),
@@ -160,8 +159,8 @@ class _AdminTeamSalesScreenState extends State<AdminTeamSalesScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Order-Wise Reports', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text('${filtered.length} found', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+            Text('Order-Wise Reports', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('${filtered.length} found', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey)),
           ],
         ),
         const SizedBox(height: 12),
@@ -189,16 +188,16 @@ class _AdminTeamSalesScreenState extends State<AdminTeamSalesScreen> {
               children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(d['customerName'] ?? 'Walk-in', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                    Text('Agent: ${d['agentName'] ?? 'System'}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                    Text(d['customerName'] ?? 'Walk-in', style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
+                    Text('Agent: ${d['agentName'] ?? 'System'}', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey)),
                   ]),
                 ),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('৳${(d['grandTotal'] ?? 0).toStringAsFixed(0)}', style: GoogleFonts.outfit(fontWeight: FontWeight.w900)),
+                  Text('৳${(d['grandTotal'] ?? 0).toStringAsFixed(0)}', style: AppFonts.banglaData(fontWeight: FontWeight.w900)),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-                    child: Text(status, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: color)),
+                    child: Text(status, style: AppFonts.banglaBody(fontSize: 10, fontWeight: FontWeight.bold, color: color)),
                   ),
                 ]),
               ],

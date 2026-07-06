@@ -3,9 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/core/design_system.dart';
@@ -103,7 +100,6 @@ class _StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = approved + rejected + pending;
     return UCard(
       padding: const EdgeInsets.all(20),
       child: Row(

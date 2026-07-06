@@ -29,6 +29,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'hr_drawer.dart';
 import 'hr_layout_constants.dart';
 
@@ -77,27 +78,9 @@ class HrWebShell extends StatelessWidget {
       );
     }
     // Mobile: Scaffold with consistent 10% top bar, 8% bottom bar (HR layout)
-    final topH = hrTopBarHeight(context);
     final bottomH = hrBottomBarHeight(context);
     return Scaffold(
       backgroundColor: backgroundColor ?? kHrSurface,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(topH),
-        child: AppBar(
-          backgroundColor: kHrHeroGreen,
-          foregroundColor: kHrTextOnGreen,
-          elevation: 0,
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(gradient: kHrHeaderGradient),
-          ),
-          title: Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                  color: kHrTextOnGreen)),
-          actions: actions,
-        ),
-      ),
       drawer: const HRDrawer(),
       body: HrShellScope(hideChrome: true, child: child),
       bottomNavigationBar: Container(
@@ -188,7 +171,7 @@ class _DesktopTopBar extends StatelessWidget {
       ),
       child: Row(children: [
         Text(title,
-            style: const TextStyle(
+            style: AppFonts.banglaHeading(
                 fontWeight: FontWeight.w800,
                 fontSize: 18,
                 color: kHrHeroGreen)),
@@ -215,19 +198,19 @@ class _TopBarUserAvatar extends StatelessWidget {
       itemBuilder: (_) => [
         PopupMenuItem(
           value: 'profile',
-          child: Row(children: const [
-            Icon(Icons.person_rounded, size: 16, color: kHrHeroGreen),
-            SizedBox(width: 10),
-            Text('Profile', style: TextStyle(fontWeight: FontWeight.w600)),
+          child: Row(children: [
+            const Icon(Icons.person_rounded, size: 16, color: kHrHeroGreen),
+            const SizedBox(width: 10),
+            Text('Profile', style: AppFonts.banglaBody(fontWeight: FontWeight.w600)),
           ]),
         ),
         PopupMenuItem(
           value: 'logout',
-          child: Row(children: const [
-            Icon(Icons.logout_rounded, size: 16, color: Colors.red),
-            SizedBox(width: 10),
+          child: Row(children: [
+            const Icon(Icons.logout_rounded, size: 16, color: Colors.red),
+            const SizedBox(width: 10),
             Text('Logout',
-                style: TextStyle(
+                style: AppFonts.banglaBody(
                     fontWeight: FontWeight.w600, color: Colors.red)),
           ]),
         ),
@@ -250,7 +233,7 @@ class _TopBarUserAvatar extends StatelessWidget {
             (photo != null && photo.isNotEmpty) ? NetworkImage(photo) : null,
         child: (photo == null || photo.isEmpty)
             ? Text(initials,
-                style: const TextStyle(
+                style: AppFonts.banglaHeading(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 12))
@@ -352,17 +335,17 @@ class _HrSidebarState extends State<_HrSidebar> {
                     color: Colors.white, size: 18),
               ),
               const SizedBox(width: 12),
-              const Column(
+              Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Uddyogi',
-                      style: TextStyle(
+                      style: AppFonts.banglaHeading(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
                           fontSize: 15)),
                   Text('HR Panel',
-                      style: TextStyle(
+                      style: AppFonts.banglaBody(
                           color: Colors.white60,
                           fontWeight: FontWeight.w500,
                           fontSize: 11)),
@@ -397,7 +380,7 @@ class _HrSidebarState extends State<_HrSidebar> {
                           : null,
                       child: photo.isEmpty
                           ? Text(initials,
-                              style: const TextStyle(
+                              style: AppFonts.banglaHeading(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w800,
                                   fontSize: 11))
@@ -411,14 +394,14 @@ class _HrSidebarState extends State<_HrSidebar> {
                           Text(name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: AppFonts.banglaHeading(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12)),
                           Text(email,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: AppFonts.banglaBody(
                                   color: Colors.white54,
                                   fontSize: 10)),
                         ],
@@ -495,8 +478,8 @@ class _HrSidebarState extends State<_HrSidebar> {
               dense: true,
               leading: const Icon(Icons.logout_rounded,
                   color: Colors.red, size: 18),
-              title: const Text('Logout',
-                  style: TextStyle(
+              title: Text('Logout',
+                  style: AppFonts.banglaHeading(
                       color: Colors.red,
                       fontWeight: FontWeight.w700,
                       fontSize: 13)),
@@ -535,7 +518,7 @@ class _SideSection extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
         child: Text(label.toUpperCase(),
-            style: const TextStyle(
+            style: AppFonts.banglaHeading(
                 color: Colors.white38,
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
@@ -590,7 +573,7 @@ class _SideItem extends StatelessWidget {
                       const BoxConstraints(minWidth: 14, minHeight: 14),
                   child: Text('$count',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: AppFonts.banglaHeading(
                           color: Colors.white,
                           fontSize: 8,
                           fontWeight: FontWeight.w900)),
@@ -621,7 +604,7 @@ class _SideItem extends StatelessWidget {
         dense: true,
         leading: iconWidget,
         title: Text(label,
-            style: TextStyle(
+            style: AppFonts.banglaHeading(
                 color: _active ? Colors.white : Colors.white70,
                 fontWeight:
                     _active ? FontWeight.w800 : FontWeight.w500,
@@ -635,20 +618,18 @@ class _SideItem extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SHELL SCOPE
-// ─────────────────────────────────────────────────────────────────────────────
-class HrShellScope extends StatelessWidget {
-  /// Tells child widgets if they should hide their own Scaffold/AppBar
-  /// because the shell is already providing one.
-  final bool hideChrome;
-  final Widget child;
+// -- Helper Helpers ------------------------------------------------------------
+double hrTopBarHeight(BuildContext context) =>
+    MediaQuery.sizeOf(context).height * 0.10;
 
-  const HrShellScope({
-    super.key,
-    required this.hideChrome,
-    required this.child,
-  });
+double hrBottomBarHeight(BuildContext context) =>
+    MediaQuery.sizeOf(context).height * 0.07;
+
+/// Provides scope settings for the HR Shell.
+class HrShellScope extends StatelessWidget {
+  final bool   hideChrome;
+  final Widget child;
+  const HrShellScope({super.key, required this.hideChrome, required this.child});
 
   @override
   Widget build(BuildContext context) => child;

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +14,6 @@ class AdminHREfficiencyScreen extends StatefulWidget {
 }
 
 class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
-  String _cid = '';
   int _totalEmployees = 0;
   int _activeWorkOrders = 0;
   double _productionRate = 0;
@@ -29,8 +28,6 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
   Future<void> _loadData() async {
     final id = await LocalStorageService.getSavedCompanyId();
     if (id == null) return;
-    _cid = id;
-
     final results = await Future.wait([
       FirebaseFirestore.instance.collection('companies').doc(id).collection('users').get(),
       FirebaseFirestore.instance.collection('companies').doc(id).collection('workOrders').where('status', isEqualTo: 'In-Progress').get(),
@@ -44,7 +41,7 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
     int onLeave = 0;
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     for (var doc in results[2].docs) {
-      final data = doc.data() as Map<String, dynamic>;
+      final data = doc.data();
       final from = data['fromDate'] as String? ?? '';
       final to   = data['toDate'] as String? ?? '';
       if (todayStr.compareTo(from) >= 0 && todayStr.compareTo(to) <= 0) {
@@ -79,7 +76,7 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Workforce Efficiency', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text('Workforce Efficiency', style: AppFonts.banglaHeading(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -91,7 +88,7 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
           children: [
             _buildEfficiencyHero(status, statusColor),
             const SizedBox(height: 24),
-            Text('Sync: Labor vs. Production', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Sync: Labor vs. Production', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             _buildMetricTile('Total Workforce', '$_totalEmployees Personnel', Icons.groups_rounded, Colors.blue),
             _buildMetricTile('Active Work Orders', '$_activeWorkOrders Units', Icons.precision_manufacturing_rounded, Colors.purple),
@@ -123,9 +120,9 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
             child: Icon(Icons.speed_rounded, color: color, size: 48),
           ),
           const SizedBox(height: 16),
-          Text(status.toUpperCase(), style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: color, letterSpacing: 2)),
+          Text(status.toUpperCase(), style: AppFonts.banglaHeading(fontSize: 24, fontWeight: FontWeight.w900, color: color, letterSpacing: 2)),
           const SizedBox(height: 8),
-          Text('Based on current Factory Output', style: GoogleFonts.outfit(color: Colors.grey, fontSize: 14)),
+          Text('Based on current Factory Output', style: AppFonts.banglaBody(color: Colors.grey, fontSize: 14)),
         ],
       ),
     ).animate().fadeIn().slideY(begin: 0.2);
@@ -140,8 +137,8 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
         children: [
           Icon(icon, color: color, size: 28),
           const SizedBox(width: 16),
-          Expanded(child: Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w600))),
-          Text(value, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16, color: const Color(0xFF0F172A))),
+          Expanded(child: Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.w600))),
+          Text(value, style: AppFonts.banglaData(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F172A))),
         ],
       ),
     );
@@ -162,11 +159,11 @@ class _AdminHREfficiencyScreenState extends State<AdminHREfficiencyScreen> {
             children: [
               const Icon(Icons.lightbulb_outline_rounded, color: Colors.amber, size: 20),
               const SizedBox(width: 8),
-              Text('Admin Recommendation', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text('Admin Recommendation', style: AppFonts.banglaHeading(color: Colors.white, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 12),
-          Text(msg, style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14)),
+          Text(msg, style: AppFonts.banglaBody(color: Colors.white70, fontSize: 14)),
         ],
       ),
     );

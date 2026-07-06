@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
-import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -16,8 +15,6 @@ class AdminInsightsScreen extends StatefulWidget {
 
 class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
   String _cid = '';
-  DateTime _now = DateTime.now();
-
   @override
   void initState() {
     super.initState();
@@ -36,7 +33,7 @@ class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Business Insights', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text('Business Insights', style: AppFonts.banglaHeading(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -102,8 +99,8 @@ class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(value, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w800, color: const Color(0xFF1E293B))),
-              Text(label, style: GoogleFonts.outfit(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
+              Text(value, style: AppFonts.banglaData(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+              Text(label, style: AppFonts.banglaBody(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -121,8 +118,8 @@ class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Revenue vs Target', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
-              Text('${(percent * 100).toStringAsFixed(0)}%', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF2563EB))),
+              Text('Revenue vs Target', style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text('${(percent * 100).toStringAsFixed(0)}%', style: AppFonts.banglaData(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
             ],
           ),
           const SizedBox(height: 24),
@@ -140,8 +137,8 @@ class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('৳${stats.monthlyRevenue.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w900)),
-                    Text('of ৳${stats.monthlyTarget.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey[500])),
+                    Text('৳${stats.monthlyRevenue.toStringAsFixed(0)}', style: AppFonts.banglaData(fontSize: 20, fontWeight: FontWeight.w900)),
+                    Text('of ৳${stats.monthlyTarget.toStringAsFixed(0)}', style: AppFonts.banglaBody(fontSize: 12, color: Colors.grey[500])),
                   ],
                 ),
               ],
@@ -159,7 +156,7 @@ class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Market Growth (MoM)', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text('Market Growth (MoM)', style: AppFonts.banglaHeading(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           SizedBox(
             height: 200,
@@ -191,14 +188,14 @@ class _AdminInsightsScreenState extends State<AdminInsightsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Top 5 Products', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text('Top 5 Products', style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!)),
           child: Column(
             children: stats.topProducts.map((p) => ListTile(
-              title: Text(p.name, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
-              trailing: Text('৳${p.revenue.toStringAsFixed(0)}', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF2563EB))),
+              title: Text(p.name, style: AppFonts.banglaBody(fontSize: 14, fontWeight: FontWeight.w600)),
+              trailing: Text('৳${p.revenue.toStringAsFixed(0)}', style: AppFonts.banglaData(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
             )).toList(),
           ),
         ),

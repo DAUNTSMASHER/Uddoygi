@@ -50,7 +50,6 @@ class CommentsPanel extends StatefulWidget {
 }
 
 class _CommentsPanelState extends State<CommentsPanel> {
-  String _cid = '';
   static const _brandBlue = Color(0xFF1D5DF1);
 
   final _controller = TextEditingController();
@@ -81,9 +80,6 @@ class _CommentsPanelState extends State<CommentsPanel> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     if (widget.commentsStreamOverride == null) {
       _bindLiveFirstPage();
     } else {

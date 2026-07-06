@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 class AdminAllBuyersPage extends StatefulWidget {
   const AdminAllBuyersPage({super.key});
@@ -25,7 +26,7 @@ class _AdminAllBuyersPageState extends State<AdminAllBuyersPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Buyers', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text('All Buyers', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -53,7 +54,7 @@ class _AdminAllBuyersPageState extends State<AdminAllBuyersPage> {
                 padding: const EdgeInsets.all(12),
                 child: Text(
                   'Total Buyers: ${buyers.length}',
-                  style: const TextStyle(
+                  style: AppFonts.banglaBody(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                     color: Colors.indigo,
@@ -94,13 +95,13 @@ class _AdminAllBuyersPageState extends State<AdminAllBuyersPage> {
                                     children: [
                                       Text(
                                         name,
-                                        style: const TextStyle(
+                                        style: AppFonts.banglaBody(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
-                                      Text(email, style: const TextStyle(fontSize: 14, color: Colors.black54)),
+                                      Text(email, style: AppFonts.banglaBody(fontSize: 14, color: Colors.black54)),
                                     ],
                                   ),
                                 ),
@@ -111,12 +112,12 @@ class _AdminAllBuyersPageState extends State<AdminAllBuyersPage> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Phone: $phone', style: const TextStyle(fontSize: 13)),
-                                Text('Agent: $addedBy', style: const TextStyle(fontSize: 13)),
+                                Text('Phone: $phone', style: AppFonts.banglaBody(fontSize: 13)),
+                                Text('Agent: $addedBy', style: AppFonts.banglaBody(fontSize: 13)),
                               ],
                             ),
                             const SizedBox(height: 4),
-                            Text('Address: $address', style: const TextStyle(fontSize: 13)),
+                            Text('Address: $address', style: AppFonts.banglaBody(fontSize: 13)),
                           ],
                         ),
                       ),

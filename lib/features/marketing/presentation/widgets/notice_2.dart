@@ -1,5 +1,4 @@
 // lib/widgets/notice_2.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';

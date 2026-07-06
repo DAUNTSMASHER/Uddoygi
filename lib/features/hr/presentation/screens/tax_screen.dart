@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uddoygi/services/db.dart';
@@ -10,25 +9,6 @@ import 'package:uddoygi/widgets/u_card.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 final _money      = UddoygiDesign.moneyFormat;
-final _dateFmt    = DateFormat('d MMM yyyy');
-
-// ── BD Tax Logic ─────────────────────────────────────────────────────────────
-const _kMaleThreshold = 350000.0;
-double _calcTax(double income, double threshold) {
-  if (income <= threshold) return 0;
-  double taxable = income - threshold;
-  double tax = 0;
-  final slabs = [100000.0, 400000.0, 500000.0, 500000.0];
-  final rates = [0.05, 0.10, 0.15, 0.20];
-  for (int i = 0; i < slabs.length; i++) {
-    if (taxable <= 0) break;
-    final chunk = taxable.clamp(0, slabs[i]);
-    tax += chunk * rates[i];
-    taxable -= chunk;
-  }
-  if (taxable > 0) tax += taxable * 0.25;
-  return tax;
-}
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
 class TaxScreen extends StatefulWidget {

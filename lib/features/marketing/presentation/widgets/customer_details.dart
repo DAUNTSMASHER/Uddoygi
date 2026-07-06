@@ -32,7 +32,6 @@ class CustomerDetailsPage extends StatefulWidget {
 }
 
 class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
-  String _cid = '';
   final _formKey = GlobalKey<FormState>();
 
   late final DocumentReference<Map<String, dynamic>> _ref;
@@ -57,9 +56,6 @@ class _CustomerDetailsPageState extends State<CustomerDetailsPage> {
   @override
   void initState() {
     super.initState();
-    LocalStorageService.getSavedCompanyId().then((id) {
-      if (mounted) setState(() => _cid = id ?? '');
-    });
     DB.col(C.customers).then((col) { if (mounted) setState(() => _ref = col.doc(widget.customerId)); });
     _load();
   }

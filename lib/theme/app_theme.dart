@@ -6,6 +6,7 @@ export 'admin_theme.dart';
 export 'hr_theme.dart';
 export 'marketing_theme.dart';
 export 'factory_theme.dart';
+export 'app_fonts.dart';
 
 /// Global app theme — Outfit font applied for a premium feel.
 ThemeData buildAppTheme() {
@@ -30,7 +31,8 @@ ThemeData createDepartmentTheme({
       secondary: palette[500],
       surface: brightness == Brightness.light ? const Color(0xFFFAFAFE) : const Color(0xFF0F0F12),
     ),
-    textTheme: GoogleFonts.outfitTextTheme(),
+    fontFamily: 'BanglaPrimary',
+    textTheme: GoogleFonts.outfitTextTheme().apply(fontFamily: 'BanglaPrimary'),
     visualDensity: VisualDensity.adaptivePlatformDensity,
     
     // Smooth Transitions

@@ -1,35 +1,37 @@
 // lib/features/factory/presentation/screens/factory_dashboard.dart
 import 'dart:async';
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/features/factory/presentation/widgets/factory_drawer.dart';
-import 'package:uddoygi/features/common/notification.dart';
-import 'package:uddoygi/features/common/stock/stockscreen.dart';
-import 'package:uddoygi/features/factory/presentation/factory/work_order.dart';
-import 'package:uddoygi/features/factory/presentation/factory/purchase_order.dart';
-import 'package:uddoygi/features/factory/presentation/factory/QC_report.dart';
-import 'package:uddoygi/features/factory/presentation/factory/daily_production.dart';
-import 'package:uddoygi/features/factory/presentation/screens/progress_update_screen.dart';
-import 'package:uddoygi/core/design_system.dart';
-import 'package:uddoygi/widgets/u_card.dart';
-import 'package:uddoygi/widgets/u_ai_assistant.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
+import 'package:uddoygi/widgets/u_ai_assistant.dart';
+import 'package:uddoygi/features/common/notification.dart';
+import 'package:uddoygi/widgets/u_inventory_analytics.dart';
+import 'factory_category_screen.dart';
+import 'package:uddoygi/widgets/global_department_switcher.dart';
+import 'package:uddoygi/features/factory/presentation/factory/industrial_velocity_dashboard_screen.dart';
+import 'package:uddoygi/features/factory/presentation/factory/purchase_order.dart' show PurchaseOrdersScreen;
+import 'package:uddoygi/features/factory/presentation/factory/QC_report.dart' show QCReportScreen;
+import 'package:uddoygi/features/factory/presentation/factory/daily_production.dart' show DailyProductionScreen;
+import 'package:uddoygi/features/factory/presentation/factory/inventory_screen.dart';
+import 'package:uddoygi/features/factory/presentation/screens/factory_attendance_screen.dart';
+import 'package:uddoygi/features/factory/presentation/screens/factory_notice.dart';
+import 'package:uddoygi/features/common/presentation/screens/messages_screen.dart';
 
-// ── Palette (Premium Navy) ───────────────────────────────────────────────────
-const _primary    = Color(0xFF0F172A);
-const _accent     = Color(0xFF3B82F6); // Blue
-const _bg         = Color(0xFFF8FAFC);
-const _card       = Color(0xFFFFFFFF);
-const _fg         = Color(0xFF1E293B);
-const _muted      = Color(0xFF64748B);
+// ── Constants (Factory Red/Maroon Theme) ────────────────────────────────────
+const _primaryRed = Color(0xFF8B0000);
+const _accentRed  = Color(0xFF5A0000);
+const _backgroundColor = Color(0xFFF9F9F9);
+const _secondaryColor = Color(0xFFFDE8E8);
+const _surfaceColor   = Color(0xFFFFFFFF);
 
+// ─────────────────────────────────────────────────────────────────────────────
 class FactoryDashboard extends StatefulWidget {
-  const FactoryDashboard({Key? key}) : super(key: key);
+  const FactoryDashboard({super.key});
   @override
   State<FactoryDashboard> createState() => _FactoryDashboardState();
 }
@@ -38,7 +40,24 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
   String _cid = '';
   String? name;
   String? photoUrl;
-  bool _showMetrics = true;
+  int _currentIndex = 0;
+
+  final List<_DashboardItem> _allItems = const [
+    _DashboardItem('ওয়ার্ক অর্ডার (Work Orders)', Icons.assignment_rounded, IndustrialVelocityDashboardScreen()),
+    _DashboardItem('পার্চেস অর্ডার (Purchase Orders)', Icons.shopping_cart_rounded, PurchaseOrdersScreen()),
+    _DashboardItem('দৈনিক উৎপাদন (Daily Production)', Icons.precision_manufacturing_rounded, DailyProductionScreen()),
+    _DashboardItem('ইনভেন্টরি ও মজুদ (Inventory)', Icons.inventory_2_rounded, InventoryScreen()),
+    _DashboardItem('কিউসি রিপোর্ট (QC Reports)', Icons.verified_rounded, QCReportScreen()),
+    _DashboardItem('উপস্থিতি (Attendance)', Icons.fingerprint_rounded, FactoryAttendanceScreen()),
+    _DashboardItem('মেসেজ ও বার্তা (Messages)', Icons.chat_rounded, MessagesScreen()),
+    _DashboardItem('নোটিশ বোর্ড (Notices)', Icons.campaign_rounded, FactoryNoticeScreen()),
+  ];
+
+  static const _sections = [
+    _Section('অপারেশনস (Operations)', [0, 1]),
+    _Section('প্রোডাকশন (Production)', [2, 3]),
+    _Section('সিস্টেম কন্ট্রোল (Controls)', [4, 5, 6, 7]),
+  ];
 
   @override
   void initState() {
@@ -48,334 +67,357 @@ class _FactoryDashboardState extends State<FactoryDashboard> {
 
   Future<void> _init() async {
     final id = await LocalStorageService.getSavedCompanyId();
-    if (!mounted) return;
-    setState(() => _cid = id ?? '');
-    await _loadSession();
-  }
-
-  Future<void> _loadSession() async {
+    if (mounted) setState(() => _cid = id ?? '');
     final session = await LocalStorageService.getSession();
     final current = FirebaseAuth.instance.currentUser;
-    if (!mounted) return;
-    setState(() {
-      name = (session?['name'] as String?) ?? current?.displayName ?? 'Factory';
-      photoUrl = current?.photoURL;
-    });
+    if (mounted) {
+      setState(() {
+        name = session?['name'] ?? current?.displayName ?? current?.email ?? 'ফ্যাক্টরি অ্যাডমিন (Factory Admin)';
+        photoUrl = current?.photoURL;
+      });
+    }
+  }
+
+  void _openCategory(String label, List<int> indices) {
+    final categoryItems = indices.map((i) => FactoryCategoryItem(_allItems[i].title, _allItems[i].icon, _allItems[i].route)).toList();
+    FactoryCategoryScreen.navigate(context, label, categoryItems);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 900;
+
+    if (isDesktop) {
+      return Scaffold(
+        backgroundColor: _backgroundColor,
+        drawer: const FactoryDrawer(),
+        appBar: AppBar(title: Text('ফ্যাক্টরি ড্যাশবোর্ড (Factory Dashboard)', style: AppFonts.banglaHeading(color: Colors.white, fontSize: 18)), backgroundColor: _primaryRed),
+        body: _buildScrollBody(),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: _primary,
-        foregroundColor: Colors.white,
-        title: Text('Factory Dashboard', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
-        actions: [
-          IconButton(icon: const Icon(Icons.notifications_none_rounded), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.logout_rounded, size: 20), onPressed: () {}),
-        ],
-      ),
+      backgroundColor: _backgroundColor,
       drawer: const FactoryDrawer(),
-      body: CustomScrollView(
-        slivers: [
-          // ── Hero Section ───────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: _primary,
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
-              ),
-              child: Column(
-                children: [
-                  _ModeToggle(
-                    value: _showMetrics,
-                    onChanged: (v) => setState(() => _showMetrics = v),
-                    leftLabel: 'Metrics',
-                    rightLabel: 'Workplace',
-                  ),
-                  const SizedBox(height: 24),
-                  if (_showMetrics) _FactoryMetricsGrid(cid: _cid).animate().fadeIn(),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Workplace / Actions ─────────────────────────────────────────
-          if (!_showMetrics)
-            SliverPadding(
-              padding: const EdgeInsets.all(24),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 1.1,
-                ),
-                delegate: SliverChildListDelegate([
-                  _ActionCard(title: 'Work Orders', icon: Icons.assignment_rounded, color: Colors.blue),
-                  _ActionCard(title: 'Production', icon: Icons.factory_rounded, color: Colors.teal),
-                  _ActionCard(title: 'Inventory', icon: Icons.inventory_2_rounded, color: Colors.orange),
-                  _ActionCard(title: 'QC Reports', icon: Icons.fact_check_rounded, color: Colors.purple),
-                ]),
-              ),
-            ),
-
-          // ── Secondary Actions ──────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Recent Activity', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: _fg)),
-                  const SizedBox(height: 16),
-                  ...List.generate(3, (i) => _RecentActivityItem()),
-                ],
-              ),
-            ),
-          ),
+      body: Stack(
+        children: [
+          _buildMobileBody(),
+          _buildFloatingBottomBar(),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: _accent,
-        child: const Icon(Icons.auto_awesome, color: Colors.white),
       ),
     );
   }
+
+  Widget _buildMobileBody() {
+    return Column(
+      children: [
+        _Header(name: name ?? 'ফ্যাক্টরি অ্যাডমিন', onNotifTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage()))),
+        const GlobalDepartmentSwitcher(current: 'Factory'),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                _FactoryOverview(cid: _cid),
+                const SizedBox(height: 12),
+                const UInventoryAnalytics(themeColor: _primaryRed).animate().fadeIn(delay: 200.ms),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    'ব্যবস্থাপনা মডিউল (Management Modules)',
+                    style: AppFonts.banglaHeading(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111827)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _ModuleGrid(sections: _sections, onCategoryTap: _openCategory),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScrollBody() {
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const GlobalDepartmentSwitcher(current: 'Factory'),
+        const SizedBox(height: 16),
+        _FactoryOverview(cid: _cid),
+        const SizedBox(height: 20),
+        const UInventoryAnalytics(themeColor: _primaryRed).animate().fadeIn(delay: 200.ms),
+        const SizedBox(height: 24),
+        _ModuleGrid(sections: _sections, onCategoryTap: _openCategory),
+      ],
+    );
+  }
+
+  Widget _buildFloatingBottomBar() {
+    return Positioned(
+      bottom: 24,
+      left: 24,
+      right: 24,
+      child: Container(
+        height: 70,
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(35),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, spreadRadius: 5),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _BottomBarIcon(icon: Icons.home_rounded, isActive: _currentIndex == 0, onTap: () => setState(() => _currentIndex = 0)),
+            _BottomBarIcon(icon: Icons.assignment_rounded, isActive: _currentIndex == 1, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IndustrialVelocityDashboardScreen()))),
+            _BottomBarIcon(icon: Icons.notifications_none_rounded, isActive: _currentIndex == 2, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationPage())), hasBadge: true),
+            _BottomBarIcon(icon: Icons.person_outline_rounded, isActive: _currentIndex == 3, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FactoryAttendanceScreen()))),
+          ],
+        ),
+      ),
+    ).animate().slideY(begin: 1, end: 0, duration: 600.ms, curve: Curves.easeOutBack);
+  }
 }
 
-class _ModeToggle extends StatelessWidget {
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final String leftLabel, rightLabel;
-  const _ModeToggle({required this.value, required this.onChanged, required this.leftLabel, required this.rightLabel});
+class _Header extends StatelessWidget {
+  final String name;
+  final VoidCallback onNotifTap;
+  const _Header({required this.name, required this.onNotifTap});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 32, 16, 12),
+      decoration: const BoxDecoration(
+        color: _primaryRed,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+      ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _ToggleBtn(label: leftLabel, active: value, onTap: () => onChanged(true)),
-          _ToggleBtn(label: rightLabel, active: !value, onTap: () => onChanged(false)),
+          Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 28),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
+          ),
+          Expanded(
+            child: Column(
+            children: [
+              Text('স্বাগতম (Welcome back)', style: AppFonts.banglaBody(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
+              Text(name, style: AppFonts.banglaHeading(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+          )),
+          GestureDetector(
+            onTap: onNotifTap,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, spreadRadius: 1),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.notifications_rounded, color: Colors.white, size: 22),
+            ),
+          ),
         ],
       ),
+    ).animate().fadeIn().slideY(begin: -0.1, end: 0);
+  }
+}
+
+class _FactoryOverview extends StatelessWidget {
+  final String cid;
+  const _FactoryOverview({required this.cid});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(1),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 15, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('ফ্যাক্টরি ওভারভিউ (Overview)', style: AppFonts.banglaHeading(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF111827))),
+              Text('সকল তথ্য', style: AppFonts.banglaBody(fontSize: 11, fontWeight: FontWeight.w700, color: _primaryRed)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            mainAxisSpacing: 1,
+            crossAxisSpacing: 1,
+            childAspectRatio: 1.4,
+            children: [
+              _MetricItem(label: 'অর্ডার (Orders)', stream: DB.colSync(cid, C.workOrders).snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryRed),
+              _MetricItem(label: 'ইন প্রোডাকশন (Active)', stream: DB.colSync(cid, C.workOrders).where('status', isEqualTo: 'In Production').snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryRed),
+              _MetricItem(label: 'দৈনিক (Daily)', stream: Stream.value('৩৫০ পিস'), primaryColor: _primaryRed),
+              _MetricItem(label: 'মজুদ (Stock)', stream: DB.colSync(cid, C.products).snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryRed),
+              _MetricItem(label: 'কিউসি রেট (QC)', stream: Stream.value('৯৬.৪%'), primaryColor: _primaryRed),
+              _MetricItem(label: 'অভিযোগ (Issues)', stream: DB.colSync(cid, C.complaints).where('status', isEqualTo: 'pending').snapshots().map((s) => '${s.docs.length}'), primaryColor: _primaryRed),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1, end: 0);
+  }
+}
+
+class _MetricItem extends StatelessWidget {
+  final String label;
+  final Stream<String> stream;
+  final Color primaryColor;
+  const _MetricItem({required this.label, required this.stream, required this.primaryColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        StreamBuilder<String>(
+          stream: stream,
+          builder: (_, snap) => FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              (snap.data ?? '—').toBanglaDigits,
+              style: AppFonts.banglaData(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: primaryColor,
+                height: 1.0,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          label,
+          style: AppFonts.banglaBody(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF6B7280),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 }
 
-class _ToggleBtn extends StatelessWidget {
+class _ModuleGrid extends StatelessWidget {
+  final List<_Section> sections;
+  final void Function(String, List<int>) onCategoryTap;
+  const _ModuleGrid({required this.sections, required this.onCategoryTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: sections.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 2.2),
+      itemBuilder: (context, i) {
+        final sec = sections[i];
+        return _ModuleTile(label: sec.label, icon: _getIcon(sec.label), onTap: () => onCategoryTap(sec.label, sec.indices));
+      },
+    );
+  }
+
+  IconData _getIcon(String label) {
+    if (label.contains('Operations') || label.contains('অপারেশনস')) return Icons.assignment_rounded;
+    if (label.contains('Production') || label.contains('প্রোডাকশন')) return Icons.precision_manufacturing_rounded;
+    return Icons.verified_rounded;
+  }
+}
+
+class _ModuleTile extends StatelessWidget {
   final String label;
-  final bool active;
+  final IconData icon;
   final VoidCallback onTap;
-  const _ToggleBtn({required this.label, required this.active, required this.onTap});
+  const _ModuleTile({required this.label, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(label, style: GoogleFonts.outfit(color: active ? _primary : Colors.white70, fontWeight: FontWeight.w700, fontSize: 13)),
-      ),
-    );
-  }
-}
-
-class _FactoryMetricsGrid extends StatelessWidget {
-  final String cid;
-  const _FactoryMetricsGrid({required this.cid});
-
-  @override
-  Widget build(BuildContext context) {
-    if (cid.isEmpty) return const SizedBox.shrink();
-
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.6,
-      children: [
-        const _MetricCard(label: 'EFFICIENCY', value: '94%', icon: Icons.bolt_rounded, color: Colors.amber),
-        
-        // Dynamic OUTPUT
-        StreamBuilder<QuerySnapshot>(
-          stream: DB.colSync(cid, C.workOrders)
-              .where('status', isEqualTo: 'Completed')
-              .snapshots(),
-          builder: (_, snap) {
-            final count = snap.data?.docs.length ?? 0;
-            return _MetricCard(
-              label: 'OUTPUT', 
-              value: count > 1000 ? '${(count/1000).toStringAsFixed(1)}k' : '$count', 
-              icon: Icons.inventory_2_rounded, 
-              color: Colors.blue
-            );
-          }
-        ),
-
-        // Dynamic WORKERS
-        StreamBuilder<QuerySnapshot>(
-          stream: DB.colSync(cid, C.users).snapshots(),
-          builder: (_, snap) {
-            final count = snap.data?.docs.length ?? 0;
-            return _MetricCard(
-              label: 'STAFF', 
-              value: '$count', 
-              icon: Icons.people_rounded, 
-              color: Colors.teal
-            );
-          }
-        ),
-
-        const _MetricCard(label: 'UPTIME', value: '99.9%', icon: Icons.timer_rounded, color: Colors.purple),
-      ],
-    );
-  }
-}
-
-
-class _MetricCard extends StatelessWidget {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-  const _MetricCard({required this.label, required this.value, required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white10)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: 8),
-              Text(label, style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white60)),
-            ],
-          ),
-          const Spacer(),
-          Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  const _ActionCard({required this.title, required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return UCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(height: 16),
-          Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w700, color: _fg)),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentActivityItem extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: UCard(
         padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 2))],
+        ),
         child: Row(
           children: [
-            const CircleAvatar(backgroundColor: _bg, child: Icon(Icons.history_rounded, size: 20, color: _muted)),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Batch #402 Completed', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, color: _fg)),
-                  Text('2 hours ago • Machine A', style: GoogleFonts.outfit(fontSize: 11, color: _muted)),
-                ],
-              ),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: _secondaryColor, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: _primaryRed, size: 20),
             ),
-            const Icon(Icons.chevron_right_rounded, color: _muted),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label, style: AppFonts.banglaBody(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF111827)))),
           ],
         ),
       ),
-    );
+    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1, end: 0);
   }
 }
 
-class _NavItem {
-  final String label;
+class _BottomBarIcon extends StatelessWidget {
   final IconData icon;
+  final bool isActive;
   final VoidCallback onTap;
-  final Stream<int>? badgeStream;
-  _NavItem(this.label, this.icon, {required this.onTap, this.badgeStream});
+  final bool hasBadge;
+  const _BottomBarIcon({required this.icon, required this.isActive, required this.onTap, this.hasBadge = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Icon(icon, color: isActive ? _primaryRed : const Color(0xFF9CA3AF), size: 28),
+          if (hasBadge) Positioned(top: 0, right: 0, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle))),
+        ],
+      ),
+    );
+  }
 }
 
-class _BadgeIcon extends StatelessWidget {
+class _DashboardItem {
+  final String title;
   final IconData icon;
-  final Color color;
-  final int count;
-  const _BadgeIcon({required this.icon, required this.color, required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(icon, color: color),
-        if (count > 0)
-          Positioned(
-            right: -6, top: -6,
-            child: Container(
-              padding: const EdgeInsets.all(2),
-              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-              constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-              child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            ),
-          ),
-      ],
-    );
-  }
+  final dynamic route;
+  const _DashboardItem(this.title, this.icon, this.route);
 }
 
-class _Badge extends StatelessWidget {
-  final int count;
-  final bool small;
-  const _Badge({required this.count, this.small = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-      child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-    );
-  }
+class _Section {
+  final String label;
+  final List<int> indices;
+  const _Section(this.label, this.indices);
 }

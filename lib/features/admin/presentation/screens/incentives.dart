@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:uddoygi/features/incentive_calculation/admin_overview_dashboard_screen.dart';
 import 'package:uddoygi/features/incentive_calculation/hr_incentive_calculator_screen.dart';
 import 'package:uddoygi/features/incentive_calculation/incentive_history_screen.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 const Color _darkBlue = Color(0xFF2A0A4B);
 class IncentiveScreen extends StatelessWidget {
   const IncentiveScreen({super.key});
@@ -12,7 +13,7 @@ class IncentiveScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Incentive Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text('Incentive Report', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -83,7 +84,7 @@ class _IncentiveTile extends StatelessWidget {
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                style: AppFonts.banglaBody(fontSize: 14, color: Colors.black87),
               ),
             ],
           ),

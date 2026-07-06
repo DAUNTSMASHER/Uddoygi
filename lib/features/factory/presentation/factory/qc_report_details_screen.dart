@@ -1,4 +1,4 @@
-﻿// lib/features/factory/presentation/screens/qc_report_details_screen.dart
+// lib/features/factory/presentation/screens/qc_report_details_screen.dart
 
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +7,7 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
@@ -175,7 +176,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QC রিপোর্ট বিস্তারিত', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text('QC রিপোর্ট বিস্তারিত', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: _darkBlue,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -232,7 +233,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
     return Column(
       children: [
         ListTile(
-          title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          title: Text(label, style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
           trailing: IconButton(icon: const Icon(Icons.calendar_today), onPressed: onPick),
         ),
         const Divider(),
@@ -261,7 +262,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(d['modelName'] ?? '—',
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
+                              style: AppFonts.banglaBody(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
                           Text('বেস: ${d['base'] ?? '—'}'),
                           Text('রঙ: ${d['colour'] ?? '—'}'),
@@ -271,7 +272,7 @@ class _QCReportDetailsScreenState extends State<QCReportDetailsScreen>
                           Text('মন্তব্য: ${d['remarks'] ?? '—'}'),
                           Text('তারিখ: $date'),
                           Text('দ্বারা: ${d['agentEmail'] ?? '—'}',
-                              style: const TextStyle(fontStyle: FontStyle.italic)),
+                              style: AppFonts.banglaBody().copyWith(fontStyle: FontStyle.italic)),
                         ],
                       ),
                     ),

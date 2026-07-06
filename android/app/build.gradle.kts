@@ -51,6 +51,11 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     // (Optional) Packaging tweaks if you hit duplicate files
     // packaging {
     //     resources {

@@ -11,16 +11,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uddoygi/services/db.dart';
 import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 import '../widgets/admin_allbuyer.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const Color _ink      = Color(0xFF0F172A);
-const Color _sub      = Color(0xFF64748B);
-const Color _border   = Color(0xFFEAE4F4);
-const Color _card     = Color(0xFFFFFFFF);
 const Color _purple   = Color(0xFF2A0A4B);
-const Color _indigo   = Color(0xFF4F46E5);
 const Color _indigoLt = Color(0xFF818CF8);
 const Color _violet   = Color(0xFF6D28D9);
 const Color _accent   = Color(0xFF7C3AED);
@@ -72,7 +67,6 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
   double _sales    = 0;
   double _expenses = 0;
   double _budget   = 0;
-  int    _buyers   = 0;
 
   double get _profit => _sales - _expenses;
 
@@ -212,7 +206,6 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
       }
 
       // ── INSIGHTS & METRICS ──
-      final buySnap = await DB.colSync(_cid, C.customers).get();
       final budSnap = await DB.colSync(_cid, C.budget).limit(1).get();
 
       String tProd = ''; int tQty = 0;
@@ -265,7 +258,6 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
           _budget        = budSnap.docs.isNotEmpty
               ? ((budSnap.docs.first.data()['amount'] ?? 0) as num).toDouble()
               : 0;
-          _buyers        = buySnap.docs.length;
           _topAgentEmail = tAgentKey ?? '';
           _topAgentSales = tAgentVal;
           _topBuyerKey   = tBuyerKey ?? '';
@@ -381,7 +373,7 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
                                   ),
                                 ),
                                 child: Text(f.$2,
-                                    style: GoogleFonts.inter(
+                                    style: AppFonts.banglaBody(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
                                         color: active ? Colors.white : Colors.white54)),
@@ -419,7 +411,7 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
                                   ),
                                   const SizedBox(width: 5),
                                   Text('Profit',
-                                      style: GoogleFonts.inter(
+                                      style: AppFonts.banglaBody(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w500,
                                           color: Colors.white54)),
@@ -430,7 +422,7 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
                                   alignment: Alignment.centerLeft,
                                   child: Text(
                                     _loading ? '…' : _fmt(_profit.abs()),
-                                    style: GoogleFonts.spaceGrotesk(
+                                    style: AppFonts.banglaData(
                                         fontSize: 26,
                                         fontWeight: FontWeight.w800,
                                         color: Colors.white,
@@ -442,7 +434,7 @@ class _AdminDashboardSummaryState extends State<AdminDashboardSummary>
                                   _loading
                                       ? ''
                                       : _profit < 0 ? 'Net loss' : 'Net profit',
-                                  style: GoogleFonts.inter(
+                                  style: AppFonts.banglaBody(
                                       fontSize: 9,
                                       color: _profit < 0
                                           ? const Color(0xFFFCA5A5)
@@ -617,14 +609,14 @@ class _SubStat extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(label,
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     fontSize: 8,
                     color: Colors.white38,
                     fontWeight: FontWeight.w500)),
             Text(value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
+                style: AppFonts.banglaBody(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
@@ -686,7 +678,7 @@ class _InsightCell extends StatelessWidget {
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Center(
                           child: Text(initials,
-                              style: GoogleFonts.inter(
+                              style: AppFonts.banglaBody(
                                   color: accentColor,
                                   fontWeight: FontWeight.w800,
                                   fontSize: 10)),
@@ -705,7 +697,7 @@ class _InsightCell extends StatelessWidget {
                   Text(label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: AppFonts.banglaBody(
                           fontSize: 8,
                           fontWeight: FontWeight.w500,
                           color: Colors.white54,
@@ -714,7 +706,7 @@ class _InsightCell extends StatelessWidget {
                   Text(value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.spaceGrotesk(
+                      style: AppFonts.banglaData(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -723,7 +715,7 @@ class _InsightCell extends StatelessWidget {
                   Text(sub,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: AppFonts.banglaBody(
                           fontSize: 8,
                           color: accentColor,
                           fontWeight: FontWeight.w600)),

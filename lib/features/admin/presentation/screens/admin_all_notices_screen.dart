@@ -6,6 +6,7 @@ import 'package:uddoygi/services/local_storage_service.dart';
 import 'package:uddoygi/services/drive_storage_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:uddoygi/theme/app_fonts.dart';
 
 class AdminAllNoticesScreen extends StatefulWidget {
   const AdminAllNoticesScreen({super.key});
@@ -93,7 +94,7 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
     return Scaffold(
       backgroundColor: containerBg,
       appBar: AppBar(
-        title: const Text('Notices', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text('Notices', style: AppFonts.banglaBody(color: Colors.white, fontWeight: FontWeight.w800)),
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -111,21 +112,21 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                 children: [
                   TextField(
                     controller: _titleController,
-                    style: TextStyle(color: primary),
+                    style: AppFonts.banglaBody(color: primary),
                     decoration: InputDecoration(
                       labelText: 'Title',
-                      labelStyle: TextStyle(color: primary),
+                      labelStyle: AppFonts.banglaBody(color: primary),
                       border: const OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _descriptionController,
-                    style: TextStyle(color: Colors.grey[800]),
+                    style: AppFonts.banglaBody(color: Colors.grey[800]),
                     maxLines: 4,
                     decoration: InputDecoration(
                       labelText: 'Description',
-                      labelStyle: TextStyle(color: primary),
+                      labelStyle: AppFonts.banglaBody(color: primary),
                       border: const OutlineInputBorder(),
                     ),
                   ),
@@ -143,7 +144,7 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                         Expanded(
                           child: Text(
                             "${_pickedFiles.length} file(s) attached",
-                            style: TextStyle(color: accent, fontSize: 12),
+                            style: AppFonts.banglaBody(color: accent, fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -208,12 +209,12 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(title,
-                                style: TextStyle(
+                                style: AppFonts.banglaBody(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                     color: primary)),
                             const SizedBox(height: 6),
-                            Text(desc, style: TextStyle(color: Colors.grey[800])),
+                            Text(desc, style: AppFonts.banglaBody(color: Colors.grey[800])),
                             const SizedBox(height: 6),
                             if (attachments != null && attachments.isNotEmpty)
                               Column(
@@ -232,10 +233,9 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                                           Flexible(
                                             child: Text(
                                               url,
-                                              style: TextStyle(
+                                              style: AppFonts.banglaBody(
                                                   color: accent,
-                                                  decoration: TextDecoration.underline,
-                                                  fontSize: 12),
+                                                  fontSize: 12).copyWith(decoration: TextDecoration.underline),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
@@ -250,13 +250,13 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                               children: [
                                 Text(
                                   publishedBy,
-                                  style: TextStyle(color: accent, fontSize: 12),
+                                  style: AppFonts.banglaBody(color: accent, fontSize: 12),
                                 ),
                                 const Spacer(),
                                 if (date != null)
                                   Text(
                                     DateFormat('d-M-yyyy h:mm a').format(date),
-                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                    style: AppFonts.banglaBody(color: Colors.grey[600], fontSize: 12),
                                   ),
                               ],
                             ),
@@ -294,18 +294,18 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                                               Expanded(
                                                 child: Text(
                                                   commentText,
-                                                  style: const TextStyle(color: Colors.black87, fontSize: 13),
+                                                  style: AppFonts.banglaBody(color: Colors.black87, fontSize: 13),
                                                 ),
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 commenter,
-                                                style: TextStyle(color: accent.withOpacity(0.7), fontSize: 10),
+                                                style: AppFonts.banglaBody(color: accent.withOpacity(0.7), fontSize: 10),
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 DateFormat('d-M h:mm a').format(commentTime),
-                                                style: const TextStyle(color: Colors.grey, fontSize: 10),
+                                                style: AppFonts.banglaBody(color: Colors.grey, fontSize: 10),
                                               ),
                                             ],
                                           ),
@@ -319,10 +319,10 @@ class _AdminNoticeScreenState extends State<AdminAllNoticesScreen> {
                                           Expanded(
                                             child: TextField(
                                               controller: commentController,
-                                              style: TextStyle(color: Colors.grey[800]),
+                                              style: AppFonts.banglaBody(color: Colors.grey[800]),
                                               decoration: InputDecoration(
                                                 hintText: "Add a comment...",
-                                                hintStyle: TextStyle(color: accent.withOpacity(0.5)),
+                                                hintStyle: AppFonts.banglaBody(color: accent.withOpacity(0.5)),
                                                 contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
                                                 border: OutlineInputBorder(
                                                   borderRadius: BorderRadius.circular(8),
